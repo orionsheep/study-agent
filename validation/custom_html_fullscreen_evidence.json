@@ -1,0 +1,32 @@
+{
+  "sorting": {
+    "box": {
+      "x": 0,
+      "y": 60,
+      "width": 1381.390625,
+      "height": 1020
+    },
+    "iframeHeight": "568px",
+    "screenshot": "validation/screenshots/custom_html_sorting_fullscreen.png"
+  },
+  "hash": {
+    "box": {
+      "x": 0,
+      "y": 60,
+      "width": 1381.390625,
+      "height": 1020
+    },
+    "iframeHeight": "618px",
+    "screenshot": "validation/screenshots/custom_html_hash_fullscreen.png"
+  },
+  "pigeonhole": {
+    "box": {
+      "x": 0,
+      "y": 60,
+      "width": 1381.390625,
+      "height": 1020
+    },
+    "iframeHeight": "454px",
+    "screenshot": "validation/screenshots/custom_html_pigeonhole_fullscreen.png"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "workflow": "performance-goal",
+  "slug": "memory-loop-closure",
+  "objective": "Complete the LearnForge EduMem0 memory loop and frontend evidence workflow",
+  "status": "complete",
+  "createdAt": "2026-06-04T05:43:32.320Z",
+  "updatedAt": "2026-06-04T05:52:20.318Z",
+  "evaluator": {
+    "command": "bash scripts/validate_memory_loop.sh",
+    "contract": "PASS when validate_memory_loop.sh proves fresh-user profile extraction creates and persists 8+ profile dimensions, profile API returns saved dimensions and evidence, conflict/confidence/decay/resource-feedback paths are exercised, quiz/app/layout memories update dashboard evidence, and frontend tests/build verify the memory evidence UI."
+  },
+  "artifactPaths": {
+    "state": ".omx/goals/performance/memory-loop-closure/state.json",
+    "ledger": ".omx/goals/performance/memory-loop-closure/ledger.jsonl",
+    "evaluator": ".omx/goals/performance/memory-loop-closure/evaluator.md"
+  },
+  "startedAt": "2026-06-04T05:43:36.472Z",
+  "lastValidation": {
+    "status": "pass",
+    "evidence": "bash scripts/validate_memory_loop.sh passed: backend closed-loop pytest 18 passed; web lint passed; renderers Vitest 4 passed; web build passed.",
+    "recordedAt": "2026-06-04T05:49:49.454Z"
+  },
+  "completedAt": "2026-06-04T05:52:20.318Z"
+}

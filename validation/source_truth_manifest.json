@@ -1,0 +1,406 @@
+{
+  "pack_root": "/Users/mychanging/Downloads/learnforge_v4_all_requirements_test_gated_goal_pack",
+  "generated_at": "2026-06-04T04:52:38+00:00",
+  "excluded": [
+    ".DS_Store"
+  ],
+  "entries": [
+    {
+      "path": ".omx/logs/omx-2026-06-03.jsonl",
+      "sha256": "cc5c593dd34daee6f6761299b621b3956fd5c008b0a7a5a4fc58ed5a39366c87",
+      "size_bytes": 221,
+      "role": "pack operational metadata",
+      "product_evidence": [
+        "RUN_REPORT.md"
+      ]
+    },
+    {
+      "path": ".omx/state/native-stop-state.json",
+      "sha256": "9b82d0fc504aa532f7a22508993c68b0cb614aa022c1c6f9eff430b322e574f9",
+      "size_bytes": 1964,
+      "role": "pack operational metadata",
+      "product_evidence": [
+        "RUN_REPORT.md"
+      ]
+    },
+    {
+      "path": ".omx/state/session.json",
+      "sha256": "bdd2ab80abc0dfc83ef21ee4fbeaf8ed8c80589544484173cf09232d792ff452",
+      "size_bytes": 297,
+      "role": "pack operational metadata",
+      "product_evidence": [
+        "RUN_REPORT.md"
+      ]
+    },
+    {
+      "path": "AGENT_TOPOLOGY_REQUIRED.md",
+      "sha256": "803c93a0d3d44e1b57253c37a2c15ba5a4f1eaef96ba0d1d80c4766a80ea798d",
+      "size_bytes": 6365,
+      "role": "requirements source document",
+      "product_evidence": [
+        "services/api/app/agents",
+        "docs/agent_design.md",
+        "docs/agents"
+      ]
+    },
+    {
+      "path": "APP_CANVAS_REQUIRED.md",
+      "sha256": "fc63076c54430566e824582d857b0f9eef48d244581a92387e8f64326e0c5865",
+      "size_bytes": 3061,
+      "role": "requirements source document",
+      "product_evidence": [
+        "apps/web/src/features/app-canvas",
+        "docs/app_canvas_design.md"
+      ]
+    },
+    {
+      "path": "APP_PROTOCOL_REQUIRED.md",
+      "sha256": "b8affa0a4d9173b819081e828d70cc4590997a6899a503a15105e47e98fdb005",
+      "size_bytes": 1517,
+      "role": "requirements source document",
+      "product_evidence": [
+        "packages/app-protocol/src/types.ts",
+        "services/api/app/schemas/app_protocol.py"
+      ]
+    },
+    {
+      "path": "AUDIT_V3_GAPS.md",
+      "sha256": "ccb377b7180e851fb62162fe93249cd1e7af87a7d905a5e1c5b6268826141921",
+      "size_bytes": 2913,
+      "role": "requirements source document",
+      "product_evidence": [
+        "validation/requirement_results.json",
+        "BLOCKED_REAL_INTEGRATION_REPORT.md"
+      ]
+    },
+    {
+      "path": "BACKEND_RUNTIME_REQUIRED.md",
+      "sha256": "0cbca8566f12583d53d86070052e75bb4e03ac3a02d5af463ad2c35d82cd85d4",
+      "size_bytes": 2500,
+      "role": "requirements source document",
+      "product_evidence": [
+        "services/api/app/main.py",
+        "services/api/tests/test_health_routes.py"
+      ]
+    },
+    {
+      "path": "COMPETITION_TRACEABILITY_REQUIRED.md",
+      "sha256": "139601d695e02ad450336ccdfc70318a7b55996a43dbe389a6429ba52de86f6e",
+      "size_bytes": 2100,
+      "role": "requirements source document",
+      "product_evidence": [
+        "docs/competition_traceability.md",
+        "docs/demo_script.md"
+      ]
+    },
+    {
+      "path": "CUSTOM_GENERATIVE_UI_REQUIRED.md",
+      "sha256": "aeb3c4868d79943523e3e9ea81646fd95ef5be07b95224b5a6c8a6a9b9a69484",
+      "size_bytes": 2221,
+      "role": "requirements source document",
+      "product_evidence": [
+        "apps/web/src/features/custom-html-app",
+        "services/api/app/skills/custom_html_app_skill.py"
+      ]
+    },
+    {
+      "path": "DASHBOARD_LEARNING_LOOP_REQUIRED.md",
+      "sha256": "4344ace4f6e8ab6e7b2f0e8d55907500634e64a2ea14fd244785ce41c42c7b53",
+      "size_bytes": 2028,
+      "role": "requirements source document",
+      "product_evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "services/api/app/skills/dashboard_skill.py"
+      ]
+    },
+    {
+      "path": "DATABASE_SCHEMA_DRAFT.sql",
+      "sha256": "017238b0ec6fb50986911ecb2126686de9fb072f5f7bf1208d98dce7852bbd2f",
+      "size_bytes": 7558,
+      "role": "database schema source",
+      "product_evidence": [
+        "services/api/app/database/postgres_schema.sql",
+        "services/api/app/database/schema.py"
+      ]
+    },
+    {
+      "path": "DELIVERABLES_REQUIRED.md",
+      "sha256": "5f8604e01490bd70fa0a245bd2362543cefdae79649e2074fbc91af03bf6e34e",
+      "size_bytes": 1069,
+      "role": "requirements source document",
+      "product_evidence": [
+        "RUN_REPORT.md",
+        "docs/test_report.md",
+        "validation/requirement_results.json"
+      ]
+    },
+    {
+      "path": "FRONTEND_PRODUCT_REQUIRED.md",
+      "sha256": "bd75b2cf9e9c0585e03a0d2e482cc87abe84090c2ed878bbb534903ce1bf3065",
+      "size_bytes": 1885,
+      "role": "requirements source document",
+      "product_evidence": [
+        "apps/web/src/app/LearnForgeApp.tsx",
+        "apps/web/src/app/styles.css"
+      ]
+    },
+    {
+      "path": "FULL_GOAL_COMMAND.md",
+      "sha256": "2e7c88eeb23ac394774c21d2ff6cd7879b75eaac6e47c439bfdf025c9464cae7",
+      "size_bytes": 1537,
+      "role": "requirements source document",
+      "product_evidence": [
+        "RUN_REPORT.md",
+        "BLOCKED_REAL_INTEGRATION_REPORT.md",
+        "docs/runbook.md"
+      ]
+    },
+    {
+      "path": "HERMES_MIMO_IMAGE2_REQUIRED.md",
+      "sha256": "47bdd3a6dd6402f817eae349ffdf7566d8c190414f4eb160489c07544d8c6036",
+      "size_bytes": 2834,
+      "role": "requirements source document",
+      "product_evidence": [
+        "services/api/app/hermes_runtime",
+        "services/api/app/model_gateway/mimo_client.py",
+        "services/api/app/image_gateway/image2_client.py"
+      ]
+    },
+    {
+      "path": "IMPLEMENT_FULL_PRODUCT.md",
+      "sha256": "873d3034ee82569efe56c95dddc773d2041227b7a4de8a557c02083e87fc427c",
+      "size_bytes": 2389,
+      "role": "requirements source document",
+      "product_evidence": [
+        "RUN_REPORT.md",
+        "scripts/run_full_validation.sh"
+      ]
+    },
+    {
+      "path": "MEMORY_SYSTEM_REQUIRED.md",
+      "sha256": "404d666840a9cd909ccf82b2ab2bb7c9bba3d1aca9facf23d063176d8722ab57",
+      "size_bytes": 3894,
+      "role": "requirements source document",
+      "product_evidence": [
+        "services/api/app/edumem0",
+        "docs/memory_design.md"
+      ]
+    },
+    {
+      "path": "NATIVE_LEARNING_APPS_REQUIRED.md",
+      "sha256": "f1ebaf090ac9473488ed847da3eb6bc12f577450ab9ea378be62df3d3d5d1a6b",
+      "size_bytes": 2240,
+      "role": "requirements source document",
+      "product_evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "packages/learning-apps/src/index.ts"
+      ]
+    },
+    {
+      "path": "NO_MOCK_POLICY.md",
+      "sha256": "4fbd3acf22d6cce5196d280fbb7f914f833d3e087f4175abcd322cbe8b97adf5",
+      "size_bytes": 718,
+      "role": "requirements source document",
+      "product_evidence": [
+        "scripts/verify_no_mock_runtime.sh",
+        "BLOCKED_REAL_INTEGRATION_REPORT.md"
+      ]
+    },
+    {
+      "path": "OPEN_SOURCE_RESEARCH_AND_CHOICES.md",
+      "sha256": "bdb1abc44d43fb1eaedd1116734a7cd586897d5b62c66fd347e551ce001bbd7c",
+      "size_bytes": 2870,
+      "role": "requirements source document",
+      "product_evidence": [
+        "docs/open_source_licenses.md",
+        "docs/provider_declaration.md"
+      ]
+    },
+    {
+      "path": "RAG_SAFETY_VERIFIER_REQUIRED.md",
+      "sha256": "0309fd80528e87f4839a294cb55fbfb30deb4a3e1afb2651715714848353d294",
+      "size_bytes": 1768,
+      "role": "requirements source document",
+      "product_evidence": [
+        "services/api/app/rag",
+        "services/api/app/safety",
+        "docs/rag_safety_design.md"
+      ]
+    },
+    {
+      "path": "README.md",
+      "sha256": "945db298dc7b16be3014ebfa482dc70f52f37678befbb63e59107fa2f4be186a",
+      "size_bytes": 1460,
+      "role": "requirements source document",
+      "product_evidence": [
+        "RUN_REPORT.md",
+        "docs/architecture.md"
+      ]
+    },
+    {
+      "path": "RESOURCE_SKILLS_REQUIRED.md",
+      "sha256": "7344f49290e7b91732df3c9e0a8b1637c762bbb98d4bbfcf88c9690028e85cde",
+      "size_bytes": 3815,
+      "role": "requirements source document",
+      "product_evidence": [
+        "services/api/app/skills",
+        "services/api/hermes_profile/skills"
+      ]
+    },
+    {
+      "path": "SECRETS_POLICY.md",
+      "sha256": "04b994a99f4effdb2ce6cc992bb510cd59c575bf5e8cd6c5e80a088121427e34",
+      "size_bytes": 449,
+      "role": "requirements source document",
+      "product_evidence": [
+        "scripts/secret_scan.sh",
+        ".gitignore",
+        ".env.example"
+      ]
+    },
+    {
+      "path": "TARGET_PROJECT_STRUCTURE.md",
+      "sha256": "6098e7904b00cb09bbb329815717dc95b46e760e2d43834d6b4aaaad34d673e6",
+      "size_bytes": 2100,
+      "role": "requirements source document",
+      "product_evidence": [
+        "scripts/verify_project_structure.py",
+        "docs/architecture.md"
+      ]
+    },
+    {
+      "path": "TEST_STANDARDS_REQUIRED.md",
+      "sha256": "352f9cacab761e1ddec0c581c242d6cc595ef1f516b901188fe6df0c36ecd600",
+      "size_bytes": 2896,
+      "role": "requirements source document",
+      "product_evidence": [
+        "scripts/run_full_validation.sh",
+        "docs/test_report.md"
+      ]
+    },
+    {
+      "path": "USER_REQUIREMENT_TRACE.md",
+      "sha256": "0dece29ed248b6d2c821641ad76ceaa9b3dd581c75053d1506f0e7c72d8c34f7",
+      "size_bytes": 2418,
+      "role": "requirements source document",
+      "product_evidence": [
+        "validation/requirement_results.json",
+        "docs/competition_traceability.md"
+      ]
+    },
+    {
+      "path": "prompts/START_GOAL.md",
+      "sha256": "23a33af2ea389d5dc7379d783a26906fccf381fa67d6195d7690c0c0d1603e08",
+      "size_bytes": 168,
+      "role": "goal prompt",
+      "product_evidence": [
+        "RUN_REPORT.md",
+        "BLOCKED_REAL_INTEGRATION_REPORT.md",
+        "docs/runbook.md"
+      ]
+    },
+    {
+      "path": "requirements/requirements.json",
+      "sha256": "c96394ac7e0fcb3a19669b355e99a1f8c079c290b436263e28a23e7debd7d025",
+      "size_bytes": 33033,
+      "role": "machine-readable acceptance contract",
+      "product_evidence": [
+        "requirements/requirements.json",
+        "validation/requirement_results.json",
+        "scripts/verify_requirement_results.py"
+      ]
+    },
+    {
+      "path": "scripts/verify_full_contract_template.py",
+      "sha256": "64e7e040b9fe6a78515c09ef5ee7c5ddbd3d3cdbf0a44d1aefddf8d432ff6db5",
+      "size_bytes": 1087,
+      "role": "validation template",
+      "product_evidence": [
+        "scripts/run_full_validation.sh",
+        "scripts/verify_full_contract.py",
+        "scripts/verify_no_mock_runtime.sh"
+      ]
+    },
+    {
+      "path": "scripts/verify_no_mock_runtime_template.sh",
+      "sha256": "75bf650db458665b466c3fb9bb6df0fcaeb51ed486e2eb810c01ff1b6f573ddc",
+      "size_bytes": 1161,
+      "role": "validation template",
+      "product_evidence": [
+        "scripts/run_full_validation.sh",
+        "scripts/verify_full_contract.py",
+        "scripts/verify_no_mock_runtime.sh"
+      ]
+    },
+    {
+      "path": "scripts/verify_pack_integrity.py",
+      "sha256": "f279514a74453ebadcc78536dc762a737c54822d6be0b8349cc81e680e790762",
+      "size_bytes": 1009,
+      "role": "validation template",
+      "product_evidence": [
+        "scripts/run_full_validation.sh",
+        "scripts/verify_full_contract.py",
+        "scripts/verify_no_mock_runtime.sh"
+      ]
+    },
+    {
+      "path": "sources/RESEARCH_SOURCES.md",
+      "sha256": "ff83782f21633e7274acd1d8e7b85869803497790a32bc6c5dfc0325b382550b",
+      "size_bytes": 1151,
+      "role": "research/source inventory",
+      "product_evidence": [
+        "docs/open_source_licenses.md",
+        "docs/provider_declaration.md",
+        "docs/competition_traceability.md"
+      ]
+    },
+    {
+      "path": "templates/.env.example",
+      "sha256": "f0cbbb6352ae6205cc74f866d2b151335b319807b22adb01721683fc6d85d095",
+      "size_bytes": 671,
+      "role": "implementation template",
+      "product_evidence": [
+        ".env.example",
+        ".gitignore",
+        "packages/app-protocol/src/types.ts",
+        "services/api/app/edumem0/schemas.py"
+      ]
+    },
+    {
+      "path": "templates/.gitignore",
+      "sha256": "4470c21021f764e23bf33bfe1fe74a6b4b2596fc7880c8aa602c918610a4a9cc",
+      "size_bytes": 169,
+      "role": "implementation template",
+      "product_evidence": [
+        ".env.example",
+        ".gitignore",
+        "packages/app-protocol/src/types.ts",
+        "services/api/app/edumem0/schemas.py"
+      ]
+    },
+    {
+      "path": "templates/app-protocol-types.ts",
+      "sha256": "e7b33fddbc004abf11cc18ef2ef165823d65a7f82df38233a02bbfa695e4ebd6",
+      "size_bytes": 4798,
+      "role": "implementation template",
+      "product_evidence": [
+        ".env.example",
+        ".gitignore",
+        "packages/app-protocol/src/types.ts",
+        "services/api/app/edumem0/schemas.py"
+      ]
+    },
+    {
+      "path": "templates/edumem0_schemas.py",
+      "sha256": "e9828efe14dda66d7eda3fab1aa47c543c485ea04c9f6631b5e789d7497c5785",
+      "size_bytes": 1840,
+      "role": "implementation template",
+      "product_evidence": [
+        ".env.example",
+        ".gitignore",
+        "packages/app-protocol/src/types.ts",
+        "services/api/app/edumem0/schemas.py"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: learnforge
+      POSTGRES_PASSWORD: learnforge
+      POSTGRES_DB: learnforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - learnforge_pg:/var/lib/postgresql/data
+      - ./services/api/app/database/postgres_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U learnforge -d learnforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+volumes:
+  learnforge_pg:

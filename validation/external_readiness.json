@@ -1,0 +1,73 @@
+{
+  "overall": "blocked_external",
+  "backend": {
+    "status": "ready",
+    "reason": "FastAPI app initialized."
+  },
+  "database": {
+    "status": "ready",
+    "required_tables": [
+      "students",
+      "student_profiles",
+      "edu_memories",
+      "learning_events",
+      "mastery_records",
+      "courses",
+      "course_documents",
+      "document_chunks",
+      "knowledge_points",
+      "knowledge_edges",
+      "learning_paths",
+      "learning_path_nodes",
+      "resources",
+      "resource_versions",
+      "canvas_apps",
+      "chat_app_links",
+      "app_events",
+      "quiz_questions",
+      "quiz_submissions",
+      "agent_runs",
+      "agent_steps",
+      "verifier_results",
+      "image_assets",
+      "feedbacks"
+    ],
+    "path": "/Users/mychanging/Downloads/learnforge-v2-product/.data/learnforge_dev.sqlite"
+  },
+  "mimo": {
+    "name": "mimo",
+    "status": "ready",
+    "reason": "MiMo OpenAI-compatible endpoint responded.",
+    "configured_model": "mimo-v2.5-pro",
+    "adapter": "openai_compatible_http"
+  },
+  "hermes": {
+    "status": "ready",
+    "reason": "Hermes SDK embedded via run_agent.AIAgent; provider=mimo; api_mode=chat_completions; model=mimo-v2.5-pro.",
+    "adapter": "python_aiagent_sdk",
+    "home": "/Users/mychanging/Downloads/learnforge-v2-product/.runtime/hermes",
+    "skills_synced": true,
+    "command_path": null,
+    "probe_command": null,
+    "integration_mode": "sdk_embedded",
+    "sdk_module": "run_agent",
+    "sdk_version": "0.14.0",
+    "sdk_path": "/Users/mychanging/Obsidian本地仓库/2026是最后的交汇点-起飞/.hermes/hermes-agent/run_agent.py",
+    "embedded_agent_class": "run_agent.AIAgent",
+    "cli_status": null
+  },
+  "image2": {
+    "name": "image2",
+    "status": "blocked_missing_credentials",
+    "reason": "IMAGE2_API_KEY or IMAGE2_BASE_URL is missing; real provider check was not attempted.",
+    "configured_model": "gpt-image-2"
+  },
+  "edumem0": {
+    "status": "ready",
+    "reason": "EduMem0 store and policies initialized."
+  },
+  "rag": {
+    "status": "ready",
+    "reason": "Seed course chunks and source_refs are available."
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "sorting": {
+    "barCount": 8,
+    "initialValues": "42,76,28,91,55,18,64,37",
+    "compareMetric": "1",
+    "highlighted": 2,
+    "screenshot": "validation/screenshots/custom_html_sorting_verified.png"
+  },
+  "hash": {
+    "bucketCount": 4,
+    "chipCount": 4,
+    "collisionBefore": "1",
+    "insertedAfter": "5",
+    "logText": "已经出现 1 次冲突：不同 key 的 home bucket 相同，需要使用链表挂在同一 bucket。",
+    "screenshot": "validation/screenshots/custom_html_hash_verified.png"
+  },
+  "pigeon": {
+    "drawerCount": 4,
+    "itemCount": 9,
+    "initialSummary": "9 个对象放进 4 个抽屉，至少有一个抽屉包含 3 个对象；当前高亮抽屉就是这个必然拥挤的证据。",
+    "updatedSummary": "12 个对象放进 4 个抽屉，至少有一个抽屉包含 3 个对象；当前高亮抽屉就是这个必然拥挤的证据。",
+    "hotDrawers": 4,
+    "screenshot": "validation/screenshots/custom_html_pigeonhole_verified.png"
+  }
+}

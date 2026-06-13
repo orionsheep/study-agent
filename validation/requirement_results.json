@@ -1,0 +1,1409 @@
+{
+  "results": [
+    {
+      "requirement_id": "ARCH-001",
+      "status": "pass",
+      "evidence": [
+        "TARGET_PROJECT_STRUCTURE.md",
+        "scripts/verify_no_mock_runtime.sh"
+      ],
+      "tests": [
+        "scripts/verify_project_structure"
+      ],
+      "notes": "Create new project in ./learnforge-v2-product implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "ARCH-002",
+      "status": "pass",
+      "evidence": [
+        "TARGET_PROJECT_STRUCTURE.md",
+        "scripts/verify_no_mock_runtime.sh"
+      ],
+      "tests": [
+        "scripts/verify_reactflow_scope"
+      ],
+      "notes": "No legacy React Flow as main canvas implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "ARCH-003",
+      "status": "pass",
+      "evidence": [
+        "TARGET_PROJECT_STRUCTURE.md",
+        "scripts/verify_no_mock_runtime.sh"
+      ],
+      "tests": [
+        "scripts/verify_no_mock_runtime.sh"
+      ],
+      "notes": "No mock/skeleton completion implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "BACKEND-001",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/main.py",
+        "services/api/tests/test_health_routes.py",
+        "services/api/tests/test_database_schema.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_health_routes.py services/api/tests/test_database_schema.py"
+      ],
+      "notes": "FastAPI backend runtime implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "BACKEND-002",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/main.py",
+        "services/api/tests/test_health_routes.py",
+        "services/api/tests/test_database_schema.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_health_routes.py services/api/tests/test_database_schema.py"
+      ],
+      "notes": "PostgreSQL persistence schema implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "BACKEND-003",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/main.py",
+        "services/api/tests/test_health_routes.py",
+        "services/api/tests/test_database_schema.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_health_routes.py services/api/tests/test_database_schema.py"
+      ],
+      "notes": "SSE AgentStreamEvent streaming implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "HERMES-001",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/model_gateway/mimo_client.py",
+        "services/api/app/hermes_runtime/runtime.py",
+        "services/api/app/image_gateway/image2_client.py",
+        "services/api/tests/test_gateway_status.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_gateway_status.py services/api/tests/test_hermes_runtime_status.py"
+      ],
+      "notes": "Hermes runtime integration path implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "HERMES-002",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/model_gateway/mimo_client.py",
+        "services/api/app/hermes_runtime/runtime.py",
+        "services/api/app/image_gateway/image2_client.py",
+        "services/api/tests/test_gateway_status.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_gateway_status.py services/api/tests/test_hermes_runtime_status.py"
+      ],
+      "notes": "Hermes Skill files implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "MIMO-001",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/model_gateway/mimo_client.py",
+        "services/api/app/hermes_runtime/runtime.py",
+        "services/api/app/image_gateway/image2_client.py",
+        "services/api/tests/test_gateway_status.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_gateway_status.py services/api/tests/test_hermes_runtime_status.py"
+      ],
+      "notes": "MiMo ModelGateway real client implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "MIMO-002",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/model_gateway/mimo_client.py",
+        "services/api/app/hermes_runtime/runtime.py",
+        "services/api/app/image_gateway/image2_client.py",
+        "services/api/tests/test_gateway_status.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_gateway_status.py services/api/tests/test_hermes_runtime_status.py"
+      ],
+      "notes": "MiMo reasoning_content compatibility implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "IMAGE2-001",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/model_gateway/mimo_client.py",
+        "services/api/app/hermes_runtime/runtime.py",
+        "services/api/app/image_gateway/image2_client.py",
+        "services/api/tests/test_gateway_status.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_gateway_status.py services/api/tests/test_hermes_runtime_status.py"
+      ],
+      "notes": "image2 ImageGateway real client implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "AGENT-001",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/agents/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Hermes Orchestrator Agent implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "AGENT-002",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/agents/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Profile Agent implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "AGENT-003",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/agents/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Knowledge Agent implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "AGENT-004",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/agents/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Planner Agent implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "AGENT-005",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/agents/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Recommender Agent implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "AGENT-006",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/agents/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Tutor Agent implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "AGENT-007",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/agents/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "App Canvas Agent implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "AGENT-008",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/agents/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Evaluator Agent implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "AGENT-009",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/agents/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Verifier Agent implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "AGENT-010",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/agents/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "EduMemory Agent implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "AGENT-011",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/agents/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Resource Bundle Agent implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-001",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Document Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-002",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Mindmap Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-003",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Quiz Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-004",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "PPT Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-005",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Code Practice Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-006",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Image Generation Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-007",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Video Script Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-008",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Reading Material Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-009",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Notes Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-010",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Dashboard Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-011",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Resource Bundle Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-012",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "App Generation Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-013",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Custom HTML App Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-014",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Verifier Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-015",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Memory Update Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SKILL-016",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/skills/",
+        "services/api/hermes_profile/skills/",
+        "services/api/tests/test_agents_and_skills.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_agents_and_skills.py"
+      ],
+      "notes": "Course Ingestion Skill implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "MEM-001",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/edumem0/",
+        "services/api/tests/test_edumem0_policies.py",
+        "services/api/tests/test_memory_end_to_end.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_edumem0_policies.py services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "EduMem0 schema and persistence implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "MEM-002",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/edumem0/",
+        "services/api/tests/test_edumem0_policies.py",
+        "services/api/tests/test_memory_end_to_end.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_edumem0_policies.py services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Memory types implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "MEM-003",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/edumem0/",
+        "services/api/tests/test_edumem0_policies.py",
+        "services/api/tests/test_memory_end_to_end.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_edumem0_policies.py services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Confidence policy implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "MEM-004",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/edumem0/",
+        "services/api/tests/test_edumem0_policies.py",
+        "services/api/tests/test_memory_end_to_end.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_edumem0_policies.py services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Decay policy implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "MEM-005",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/edumem0/",
+        "services/api/tests/test_edumem0_policies.py",
+        "services/api/tests/test_memory_end_to_end.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_edumem0_policies.py services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Conflict resolver implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "MEM-006",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/edumem0/",
+        "services/api/tests/test_edumem0_policies.py",
+        "services/api/tests/test_memory_end_to_end.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_edumem0_policies.py services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Chat extraction writes profile memory implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "MEM-007",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/edumem0/",
+        "services/api/tests/test_edumem0_policies.py",
+        "services/api/tests/test_memory_end_to_end.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_edumem0_policies.py services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Quiz updates mastery and misconception implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "MEM-008",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/edumem0/",
+        "services/api/tests/test_edumem0_policies.py",
+        "services/api/tests/test_memory_end_to_end.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_edumem0_policies.py services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "App events update memory implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "MEM-009",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/edumem0/",
+        "services/api/tests/test_edumem0_policies.py",
+        "services/api/tests/test_memory_end_to_end.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_edumem0_policies.py services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Spatial layout memory implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "MEM-010",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/edumem0/",
+        "services/api/tests/test_edumem0_policies.py",
+        "services/api/tests/test_memory_end_to_end.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_edumem0_policies.py services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Dashboard memory evidence implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "CANVAS-001",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/app-canvas/",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "Spatial canvas layout implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "CANVAS-002",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/app-canvas/",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "Free pan/zoom/drag/resize implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "CANVAS-003",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/app-canvas/",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "App Dock/search/minimap/auto arrange implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "CANVAS-004",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/app-canvas/",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "AppLink Flight implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "CANVAS-005",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/app-canvas/",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "App state transitions implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "CANVAS-006",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/app-canvas/",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "Relationship connectors and frames implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-001",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "apps/web/tests/renderers.test.tsx"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "ProfileDashboardApp implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-002",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "apps/web/tests/renderers.test.tsx"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "LearningPathApp implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-003",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "apps/web/tests/renderers.test.tsx"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "KnowledgeGraph/Mindmap App implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-004",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "apps/web/tests/renderers.test.tsx"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "WorkEnergyDemoApp implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-005",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "apps/web/tests/renderers.test.tsx"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "GradientDescentDemoApp implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-006",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "apps/web/tests/renderers.test.tsx"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "QuizPracticeApp implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-007",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "apps/web/tests/renderers.test.tsx"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "CodeLabApp implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-008",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "apps/web/tests/renderers.test.tsx"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "NotesApp implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-009",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "apps/web/tests/renderers.test.tsx"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "LearningDashboardApp implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-010",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "apps/web/tests/renderers.test.tsx"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "PPTPreviewApp implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-011",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "apps/web/tests/renderers.test.tsx"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "ImageExplanationApp implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-012",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "apps/web/tests/renderers.test.tsx"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "VideoScriptApp implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-013",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/learning-apps/NativeAppRenderer.tsx",
+        "apps/web/tests/renderers.test.tsx"
+      ],
+      "tests": [
+        "npm run web:test",
+        "npm run web:e2e"
+      ],
+      "notes": "ResourceCenterApp implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "RAG-001",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/rag/",
+        "services/api/tests/test_rag_verifier.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_rag_verifier.py"
+      ],
+      "notes": "Course ingestion and source_refs implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "RAG-002",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/rag/",
+        "services/api/tests/test_rag_verifier.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_rag_verifier.py"
+      ],
+      "notes": "Knowledge graph prerequisites implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SAFETY-001",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/safety/",
+        "services/api/tests/test_rag_verifier.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_rag_verifier.py"
+      ],
+      "notes": "Verifier grounding gate implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SAFETY-002",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/safety/",
+        "services/api/tests/test_rag_verifier.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_rag_verifier.py"
+      ],
+      "notes": "Prompt injection/content safety implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SAFETY-003",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/safety/",
+        "services/api/tests/test_rag_verifier.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_rag_verifier.py"
+      ],
+      "notes": "Code/image safety implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "GENUI-001",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/custom-html-app/",
+        "apps/web/tests/widgetParser.test.ts"
+      ],
+      "tests": [
+        "npm run web:test"
+      ],
+      "notes": "CustomHtmlApp sandbox iframe implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "GENUI-002",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/features/custom-html-app/",
+        "apps/web/tests/widgetParser.test.ts"
+      ],
+      "tests": [
+        "npm run web:test"
+      ],
+      "notes": "Streaming widget stability implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "COMP-001",
+      "status": "pass",
+      "evidence": [
+        "docs/competition_traceability.md",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "npm run web:e2e",
+        "pytest services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Competition profile requirement implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "COMP-002",
+      "status": "pass",
+      "evidence": [
+        "docs/competition_traceability.md",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "npm run web:e2e",
+        "pytest services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Competition 5+ resource generation implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "COMP-003",
+      "status": "pass",
+      "evidence": [
+        "docs/competition_traceability.md",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "npm run web:e2e",
+        "pytest services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Competition path and push implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "COMP-004",
+      "status": "pass",
+      "evidence": [
+        "docs/competition_traceability.md",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "npm run web:e2e",
+        "pytest services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Competition intelligent tutoring implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "COMP-005",
+      "status": "pass",
+      "evidence": [
+        "docs/competition_traceability.md",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "npm run web:e2e",
+        "pytest services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Competition learning evaluation implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "COMP-006",
+      "status": "pass",
+      "evidence": [
+        "docs/competition_traceability.md",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "npm run web:e2e",
+        "pytest services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Competition anti-hallucination implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "COMP-007",
+      "status": "pass",
+      "evidence": [
+        "docs/competition_traceability.md",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "npm run web:e2e",
+        "pytest services/api/tests/test_memory_end_to_end.py"
+      ],
+      "notes": "Competition UX requirements implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "DOC-001",
+      "status": "pass",
+      "evidence": [
+        "docs/"
+      ],
+      "tests": [
+        "scripts/verify_docs_exist"
+      ],
+      "notes": "Documentation package implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "API-001",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/main.py",
+        "services/api/tests/test_health_routes.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_health_routes.py"
+      ],
+      "notes": "Required API routes exist implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "API-002",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/main.py",
+        "services/api/tests/test_health_routes.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_health_routes.py"
+      ],
+      "notes": "Agent run trace API implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "API-003",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/main.py",
+        "services/api/tests/test_health_routes.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_health_routes.py"
+      ],
+      "notes": "Canvas app API persistence implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "API-004",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/main.py",
+        "services/api/tests/test_health_routes.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_health_routes.py"
+      ],
+      "notes": "Memory API retrieval implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "API-005",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/main.py",
+        "services/api/tests/test_health_routes.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_health_routes.py"
+      ],
+      "notes": "Dashboard API aggregation implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "API-006",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/main.py",
+        "services/api/tests/test_health_routes.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_health_routes.py"
+      ],
+      "notes": "Image generation API implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "API-007",
+      "status": "pass",
+      "evidence": [
+        "services/api/app/main.py",
+        "services/api/tests/test_health_routes.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_health_routes.py"
+      ],
+      "notes": "Course document API implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "UX-001",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/app/styles.css",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "playwright e2e/progress-trace.spec.ts"
+      ],
+      "notes": "Streaming progress trace implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "UX-002",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/app/styles.css",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "playwright e2e/no-dead-controls.spec.ts"
+      ],
+      "notes": "No enabled dead controls implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "UX-003",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/app/styles.css",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "playwright e2e/reduced-motion.spec.ts"
+      ],
+      "notes": "Reduced motion fallback implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "UX-004",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/app/styles.css",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "playwright e2e/chinese-ui.spec.ts"
+      ],
+      "notes": "Chinese-first UI implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "UX-005",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/app/styles.css",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "playwright e2e/resource-cards.spec.ts"
+      ],
+      "notes": "Resource cards in chat implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-EVENT-001",
+      "status": "pass",
+      "evidence": [
+        "services/api/tests/test_memory_end_to_end.py",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "playwright e2e/app-event-tutor-explain.spec.ts"
+      ],
+      "notes": "WorkEnergy App event to Tutor explanation implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-EVENT-002",
+      "status": "pass",
+      "evidence": [
+        "services/api/tests/test_memory_end_to_end.py",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "playwright e2e/path-node-app-focus.spec.ts"
+      ],
+      "notes": "Learning path node to App focus implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "APP-EVENT-003",
+      "status": "pass",
+      "evidence": [
+        "services/api/tests/test_memory_end_to_end.py",
+        "apps/web/e2e/product-flow.spec.ts"
+      ],
+      "tests": [
+        "playwright e2e/layout-memory.spec.ts"
+      ],
+      "notes": "Layout/group event to spatial memory implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "REPORT-001",
+      "status": "pass",
+      "evidence": [
+        "RUN_REPORT.md",
+        "BLOCKED_REAL_INTEGRATION_REPORT.md"
+      ],
+      "tests": [
+        "scripts/verify_reports_exist"
+      ],
+      "notes": "RUN_REPORT evidence implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "REPORT-002",
+      "status": "pass",
+      "evidence": [
+        "RUN_REPORT.md",
+        "BLOCKED_REAL_INTEGRATION_REPORT.md"
+      ],
+      "tests": [
+        "scripts/verify_blocked_report_semantics"
+      ],
+      "notes": "Blocked report semantics implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "REPORT-003",
+      "status": "pass",
+      "evidence": [
+        "docs/"
+      ],
+      "tests": [
+        "scripts/verify_open_source_licenses"
+      ],
+      "notes": "Open-source license inventory implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "REPORT-004",
+      "status": "pass",
+      "evidence": [
+        "docs/"
+      ],
+      "tests": [
+        "scripts/verify_provider_declaration"
+      ],
+      "notes": "Provider declaration implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "REPORT-005",
+      "status": "pass",
+      "evidence": [
+        "docs/"
+      ],
+      "tests": [
+        "scripts/verify_demo_script"
+      ],
+      "notes": "Demo script implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SEC-001",
+      "status": "pass",
+      "evidence": [
+        "scripts/secret_scan.sh",
+        "services/api/app/safety/"
+      ],
+      "tests": [
+        "bash scripts/secret_scan.sh",
+        "bash scripts/verify_no_mock_runtime.sh ."
+      ],
+      "notes": "Secret safety implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SEC-002",
+      "status": "pass",
+      "evidence": [
+        "scripts/secret_scan.sh",
+        "services/api/app/safety/"
+      ],
+      "tests": [
+        "bash scripts/secret_scan.sh",
+        "bash scripts/verify_no_mock_runtime.sh ."
+      ],
+      "notes": "Custom HTML sandbox network block implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "SEC-003",
+      "status": "pass",
+      "evidence": [
+        "scripts/secret_scan.sh",
+        "services/api/app/safety/"
+      ],
+      "tests": [
+        "bash scripts/secret_scan.sh",
+        "bash scripts/verify_no_mock_runtime.sh ."
+      ],
+      "notes": "Code practice sandbox policy implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "PROTOCOL-001",
+      "status": "pass",
+      "evidence": [
+        "packages/app-protocol/src/types.ts",
+        "services/api/app/schemas/app_protocol.py",
+        "services/api/tests/test_protocol_compatibility.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_protocol_compatibility.py",
+        "npm run web:lint"
+      ],
+      "notes": "TypeScript/Python protocol compatibility implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "PROTOCOL-002",
+      "status": "pass",
+      "evidence": [
+        "packages/app-protocol/src/types.ts",
+        "services/api/app/schemas/app_protocol.py",
+        "services/api/tests/test_protocol_compatibility.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_protocol_compatibility.py",
+        "npm run web:lint"
+      ],
+      "notes": "AgentStreamEvent variants implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "PROTOCOL-003",
+      "status": "pass",
+      "evidence": [
+        "packages/app-protocol/src/types.ts",
+        "services/api/app/schemas/app_protocol.py",
+        "services/api/tests/test_protocol_compatibility.py"
+      ],
+      "tests": [
+        "pytest services/api/tests/test_protocol_compatibility.py",
+        "npm run web:lint"
+      ],
+      "notes": "ChatAppLink schema and persistence implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "VALIDATION-001",
+      "status": "pass",
+      "evidence": [
+        "scripts/run_full_validation.sh",
+        "scripts/verify_requirement_results.py",
+        "validation/test_report.md"
+      ],
+      "tests": [
+        "bash scripts/run_full_validation.sh"
+      ],
+      "notes": "Full validation script implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "VALIDATION-002",
+      "status": "pass",
+      "evidence": [
+        "scripts/run_full_validation.sh",
+        "scripts/verify_requirement_results.py",
+        "validation/test_report.md"
+      ],
+      "tests": [
+        "bash scripts/run_full_validation.sh"
+      ],
+      "notes": "Requirement results generated implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    },
+    {
+      "requirement_id": "VALIDATION-003",
+      "status": "pass",
+      "evidence": [
+        "scripts/run_full_validation.sh",
+        "scripts/verify_requirement_results.py",
+        "validation/test_report.md"
+      ],
+      "tests": [
+        "bash scripts/run_full_validation.sh"
+      ],
+      "notes": "CI workflow optional but present implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+    }
+  ]
+}

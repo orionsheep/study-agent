@@ -1,0 +1,1012 @@
+{
+  "version": "v4-all-requirements-test-gated",
+  "completion_rule": "Every requirement must have status pass in learnforge-v2-product/validation/requirement_results.json. External readiness may be blocked only with BLOCKED_REAL_INTEGRATION_REPORT.md and cannot be marked complete.",
+  "requirements": [
+    {
+      "id": "ARCH-001",
+      "title": "Create new project in ./learnforge-v2-product",
+      "category": "architecture",
+      "acceptance": "Project exists with apps/web, services/api, packages/app-protocol, packages/learning-apps, docs, scripts, validation. Legacy project is not patched.",
+      "tests": [
+        "scripts/verify_project_structure"
+      ]
+    },
+    {
+      "id": "ARCH-002",
+      "title": "No legacy React Flow as main canvas",
+      "category": "architecture",
+      "acceptance": "React Flow only appears inside knowledge.graph or learning.path graph App implementation, not main canvas root.",
+      "tests": [
+        "scripts/verify_reactflow_scope"
+      ]
+    },
+    {
+      "id": "ARCH-003",
+      "title": "No mock/skeleton completion",
+      "category": "architecture",
+      "acceptance": "Runtime success paths do not include forbidden mock/fake/placeholder phrases and health does not report ready for missing providers.",
+      "tests": [
+        "scripts/verify_no_mock_runtime.sh"
+      ]
+    },
+    {
+      "id": "BACKEND-001",
+      "title": "FastAPI backend runtime",
+      "category": "backend",
+      "acceptance": "services/api exposes FastAPI app with required API routes and OpenAPI schema.",
+      "tests": [
+        "pytest services/api/tests/test_health_routes.py"
+      ]
+    },
+    {
+      "id": "BACKEND-002",
+      "title": "PostgreSQL persistence schema",
+      "category": "backend",
+      "acceptance": "Database models/migrations include all required product tables.",
+      "tests": [
+        "pytest services/api/tests/test_database_schema.py"
+      ]
+    },
+    {
+      "id": "BACKEND-003",
+      "title": "SSE AgentStreamEvent streaming",
+      "category": "backend",
+      "acceptance": "Chat route streams AgentStreamEvent variants and frontend consumes them.",
+      "tests": [
+        "pytest services/api/tests/test_streaming_events.py",
+        "playwright e2e/chat-stream.spec.ts"
+      ]
+    },
+    {
+      "id": "HERMES-001",
+      "title": "Hermes runtime integration path",
+      "category": "external",
+      "acceptance": "Hermes runtime adapter uses Python AIAgent or CLI; status reports ready or blocked_missing_runtime, never mock-ready.",
+      "tests": [
+        "pytest services/api/tests/test_hermes_runtime_status.py"
+      ]
+    },
+    {
+      "id": "HERMES-002",
+      "title": "Hermes Skill files",
+      "category": "external",
+      "acceptance": "Required SKILL.md files exist and are synchronized under hermes_profile/skills.",
+      "tests": [
+        "pytest services/api/tests/test_hermes_skill_files.py"
+      ]
+    },
+    {
+      "id": "MIMO-001",
+      "title": "MiMo ModelGateway real client",
+      "category": "external",
+      "acceptance": "MiMo client implements OpenAI-compatible requests, streaming, structured output, and real readiness validation if credentials exist.",
+      "tests": [
+        "pytest services/api/tests/test_mimo_gateway.py"
+      ]
+    },
+    {
+      "id": "MIMO-002",
+      "title": "MiMo reasoning_content compatibility",
+      "category": "external",
+      "acceptance": "Provider-specific reasoning_content is preserved when thinking mode is enabled.",
+      "tests": [
+        "pytest services/api/tests/test_mimo_reasoning_content.py"
+      ]
+    },
+    {
+      "id": "IMAGE2-001",
+      "title": "image2 ImageGateway real client",
+      "category": "external",
+      "acceptance": "image2 client reads env config, generates/stores image assets when credentials exist, blocked otherwise.",
+      "tests": [
+        "pytest services/api/tests/test_image2_gateway.py"
+      ]
+    },
+    {
+      "id": "AGENT-001",
+      "title": "Hermes Orchestrator Agent",
+      "category": "agent",
+      "acceptance": "orchestrator_agent.py exists, routes tasks, dispatches skills, emits trace events, records run/steps.",
+      "tests": [
+        "pytest services/api/tests/test_orchestrator_agent.py"
+      ]
+    },
+    {
+      "id": "AGENT-002",
+      "title": "Profile Agent",
+      "category": "agent",
+      "acceptance": "profile_agent.py extracts 8+ profile dimensions and writes profile memory with confidence/evidence.",
+      "tests": [
+        "pytest services/api/tests/test_profile_agent.py"
+      ]
+    },
+    {
+      "id": "AGENT-003",
+      "title": "Knowledge Agent",
+      "category": "agent",
+      "acceptance": "knowledge_agent.py ingests course docs, builds chunks, knowledge points, prerequisite graph, source_refs.",
+      "tests": [
+        "pytest services/api/tests/test_knowledge_agent.py"
+      ]
+    },
+    {
+      "id": "AGENT-004",
+      "title": "Planner Agent",
+      "category": "agent",
+      "acceptance": "planner_agent.py generates personalized path, locks, stages, resources, and replans after evaluation.",
+      "tests": [
+        "pytest services/api/tests/test_planner_agent.py"
+      ]
+    },
+    {
+      "id": "AGENT-005",
+      "title": "Recommender Agent",
+      "category": "agent",
+      "acceptance": "recommender_agent.py ranks resources with reasons based on profile, weakness, goal, feedback.",
+      "tests": [
+        "pytest services/api/tests/test_recommender_agent.py"
+      ]
+    },
+    {
+      "id": "AGENT-006",
+      "title": "Tutor Agent",
+      "category": "agent",
+      "acceptance": "tutor_agent.py streams rich teacher chat, AppLinks, App event explanations, notes summaries, RAG-grounded answers.",
+      "tests": [
+        "pytest services/api/tests/test_tutor_agent.py"
+      ]
+    },
+    {
+      "id": "AGENT-007",
+      "title": "App Canvas Agent",
+      "category": "agent",
+      "acceptance": "app_canvas_agent.py creates/updates Apps, ChatAppLinks, handles App events and spatial memory.",
+      "tests": [
+        "pytest services/api/tests/test_app_canvas_agent.py"
+      ]
+    },
+    {
+      "id": "AGENT-008",
+      "title": "Evaluator Agent",
+      "category": "agent",
+      "acceptance": "evaluator_agent.py grades quizzes, updates mastery/misconception, triggers replanning.",
+      "tests": [
+        "pytest services/api/tests/test_evaluator_agent.py"
+      ]
+    },
+    {
+      "id": "AGENT-009",
+      "title": "Verifier Agent",
+      "category": "agent",
+      "acceptance": "verifier_agent.py checks grounding, safety, schema, quiz consistency, code/image safety.",
+      "tests": [
+        "pytest services/api/tests/test_verifier_agent.py"
+      ]
+    },
+    {
+      "id": "AGENT-010",
+      "title": "EduMemory Agent",
+      "category": "agent",
+      "acceptance": "memory_agent.py orchestrates EduMem0 extraction/retrieval/update/conflict/decay and evidence.",
+      "tests": [
+        "pytest services/api/tests/test_memory_agent.py"
+      ]
+    },
+    {
+      "id": "AGENT-011",
+      "title": "Resource Bundle Agent",
+      "category": "agent",
+      "acceptance": "resource_bundle_agent.py creates coordinated bundle with at least 5 resource types and verifier pass.",
+      "tests": [
+        "pytest services/api/tests/test_resource_bundle_agent.py"
+      ]
+    },
+    {
+      "id": "SKILL-001",
+      "title": "Document Skill",
+      "category": "skill",
+      "acceptance": "Generates personalized Markdown document with source_refs and verifier result.",
+      "tests": [
+        "pytest services/api/tests/test_document_skill.py"
+      ]
+    },
+    {
+      "id": "SKILL-002",
+      "title": "Mindmap Skill",
+      "category": "skill",
+      "acceptance": "Generates Mermaid/Markmap mindmap with clickable nodes and weak point highlights.",
+      "tests": [
+        "pytest services/api/tests/test_mindmap_skill.py"
+      ]
+    },
+    {
+      "id": "SKILL-003",
+      "title": "Quiz Skill",
+      "category": "skill",
+      "acceptance": "Generates multiple question types with answers, explanations, misconception tags, source_refs.",
+      "tests": [
+        "pytest services/api/tests/test_quiz_skill.py"
+      ]
+    },
+    {
+      "id": "SKILL-004",
+      "title": "PPT Skill",
+      "category": "skill",
+      "acceptance": "Generates PPT outline and pptx export with personalized slide structure.",
+      "tests": [
+        "pytest services/api/tests/test_ppt_skill.py"
+      ]
+    },
+    {
+      "id": "SKILL-005",
+      "title": "Code Practice Skill",
+      "category": "skill",
+      "acceptance": "Generates safe code lab with starter code, tests, expected output, explanation.",
+      "tests": [
+        "pytest services/api/tests/test_code_practice_skill.py"
+      ]
+    },
+    {
+      "id": "SKILL-006",
+      "title": "Image Generation Skill",
+      "category": "skill",
+      "acceptance": "Plans image prompt through MiMo and calls image2 when credentials available, with overlay labels and safety.",
+      "tests": [
+        "pytest services/api/tests/test_image_generation_skill.py"
+      ]
+    },
+    {
+      "id": "SKILL-007",
+      "title": "Video Script Skill",
+      "category": "skill",
+      "acceptance": "Generates storyboard, narration, keyframe prompts, animation steps.",
+      "tests": [
+        "pytest services/api/tests/test_video_script_skill.py"
+      ]
+    },
+    {
+      "id": "SKILL-008",
+      "title": "Reading Material Skill",
+      "category": "skill",
+      "acceptance": "Generates extension reading guide with recommendation reason and sources/unverified marker.",
+      "tests": [
+        "pytest services/api/tests/test_reading_skill.py"
+      ]
+    },
+    {
+      "id": "SKILL-009",
+      "title": "Notes Skill",
+      "category": "skill",
+      "acceptance": "Summarizes Tutor Chat and App actions into Notes App with linked Apps.",
+      "tests": [
+        "pytest services/api/tests/test_notes_skill.py"
+      ]
+    },
+    {
+      "id": "SKILL-010",
+      "title": "Dashboard Skill",
+      "category": "skill",
+      "acceptance": "Aggregates profile, mastery, memory evidence, path, recommendation, run trace.",
+      "tests": [
+        "pytest services/api/tests/test_dashboard_skill.py"
+      ]
+    },
+    {
+      "id": "SKILL-011",
+      "title": "Resource Bundle Skill",
+      "category": "skill",
+      "acceptance": "Generates at least five personalized resources from Planner output.",
+      "tests": [
+        "pytest services/api/tests/test_resource_bundle_skill.py"
+      ]
+    },
+    {
+      "id": "SKILL-012",
+      "title": "App Generation Skill",
+      "category": "skill",
+      "acceptance": "Converts resources into CanvasApps and creates ChatAppLinks.",
+      "tests": [
+        "pytest services/api/tests/test_app_generation_skill.py"
+      ]
+    },
+    {
+      "id": "SKILL-013",
+      "title": "Custom HTML App Skill",
+      "category": "skill",
+      "acceptance": "Creates custom.html app payload for sandbox renderer; secondary path only.",
+      "tests": [
+        "pytest services/api/tests/test_custom_html_skill.py",
+        "vitest custom html parser tests"
+      ]
+    },
+    {
+      "id": "SKILL-014",
+      "title": "Verifier Skill",
+      "category": "skill",
+      "acceptance": "Callable verifier skill runs for every resource generation flow.",
+      "tests": [
+        "pytest services/api/tests/test_verifier_skill.py"
+      ]
+    },
+    {
+      "id": "SKILL-015",
+      "title": "Memory Update Skill",
+      "category": "skill",
+      "acceptance": "Writes chat, quiz, app, layout, feedback memories to EduMem0.",
+      "tests": [
+        "pytest services/api/tests/test_memory_update_skill.py"
+      ]
+    },
+    {
+      "id": "SKILL-016",
+      "title": "Course Ingestion Skill",
+      "category": "skill",
+      "acceptance": "Parses course files and builds RAG chunks, knowledge points, prerequisites.",
+      "tests": [
+        "pytest services/api/tests/test_course_ingestion_skill.py"
+      ]
+    },
+    {
+      "id": "MEM-001",
+      "title": "EduMem0 schema and persistence",
+      "category": "memory",
+      "acceptance": "EduMemoryItem schema includes required fields and persists to PostgreSQL.",
+      "tests": [
+        "pytest services/api/tests/test_edumem0_schema.py"
+      ]
+    },
+    {
+      "id": "MEM-002",
+      "title": "Memory types",
+      "category": "memory",
+      "acceptance": "All required memory types implemented and queryable.",
+      "tests": [
+        "pytest services/api/tests/test_edumem0_types.py"
+      ]
+    },
+    {
+      "id": "MEM-003",
+      "title": "Confidence policy",
+      "category": "memory",
+      "acceptance": "Confidence changes based on evidence type and repetition.",
+      "tests": [
+        "pytest services/api/tests/test_confidence_policy.py"
+      ]
+    },
+    {
+      "id": "MEM-004",
+      "title": "Decay policy",
+      "category": "memory",
+      "acceptance": "Mastery/misconception decay and stable profile retention implemented.",
+      "tests": [
+        "pytest services/api/tests/test_decay_policy.py"
+      ]
+    },
+    {
+      "id": "MEM-005",
+      "title": "Conflict resolver",
+      "category": "memory",
+      "acceptance": "Contradictory evidence creates conflict decision and confidence updates.",
+      "tests": [
+        "pytest services/api/tests/test_conflict_resolver.py"
+      ]
+    },
+    {
+      "id": "MEM-006",
+      "title": "Chat extraction writes profile memory",
+      "category": "memory",
+      "acceptance": "Profile chat input creates profile memory and evidence.",
+      "tests": [
+        "pytest services/api/tests/test_memory_chat_extraction.py"
+      ]
+    },
+    {
+      "id": "MEM-007",
+      "title": "Quiz updates mastery and misconception",
+      "category": "memory",
+      "acceptance": "Quiz results write mastery/misconception memories.",
+      "tests": [
+        "pytest services/api/tests/test_memory_quiz_update.py"
+      ]
+    },
+    {
+      "id": "MEM-008",
+      "title": "App events update memory",
+      "category": "memory",
+      "acceptance": "Demo/App interactions write app_interaction memory.",
+      "tests": [
+        "pytest services/api/tests/test_memory_app_event_update.py"
+      ]
+    },
+    {
+      "id": "MEM-009",
+      "title": "Spatial layout memory",
+      "category": "memory",
+      "acceptance": "Drag/group/layout events write spatial_layout memory.",
+      "tests": [
+        "pytest services/api/tests/test_memory_spatial_layout_update.py"
+      ]
+    },
+    {
+      "id": "MEM-010",
+      "title": "Dashboard memory evidence",
+      "category": "memory",
+      "acceptance": "Dashboard displays evidence chain for profile/mastery/misconceptions.",
+      "tests": [
+        "pytest services/api/tests/test_dashboard_memory_evidence.py",
+        "playwright e2e/dashboard-memory.spec.ts"
+      ]
+    },
+    {
+      "id": "CANVAS-001",
+      "title": "Spatial canvas layout",
+      "category": "frontend",
+      "acceptance": "Left canvas and right Tutor Chat layout implemented with Chinese UI.",
+      "tests": [
+        "playwright e2e/layout.spec.ts"
+      ]
+    },
+    {
+      "id": "CANVAS-002",
+      "title": "Free pan/zoom/drag/resize",
+      "category": "frontend",
+      "acceptance": "Canvas pan/zoom and App drag/resize work and persist.",
+      "tests": [
+        "playwright e2e/canvas-interactions.spec.ts"
+      ]
+    },
+    {
+      "id": "CANVAS-003",
+      "title": "App Dock/search/minimap/auto arrange",
+      "category": "frontend",
+      "acceptance": "Dock, search, minimap, auto arrange are functional.",
+      "tests": [
+        "playwright e2e/canvas-tools.spec.ts"
+      ]
+    },
+    {
+      "id": "CANVAS-004",
+      "title": "AppLink Flight",
+      "category": "frontend",
+      "acceptance": "Clicking chat AppLink animates and focuses/opens target App.",
+      "tests": [
+        "playwright e2e/applink-flight.spec.ts"
+      ]
+    },
+    {
+      "id": "CANVAS-005",
+      "title": "App state transitions",
+      "category": "frontend",
+      "acceptance": "icon/card/window/fullscreen/split/minimized/focused states function.",
+      "tests": [
+        "vitest AppWindow state tests",
+        "playwright e2e/app-window-states.spec.ts"
+      ]
+    },
+    {
+      "id": "CANVAS-006",
+      "title": "Relationship connectors and frames",
+      "category": "frontend",
+      "acceptance": "Canvas supports App connectors and grouping frames.",
+      "tests": [
+        "playwright e2e/connectors-frames.spec.ts"
+      ]
+    },
+    {
+      "id": "APP-001",
+      "title": "ProfileDashboardApp",
+      "category": "frontend-app",
+      "acceptance": "Displays profile dimensions and evidence.",
+      "tests": [
+        "vitest ProfileDashboardApp tests"
+      ]
+    },
+    {
+      "id": "APP-002",
+      "title": "LearningPathApp",
+      "category": "frontend-app",
+      "acceptance": "Displays stages, locks, progress, resources; node click focuses/creates App.",
+      "tests": [
+        "playwright e2e/learning-path-app.spec.ts"
+      ]
+    },
+    {
+      "id": "APP-003",
+      "title": "KnowledgeGraph/Mindmap App",
+      "category": "frontend-app",
+      "acceptance": "Displays knowledge graph/mindmap; React Flow scoped internally only.",
+      "tests": [
+        "vitest KnowledgeGraphApp tests"
+      ]
+    },
+    {
+      "id": "APP-004",
+      "title": "WorkEnergyDemoApp",
+      "category": "frontend-app",
+      "acceptance": "Controls update work/kinetic energy values and emit App event.",
+      "tests": [
+        "vitest work energy math tests",
+        "playwright e2e/work-energy-demo.spec.ts"
+      ]
+    },
+    {
+      "id": "APP-005",
+      "title": "GradientDescentDemoApp",
+      "category": "frontend-app",
+      "acceptance": "Learning rate and iterations update curve/path/table and emit App event.",
+      "tests": [
+        "vitest gradient descent tests"
+      ]
+    },
+    {
+      "id": "APP-006",
+      "title": "QuizPracticeApp",
+      "category": "frontend-app",
+      "acceptance": "Answer/submit/feedback/evaluator/dashboard loop works.",
+      "tests": [
+        "playwright e2e/quiz-learning-loop.spec.ts"
+      ]
+    },
+    {
+      "id": "APP-007",
+      "title": "CodeLabApp",
+      "category": "frontend-app",
+      "acceptance": "Shows starter code, tests, explanation, safe execution warning/route.",
+      "tests": [
+        "vitest CodeLabApp tests"
+      ]
+    },
+    {
+      "id": "APP-008",
+      "title": "NotesApp",
+      "category": "frontend-app",
+      "acceptance": "Creates and persists summary notes linked to Apps.",
+      "tests": [
+        "playwright e2e/notes-summary.spec.ts"
+      ]
+    },
+    {
+      "id": "APP-009",
+      "title": "LearningDashboardApp",
+      "category": "frontend-app",
+      "acceptance": "Shows profile/mastery/weakness/recommendations/memory evidence/run trace.",
+      "tests": [
+        "playwright e2e/dashboard-app.spec.ts"
+      ]
+    },
+    {
+      "id": "APP-010",
+      "title": "PPTPreviewApp",
+      "category": "frontend-app",
+      "acceptance": "Previews generated slides and export metadata.",
+      "tests": [
+        "vitest PPTPreviewApp tests"
+      ]
+    },
+    {
+      "id": "APP-011",
+      "title": "ImageExplanationApp",
+      "category": "frontend-app",
+      "acceptance": "Shows image asset with frontend overlay labels and teaching goal.",
+      "tests": [
+        "vitest ImageExplanationApp tests"
+      ]
+    },
+    {
+      "id": "APP-012",
+      "title": "VideoScriptApp",
+      "category": "frontend-app",
+      "acceptance": "Shows storyboard, narration, keyframes, animation steps.",
+      "tests": [
+        "vitest VideoScriptApp tests"
+      ]
+    },
+    {
+      "id": "APP-013",
+      "title": "ResourceCenterApp",
+      "category": "frontend-app",
+      "acceptance": "Lists resources with filters, source_refs, verifier status.",
+      "tests": [
+        "vitest ResourceCenterApp tests"
+      ]
+    },
+    {
+      "id": "RAG-001",
+      "title": "Course ingestion and source_refs",
+      "category": "rag",
+      "acceptance": "Seed course and uploaded docs are chunked, embedded, retrievable with source_refs.",
+      "tests": [
+        "pytest services/api/tests/test_course_ingestion_and_rag.py"
+      ]
+    },
+    {
+      "id": "RAG-002",
+      "title": "Knowledge graph prerequisites",
+      "category": "rag",
+      "acceptance": "Knowledge points and prerequisite edges are extracted and used by Planner.",
+      "tests": [
+        "pytest services/api/tests/test_knowledge_graph_prereqs.py"
+      ]
+    },
+    {
+      "id": "SAFETY-001",
+      "title": "Verifier grounding gate",
+      "category": "safety",
+      "acceptance": "Resources without valid source_refs fail verifier.",
+      "tests": [
+        "pytest services/api/tests/test_verifier_grounding.py"
+      ]
+    },
+    {
+      "id": "SAFETY-002",
+      "title": "Prompt injection/content safety",
+      "category": "safety",
+      "acceptance": "Prompt injection and unsafe content are blocked or marked unsafe.",
+      "tests": [
+        "pytest services/api/tests/test_content_safety.py"
+      ]
+    },
+    {
+      "id": "SAFETY-003",
+      "title": "Code/image safety",
+      "category": "safety",
+      "acceptance": "Unsafe code commands and unsafe image prompts fail.",
+      "tests": [
+        "pytest services/api/tests/test_code_image_safety.py"
+      ]
+    },
+    {
+      "id": "GENUI-001",
+      "title": "CustomHtmlApp sandbox iframe",
+      "category": "generative-ui",
+      "acceptance": "CustomHtmlAppRenderer uses sandbox iframe, CSP, postMessage protocol.",
+      "tests": [
+        "vitest custom html sandbox tests"
+      ]
+    },
+    {
+      "id": "GENUI-002",
+      "title": "Streaming widget stability",
+      "category": "generative-ui",
+      "acceptance": "Handles partial JSON/HTML/script, height cache, finalize no flicker, ready race fallback.",
+      "tests": [
+        "vitest custom html streaming stability tests"
+      ]
+    },
+    {
+      "id": "COMP-001",
+      "title": "Competition profile requirement",
+      "category": "competition",
+      "acceptance": "Dialogue-based dynamic profile has >=6 dimensions and随学随新; implemented as 8+ dimensions.",
+      "tests": [
+        "pytest services/api/tests/test_profile_agent.py"
+      ]
+    },
+    {
+      "id": "COMP-002",
+      "title": "Competition 5+ resource generation",
+      "category": "competition",
+      "acceptance": "At least 5 personalized resource types generated by multi-agent/skill bundle.",
+      "tests": [
+        "pytest services/api/tests/test_resource_bundle_agent.py"
+      ]
+    },
+    {
+      "id": "COMP-003",
+      "title": "Competition path and push",
+      "category": "competition",
+      "acceptance": "Personalized path and resource push with recommendation reasons.",
+      "tests": [
+        "pytest services/api/tests/test_planner_agent.py",
+        "pytest services/api/tests/test_recommender_agent.py"
+      ]
+    },
+    {
+      "id": "COMP-004",
+      "title": "Competition intelligent tutoring",
+      "category": "competition",
+      "acceptance": "Tutor Agent answers with text/App explanation/notes and RAG grounding.",
+      "tests": [
+        "pytest services/api/tests/test_tutor_agent.py"
+      ]
+    },
+    {
+      "id": "COMP-005",
+      "title": "Competition learning evaluation",
+      "category": "competition",
+      "acceptance": "Quiz/evaluation updates memory, dashboard, path.",
+      "tests": [
+        "playwright e2e/quiz-learning-loop.spec.ts"
+      ]
+    },
+    {
+      "id": "COMP-006",
+      "title": "Competition anti-hallucination",
+      "category": "competition",
+      "acceptance": "RAG/source_refs/verifier/safety gates implemented and tested.",
+      "tests": [
+        "pytest services/api/tests/test_verifier_grounding.py"
+      ]
+    },
+    {
+      "id": "COMP-007",
+      "title": "Competition UX requirements",
+      "category": "competition",
+      "acceptance": "Stream output, rich cards, no dead controls, progress trace, smooth animations.",
+      "tests": [
+        "playwright e2e/ux-nonfunctional.spec.ts"
+      ]
+    },
+    {
+      "id": "DOC-001",
+      "title": "Documentation package",
+      "category": "docs",
+      "acceptance": "Docs include architecture, agents, memory, testing, competition traceability, licenses, provider declaration, demo script.",
+      "tests": [
+        "scripts/verify_docs_exist"
+      ]
+    },
+    {
+      "id": "API-001",
+      "title": "Required API routes exist",
+      "category": "backend-api",
+      "acceptance": "All API routes listed in BACKEND_RUNTIME_REQUIRED.md exist and are tested.",
+      "tests": [
+        "pytest services/api/tests/test_required_api_routes.py"
+      ]
+    },
+    {
+      "id": "API-002",
+      "title": "Agent run trace API",
+      "category": "backend-api",
+      "acceptance": "/api/agent-runs/{run_id} returns run and steps for frontend trace display.",
+      "tests": [
+        "pytest services/api/tests/test_agent_run_trace_api.py"
+      ]
+    },
+    {
+      "id": "API-003",
+      "title": "Canvas app API persistence",
+      "category": "backend-api",
+      "acceptance": "Canvas App create/update/event routes persist and return typed schema.",
+      "tests": [
+        "pytest services/api/tests/test_canvas_app_api.py"
+      ]
+    },
+    {
+      "id": "API-004",
+      "title": "Memory API retrieval",
+      "category": "backend-api",
+      "acceptance": "Memory search/extract/update routes function with persistent store.",
+      "tests": [
+        "pytest services/api/tests/test_memory_api.py"
+      ]
+    },
+    {
+      "id": "API-005",
+      "title": "Dashboard API aggregation",
+      "category": "backend-api",
+      "acceptance": "Dashboard API aggregates profile, path, mastery, memory evidence, recommendations, traces.",
+      "tests": [
+        "pytest services/api/tests/test_dashboard_api.py"
+      ]
+    },
+    {
+      "id": "API-006",
+      "title": "Image generation API",
+      "category": "backend-api",
+      "acceptance": "Image generation API routes through image2 gateway or returns blocked status without fake success.",
+      "tests": [
+        "pytest services/api/tests/test_image_api.py"
+      ]
+    },
+    {
+      "id": "API-007",
+      "title": "Course document API",
+      "category": "backend-api",
+      "acceptance": "Course document upload/ingest API builds RAG data and source_refs.",
+      "tests": [
+        "pytest services/api/tests/test_course_document_api.py"
+      ]
+    },
+    {
+      "id": "UX-001",
+      "title": "Streaming progress trace",
+      "category": "ux",
+      "acceptance": "Long-running generation shows run.step/progress events, not blank waiting.",
+      "tests": [
+        "playwright e2e/progress-trace.spec.ts"
+      ]
+    },
+    {
+      "id": "UX-002",
+      "title": "No enabled dead controls",
+      "category": "ux",
+      "acceptance": "Every enabled button/control has a working action; incomplete actions are disabled with reason.",
+      "tests": [
+        "playwright e2e/no-dead-controls.spec.ts"
+      ]
+    },
+    {
+      "id": "UX-003",
+      "title": "Reduced motion fallback",
+      "category": "ux",
+      "acceptance": "AppLink Flight and transitions respect prefers-reduced-motion.",
+      "tests": [
+        "playwright e2e/reduced-motion.spec.ts"
+      ]
+    },
+    {
+      "id": "UX-004",
+      "title": "Chinese-first UI",
+      "category": "ux",
+      "acceptance": "Main UI labels and flows are Chinese by default while preserving technical terms as needed.",
+      "tests": [
+        "playwright e2e/chinese-ui.spec.ts"
+      ]
+    },
+    {
+      "id": "UX-005",
+      "title": "Resource cards in chat",
+      "category": "ux",
+      "acceptance": "Tutor Chat renders generated resource cards and AppLink chips from stream events.",
+      "tests": [
+        "playwright e2e/resource-cards.spec.ts"
+      ]
+    },
+    {
+      "id": "APP-EVENT-001",
+      "title": "WorkEnergy App event to Tutor explanation",
+      "category": "app-event",
+      "acceptance": "Changing WorkEnergy parameters can trigger Tutor explanation with current values.",
+      "tests": [
+        "playwright e2e/app-event-tutor-explain.spec.ts"
+      ]
+    },
+    {
+      "id": "APP-EVENT-002",
+      "title": "Learning path node to App focus",
+      "category": "app-event",
+      "acceptance": "Clicking a learning path stage/resource focuses or creates linked App.",
+      "tests": [
+        "playwright e2e/path-node-app-focus.spec.ts"
+      ]
+    },
+    {
+      "id": "APP-EVENT-003",
+      "title": "Layout/group event to spatial memory",
+      "category": "app-event",
+      "acceptance": "Dragging/grouping Apps creates spatial_layout memory and dashboard evidence.",
+      "tests": [
+        "playwright e2e/layout-memory.spec.ts"
+      ]
+    },
+    {
+      "id": "REPORT-001",
+      "title": "RUN_REPORT evidence",
+      "category": "reports",
+      "acceptance": "RUN_REPORT.md lists commands, ports, readiness, test results, external integration status, and no secret values.",
+      "tests": [
+        "scripts/verify_reports_exist"
+      ]
+    },
+    {
+      "id": "REPORT-002",
+      "title": "Blocked report semantics",
+      "category": "reports",
+      "acceptance": "If external integration blocked, BLOCKED_REAL_INTEGRATION_REPORT.md lists exact blockers and product is not marked complete.",
+      "tests": [
+        "scripts/verify_blocked_report_semantics"
+      ]
+    },
+    {
+      "id": "REPORT-003",
+      "title": "Open-source license inventory",
+      "category": "docs",
+      "acceptance": "docs/open_source_licenses.md lists all open-source dependencies, source, license, and purpose.",
+      "tests": [
+        "scripts/verify_open_source_licenses"
+      ]
+    },
+    {
+      "id": "REPORT-004",
+      "title": "Provider declaration",
+      "category": "docs",
+      "acceptance": "docs/provider_declaration.md declares MiMo, image2, Hermes, Mem0/EduMem0, optional fallback providers and credential handling.",
+      "tests": [
+        "scripts/verify_provider_declaration"
+      ]
+    },
+    {
+      "id": "REPORT-005",
+      "title": "Demo script",
+      "category": "docs",
+      "acceptance": "docs/demo_script.md provides a 7-minute competition demo flow covering profile, path, resources, AppLink, quiz, dashboard.",
+      "tests": [
+        "scripts/verify_demo_script"
+      ]
+    },
+    {
+      "id": "SEC-001",
+      "title": "Secret safety",
+      "category": "security",
+      "acceptance": "No real API keys in repo; .env ignored; secret scan runs.",
+      "tests": [
+        "scripts/secret_scan.sh"
+      ]
+    },
+    {
+      "id": "SEC-002",
+      "title": "Custom HTML sandbox network block",
+      "category": "security",
+      "acceptance": "CustomHtmlApp iframe blocks network by default and intercepts links.",
+      "tests": [
+        "vitest CustomHtmlApp security tests"
+      ]
+    },
+    {
+      "id": "SEC-003",
+      "title": "Code practice sandbox policy",
+      "category": "security",
+      "acceptance": "CodeLab does not execute untrusted arbitrary code in backend process; sandbox policy documented/tested.",
+      "tests": [
+        "pytest services/api/tests/test_code_sandbox_policy.py"
+      ]
+    },
+    {
+      "id": "PROTOCOL-001",
+      "title": "TypeScript/Python protocol compatibility",
+      "category": "protocol",
+      "acceptance": "Shared app protocol JSON fixtures validate against TS and Python schemas.",
+      "tests": [
+        "vitest protocol fixtures",
+        "pytest services/api/tests/test_protocol_compatibility.py"
+      ]
+    },
+    {
+      "id": "PROTOCOL-002",
+      "title": "AgentStreamEvent variants",
+      "category": "protocol",
+      "acceptance": "All required AgentStreamEvent variants are implemented and handled by frontend.",
+      "tests": [
+        "vitest AgentStreamEvent reducer tests"
+      ]
+    },
+    {
+      "id": "PROTOCOL-003",
+      "title": "ChatAppLink schema and persistence",
+      "category": "protocol",
+      "acceptance": "ChatAppLink schema exists in TS/Python and persists in database.",
+      "tests": [
+        "pytest services/api/tests/test_chat_app_link_schema.py"
+      ]
+    },
+    {
+      "id": "VALIDATION-001",
+      "title": "Full validation script",
+      "category": "validation",
+      "acceptance": "scripts/run_full_validation.sh executes backend, frontend, E2E, no-mock, secret scan, requirement verification.",
+      "tests": [
+        "bash scripts/run_full_validation.sh"
+      ]
+    },
+    {
+      "id": "VALIDATION-002",
+      "title": "Requirement results generated",
+      "category": "validation",
+      "acceptance": "validation/requirement_results.json contains one pass result per requirement ID.",
+      "tests": [
+        "python scripts/verify_requirement_results.py"
+      ]
+    },
+    {
+      "id": "VALIDATION-003",
+      "title": "CI workflow optional but present",
+      "category": "validation",
+      "acceptance": "A GitHub Actions or equivalent CI workflow runs the validation commands, or docs explain local-only environment limitation.",
+      "tests": [
+        "scripts/verify_ci_or_local_validation_doc"
+      ]
+    }
+  ]
+}

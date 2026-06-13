@@ -1,0 +1,406 @@
+INFO:     Started server process [28852]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8011 (Press CTRL+C to quit)
+INFO:     127.0.0.1:64320 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64321 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64321 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64320 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64320 - "OPTIONS /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64321 - "OPTIONS /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64322 - "OPTIONS /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64323 - "OPTIONS /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64324 - "OPTIONS /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64325 - "OPTIONS /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64321 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64320 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64321 - "OPTIONS /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64324 - "OPTIONS /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64322 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64325 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64323 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64324 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64321 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64322 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64320 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64325 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64323 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64417 - "OPTIONS /api/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64417 - "POST /api/chat/stream HTTP/1.1" 200 OK
+ERROR:    Exception in ASGI application
+  + Exception Group Traceback (most recent call last):
+  |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 81, in collapse_excgroups
+  |     yield
+  |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/responses.py", line 274, in __call__
+  |     async with anyio.create_task_group() as task_group:
+  |                ~~~~~~~~~~~~~~~~~~~~~~~^^
+  |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py", line 799, in __aexit__
+  |     raise BaseExceptionGroup(
+  |         "unhandled errors in a TaskGroup", self._exceptions
+  |     ) from None
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/uvicorn/protocols/http/httptools_impl.py", line 421, in run_asgi
+    |     result = await app(  # type: ignore[func-returns-value]
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |         self.scope, self.receive, self.send
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     )
+    |     ^
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    |     return await self.app(scope, receive, send)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/fastapi/applications.py", line 1159, in __call__
+    |     await super().__call__(scope, receive, send)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/applications.py", line 90, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    |     raise exc
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    |     await self.simple_response(scope, receive, send, request_headers=headers)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    |     await self.app(scope, receive, send)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/routing.py", line 660, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/routing.py", line 680, in app
+    |     await route.handle(scope, receive, send)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/routing.py", line 276, in handle
+    |     await self.app(scope, receive, send)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 134, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 121, in app
+    |     await response(scope, receive, send)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/responses.py", line 273, in __call__
+    |     with collapse_excgroups():
+    |          ~~~~~~~~~~~~~~~~~~^^
+    |   File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 162, in __exit__
+    |     self.gen.throw(value)
+    |     ~~~~~~~~~~~~~~^^^^^^^
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 87, in collapse_excgroups
+    |     raise exc
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/responses.py", line 277, in wrap
+    |     await func()
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/responses.py", line 250, in stream_response
+    |     async for chunk in self.body_iterator:
+    |     ...<2 lines>...
+    |         await send({"type": "http.response.body", "body": chunk, "more_body": True})
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/services/api/app/main.py", line 591, in generate
+    |     async for event in orchestrator.execute_plan(plan, context):
+    |         yield orchestrator.sse_line(event)
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/services/api/app/agents/orchestrator_agent.py", line 1280, in execute_plan
+    |     output = PlannerAgent().run(PlannerAgentInput(student_id=context.student_id, course_id=context.course_id, topic=plan.payload.get("topic", "神经网络")))
+    |              ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/mychanging/Downloads/learnforge-v2-product/services/api/app/agents/planner_agent.py", line 23, in run
+    |     weak_math = any("数学" in item for item in profile.get("weak_points", [])) or "数学" in str(profile)
+    |                                                ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+    | TypeError: 'NoneType' object is not iterable
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/uvicorn/protocols/http/httptools_impl.py", line 421, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/fastapi/applications.py", line 1159, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 121, in app
+    await response(scope, receive, send)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/responses.py", line 273, in __call__
+    with collapse_excgroups():
+         ~~~~~~~~~~~~~~~~~~^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/responses.py", line 277, in wrap
+    await func()
+  File "/Users/mychanging/Downloads/learnforge-v2-product/.venv/lib/python3.14/site-packages/starlette/responses.py", line 250, in stream_response
+    async for chunk in self.body_iterator:
+    ...<2 lines>...
+        await send({"type": "http.response.body", "body": chunk, "more_body": True})
+  File "/Users/mychanging/Downloads/learnforge-v2-product/services/api/app/main.py", line 591, in generate
+    async for event in orchestrator.execute_plan(plan, context):
+        yield orchestrator.sse_line(event)
+  File "/Users/mychanging/Downloads/learnforge-v2-product/services/api/app/agents/orchestrator_agent.py", line 1280, in execute_plan
+    output = PlannerAgent().run(PlannerAgentInput(student_id=context.student_id, course_id=context.course_id, topic=plan.payload.get("topic", "神经网络")))
+             ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/mychanging/Downloads/learnforge-v2-product/services/api/app/agents/planner_agent.py", line 23, in run
+    weak_math = any("数学" in item for item in profile.get("weak_points", [])) or "数学" in str(profile)
+                                               ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not iterable
+INFO:     127.0.0.1:64462 - "PATCH /api/canvas/apps/app_9e0822ef1da2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64462 - "OPTIONS /api/canvas/apps/app_9e0822ef1da2/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64462 - "POST /api/canvas/apps/app_9e0822ef1da2/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65370 - "OPTIONS /api/canvas/apps/app_1d6b425763b9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65370 - "PATCH /api/canvas/apps/app_1d6b425763b9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49370 - "OPTIONS /api/canvas/apps/app_7150c9858de6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49370 - "PATCH /api/canvas/apps/app_7150c9858de6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50136 - "OPTIONS /api/canvas/apps/app-code-25038dcc09c21c3a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50136 - "PATCH /api/canvas/apps/app-code-25038dcc09c21c3a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50201 - "OPTIONS /api/canvas/apps/app_956796e2671d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50201 - "PATCH /api/canvas/apps/app_956796e2671d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50201 - "PATCH /api/canvas/apps/app_956796e2671d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50201 - "OPTIONS /api/canvas/apps/app_956796e2671d/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50201 - "POST /api/canvas/apps/app_956796e2671d/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50201 - "PATCH /api/canvas/apps/app_956796e2671d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50201 - "POST /api/canvas/apps/app_956796e2671d/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51044 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51045 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51046 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51047 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51044 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51047 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51044 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51047 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51047 - "OPTIONS /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51044 - "OPTIONS /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51046 - "OPTIONS /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51045 - "OPTIONS /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51048 - "OPTIONS /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51049 - "OPTIONS /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51047 - "OPTIONS /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51044 - "OPTIONS /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51045 - "OPTIONS /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51046 - "OPTIONS /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51048 - "OPTIONS /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51049 - "OPTIONS /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51047 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51044 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51045 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51049 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51048 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51046 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51047 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51044 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51048 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51049 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51046 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51044 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51047 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51048 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51049 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51044 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51046 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51048 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51048 - "OPTIONS /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51048 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51044 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51044 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51048 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52052 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52052 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52053 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52054 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52055 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52056 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52052 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52054 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52054 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52052 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52052 - "OPTIONS /api/canvas/apps/app_7150c9858de6/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52052 - "POST /api/canvas/apps/app_7150c9858de6/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52052 - "OPTIONS /api/canvas/apps/app_1d6b425763b9/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52052 - "POST /api/canvas/apps/app_1d6b425763b9/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52465 - "OPTIONS /api/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52465 - "POST /api/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52465 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55478 - "OPTIONS /api/canvas/apps/app_815dbc7ada77 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55478 - "PATCH /api/canvas/apps/app_815dbc7ada77 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55478 - "OPTIONS /api/canvas/applink/link_3e941ebb29d2/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55478 - "POST /api/canvas/applink/link_3e941ebb29d2/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55478 - "POST /api/canvas/applink/link_3e941ebb29d2/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55478 - "POST /api/canvas/applink/link_3e941ebb29d2/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55478 - "POST /api/canvas/applink/link_3e941ebb29d2/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55478 - "POST /api/canvas/applink/link_3e941ebb29d2/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55478 - "POST /api/canvas/applink/link_3e941ebb29d2/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55478 - "POST /api/canvas/applink/link_3e941ebb29d2/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55478 - "POST /api/canvas/applink/link_3e941ebb29d2/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55478 - "POST /api/canvas/applink/link_3e941ebb29d2/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58044 - "POST /api/canvas/applink/link_3e941ebb29d2/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58044 - "POST /api/canvas/applink/link_3e941ebb29d2/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58044 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58152 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58152 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58044 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58044 - "OPTIONS /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58152 - "OPTIONS /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58153 - "OPTIONS /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58154 - "OPTIONS /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58155 - "OPTIONS /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58156 - "OPTIONS /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58044 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58153 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58154 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58156 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58155 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58152 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58044 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58153 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58155 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58155 - "OPTIONS /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58155 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58044 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59716 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59717 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59717 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59716 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59716 - "OPTIONS /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59717 - "OPTIONS /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59720 - "OPTIONS /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59721 - "OPTIONS /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59722 - "OPTIONS /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59723 - "OPTIONS /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59717 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59716 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59720 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59723 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59722 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59717 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59720 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59716 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59723 - "OPTIONS /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59717 - "OPTIONS /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59722 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59716 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59722 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59722 - "OPTIONS /api/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59722 - "POST /api/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "OPTIONS /api/canvas/apps/app_815dbc7ada77/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/apps/app_815dbc7ada77/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "OPTIONS /api/canvas/apps/app_ab74ecef03f4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "PATCH /api/canvas/apps/app_ab74ecef03f4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "OPTIONS /api/canvas/applink/link_7aba58833910/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/applink/link_7aba58833910/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/applink/link_7aba58833910/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "OPTIONS /api/canvas/apps/app_ab74ecef03f4/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/apps/app_ab74ecef03f4/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/apps/app_ab74ecef03f4/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/apps/app_ab74ecef03f4/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/apps/app_ab74ecef03f4/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/apps/app_ab74ecef03f4/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/apps/app_ab74ecef03f4/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/apps/app_ab74ecef03f4/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/apps/app_ab74ecef03f4/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/apps/app_ab74ecef03f4/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/apps/app_ab74ecef03f4/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/apps/app_ab74ecef03f4/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/apps/app_ab74ecef03f4/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59943 - "POST /api/canvas/applink/link_7aba58833910/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60191 - "PATCH /api/canvas/apps/app_ab74ecef03f4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60191 - "POST /api/canvas/applink/link_7aba58833910/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59722 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59722 - "POST /api/canvas/applink/link_7aba58833910/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61406 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61407 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61407 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61406 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61408 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61409 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61407 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61410 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61408 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61406 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61407 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61409 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61407 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61407 - "POST /api/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61988 - "OPTIONS /api/canvas/apps/app_ca319c8889a3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61988 - "PATCH /api/canvas/apps/app_ca319c8889a3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61988 - "OPTIONS /api/canvas/applink/link_3f19bbb68c86/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61988 - "POST /api/canvas/applink/link_3f19bbb68c86/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61407 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54122 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54123 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54123 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54122 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54122 - "OPTIONS /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54123 - "OPTIONS /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54124 - "OPTIONS /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54125 - "OPTIONS /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54122 - "OPTIONS /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54126 - "OPTIONS /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54123 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54124 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54125 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54126 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54122 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54127 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54123 - "GET /api/canvas/apps?student_id=stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54124 - "GET /api/chat/messages?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&conversation_id=conv-stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54122 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54122 - "OPTIONS /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54123 - "OPTIONS /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54123 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54122 - "GET /api/resources?student_id=stu-8ee498ba017b6f6f&course_id=ai-course&limit=320 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54122 - "OPTIONS /api/canvas/apps/app_ca319c8889a3/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54122 - "POST /api/canvas/apps/app_ca319c8889a3/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54122 - "OPTIONS /api/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54122 - "POST /api/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54122 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54910 - "OPTIONS /api/canvas/apps/app_a48d0ab67697 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54910 - "PATCH /api/canvas/apps/app_a48d0ab67697 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54910 - "OPTIONS /api/canvas/applink/link_eec13ecab5bf/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54910 - "POST /api/canvas/applink/link_eec13ecab5bf/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54996 - "POST /api/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55561 - "GET /api/dashboard/stu-8ee498ba017b6f6f HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [28852]

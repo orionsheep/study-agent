@@ -1,0 +1,15 @@
+{
+  "status": "ready",
+  "reason": "Hermes SDK embedded via run_agent.AIAgent; provider=mimo; api_mode=chat_completions; model=mimo-v2.5-pro.",
+  "adapter": "python_aiagent_sdk",
+  "home": "/Users/mychanging/Downloads/learnforge-v2-product/.runtime/hermes",
+  "skills_synced": true,
+  "command_path": null,
+  "probe_command": null,
+  "integration_mode": "sdk_embedded",
+  "sdk_module": "run_agent",
+  "sdk_version": "0.14.0",
+  "sdk_path": "/Users/mychanging/Obsidian本地仓库/2026是最后的交汇点-起飞/.hermes/hermes-agent/run_agent.py",
+  "embedded_agent_class": "run_agent.AIAgent",
+  "cli_status": null
+}

@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: learnforge-api
+Version: 0.1.0
+Summary: LearnForge V2 FastAPI service
+Requires-Python: >=3.12
+Requires-Dist: fastapi>=0.115.12
+Requires-Dist: httpx>=0.28.1
+Requires-Dist: pydantic>=2.11.5
+Requires-Dist: python-multipart>=0.0.20
+Requires-Dist: python-dotenv>=1.1.0
+Requires-Dist: uvicorn[standard]>=0.34.2
+Provides-Extra: postgres
+Requires-Dist: psycopg[binary]>=3.2.9; extra == "postgres"
+Provides-Extra: hermes
+Requires-Dist: hermes-agent>=0.14.0; extra == "hermes"
+Provides-Extra: test
+Requires-Dist: pytest>=8.3.5; extra == "test"
+Requires-Dist: pytest-asyncio>=0.26.0; extra == "test"
