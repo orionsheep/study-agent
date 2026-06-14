@@ -832,6 +832,18 @@ class HermesTaskExecutor:
                         fallback_trace.append(f"hermes_json_repair_retry:{provider}#{repair_round + 1}:{str(exc)[:120]}")
                         prompt = base_prompt + self._json_repair_suffix(output)
                         continue
+                    # ── Graceful fallback: treat non-JSON output as plain text answer ──
+                    clean_output = output.strip()[:4000]
+                    if clean_output:
+                        fallback_trace.append(f"hermes_unstructured_fallback:{provider}:{str(exc)[:120]}")
+                        return HermesTaskResult(
+                            capability="answer_only",
+                            mode="synchronous",
+                            summary="Hermes 文本回复（非结构化输出）",
+                            text_response=clean_output,
+                            raw_text=output,
+                            trace=[*fallback_trace, "unstructured_fallback"],
+                        )
                     break
 
         raise last_error or ModelGatewayError("Hermes unified task failed.")

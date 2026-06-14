@@ -2236,6 +2236,20 @@ class UnifiedOrchestrator(OrchestratorAgent):
                 payload=payload,
             )
 
+        # ── 简单问候/闲聊 → 轻量快速回复（不启动 Hermes 全管线）──
+        if self._is_quick_chat(context.message):
+            return AgentPlan(
+                task_type="quick_answer",
+                steps=["quick_answer"],
+                payload={
+                    "topic": context.message,
+                    "source_material": context.message,
+                    "capability": "answer_only",
+                    "requires_canvas": False,
+                    "original_message": context.message,
+                },
+            )
+
         # ── 其余一切 → Hermes 决定 ──
         return AgentPlan(
             task_type="unified_hermes",
@@ -2250,6 +2264,71 @@ class UnifiedOrchestrator(OrchestratorAgent):
             },
         )
 
+    @staticmethod
+    def _is_quick_chat(message: str) -> bool:
+        """判断是否为简单问候/闲聊，不需要 Hermes 全管线处理。"""
+        stripped = message.strip().lower()
+        # 纯粹的问候
+        GREETINGS = {
+            "你好", "嗨", "hello", "hi", "hey", "在吗", "在不在", "早上好", "晚上好", "下午好",
+            "早安", "晚安", "good morning", "good evening",
+        }
+        if stripped in GREETINGS:
+            return True
+        # 以问候开头且整条消息很短（≤15字）
+        SHORT_GREETING_STARTS = ["你好", "嗨", "hello", "hi", "hey"]
+        if len(stripped) <= 15 and any(stripped.startswith(g) for g in SHORT_GREETING_STARTS):
+            return True
+        # 纯粹的致谢/道别
+        FAREWELLS = {"谢谢", "多谢", "感谢", "再见", "拜拜", "bye", "thanks", "thank you", "see you"}
+        if stripped in FAREWELLS:
+            return True
+        return False
+
+    async def _quick_answer_stream(
+        self, plan: AgentPlan, context: TutorTurnContext
+    ) -> AsyncIterator[dict[str, Any]]:
+        """轻量快速回复：直接用模型网关生成文本，不启动 Hermes 全管线。"""
+        run_id = self.store.create_run(context.student_id, plan.task_type,
+                                       {"message": context.message, "plan": plan.model_dump()})
+        self.save_chat_message(context, "user", context.message, run_id=run_id,
+                               metadata={"plan": plan.model_dump()})
+        yield event_dict(RunStarted(run_id=run_id, task_type=plan.task_type))
+
+        message_id = new_id("msg")
+        try:
+            gateway = ModelGatewayRouter()
+            provider = gateway.normalize_provider(context.model_provider)
+            client = gateway.client(provider)
+            system_prompt = (
+                "你是 LearnForge AI 学习助手，一个友好、专业的教育 AI。"
+                "请用简洁、温暖的中文回复用户的问候或闲聊。"
+                "回复控制在 2-3 句话以内，不要展开长篇大论。"
+                "如果用户打招呼，你也友好地打招呼并简要介绍自己。"
+            )
+            messages = [
+                ChatMessage(role="system", content=system_prompt),
+                ChatMessage(role="user", content=context.message),
+            ]
+            response = await client.complete(messages, stream=False)
+            text = client.extract_assistant_text(response)
+        except (ProviderBlocked, ModelGatewayError) as exc:
+            code = exc.code if isinstance(exc, ProviderBlocked) else "model_gateway_error"
+            reason = exc.reason if isinstance(exc, ProviderBlocked) else str(exc)
+            yield event_dict(RunStepEvent(run_id=run_id, step_name="quick_answer",
+                                          status="failed", detail=reason))
+            yield event_dict(RunDone(run_id=run_id, status="failed"))
+            yield event_dict(AssistantDone(message_id=message_id))
+            return
+
+        yield event_dict(AssistantDelta(message_id=message_id, text=text))
+        self.save_chat_message(context, "assistant", text, run_id=run_id,
+                               metadata={"capability": "answer_only"})
+        yield event_dict(RunStepEvent(run_id=run_id, step_name="quick_answer",
+                                      status="completed", detail="快速回复完成"))
+        yield event_dict(RunDone(run_id=run_id, status="completed"))
+        yield event_dict(AssistantDone(message_id=message_id))
+
     async def execute_plan(
         self, plan: AgentPlan, context: TutorTurnContext
     ) -> AsyncIterator[dict[str, Any]]:
@@ -2257,6 +2336,12 @@ class UnifiedOrchestrator(OrchestratorAgent):
         # 特殊路径：video_recommendations 和 profile_build 复用父类完整逻辑
         if plan.task_type in ("video_recommendations", "profile_build"):
             async for event in super().execute_plan(plan, context):
+                yield event
+            return
+
+        # ── 快速闲聊：直接用模型网关，不启动 Hermes 全管线 ──
+        if plan.task_type == "quick_answer":
+            async for event in self._quick_answer_stream(plan, context):
                 yield event
             return
 
