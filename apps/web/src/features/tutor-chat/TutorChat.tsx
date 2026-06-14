@@ -54,7 +54,7 @@ function agentStepLabel(name: string) {
   const labels: Record<string, string> = {
     backend: "发送请求",
     intent_detect: "识别意图",
-    capability_contract: "确认任务能力",
+    capability_contract: "Hermes 判定",
     context: "更新学习焦点",
     video_context: "锁定搜索主题",
     bilibili_live_search: "实时搜索 B站",
@@ -102,7 +102,6 @@ function shouldShowAgentStep(name: string) {
   return ![
     "backend",
     "skill_call",
-    "capability_contract",
     "resource_create",
     "app_create",
     "app_link",
@@ -120,7 +119,15 @@ function AgentActivity({ trace, isStreaming }: { trace: Array<TraceItem | string
   const visibleSteps = rawSteps
     .filter((step) => shouldShowAgentStep(step.name))
     .slice(-7)
-    .map((step) => ({ ...step, label: agentStepLabel(step.name), detail: agentStepDetail(step) }));
+    .map((step) => {
+      const label = agentStepLabel(step.name);
+      const detail = agentStepDetail(step);
+      // ── capability_contract 携带有 Hermes 判定的具体能力，直接展示 ──
+      if (step.name === "capability_contract" && detail) {
+        return { ...step, label: detail, detail: "" };
+      }
+      return { ...step, label, detail };
+    });
   const headStep = visibleSteps.find((step) => step.state === "running") ?? visibleSteps.at(-1);
   const completedSteps = visibleSteps.filter((step) => step.state === "completed").slice(-3);
   const statusText = isStreaming ? (headStep?.label ?? "正在思考") : "已完成";

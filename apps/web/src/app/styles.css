@@ -2104,12 +2104,12 @@ button:disabled {
   --accent-violet-bright: #b79dff;
   --accent-grad: linear-gradient(120deg, #5b8cff 0%, #9d7bff 100%);
   --accent-grad-soft: linear-gradient(120deg, rgba(91, 140, 255, 0.18) 0%, rgba(157, 123, 255, 0.18) 100%);
-  --st-done: #4ade80;
+  --st-done: #5b8cff;
   --st-learning: #5b8cff;
   --st-weak: #f9a23c;
   --st-risk: #f87a7a;
   --st-rec: #9d7bff;
-  --st-done-dim: rgba(74, 222, 128, 0.14);
+  --st-done-dim: rgba(91, 140, 255, 0.14);
   --st-learning-dim: rgba(91, 140, 255, 0.16);
   --st-weak-dim: rgba(249, 162, 60, 0.16);
   --st-risk-dim: rgba(248, 122, 122, 0.16);
