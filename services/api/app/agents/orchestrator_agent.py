@@ -2253,7 +2253,7 @@ class UnifiedOrchestrator(OrchestratorAgent):
         # ── 其余一切 → Hermes 决定 ──
         return AgentPlan(
             task_type="unified_hermes",
-            steps=["intent_detect", "hermes_runtime", "canvas_materializer", "artifact_verifier"],
+            steps=["intent_detect", "hermes_runtime", "canvas_materializer"],
             payload={
                 "topic": context.message,
                 "source_material": context.message,
@@ -2428,14 +2428,6 @@ class UnifiedOrchestrator(OrchestratorAgent):
                         detail=str(trace_item)[:180]
                     ))
 
-                # Handle background tasks (detailed_analysis)
-                if hermes_result.mode == "background":
-                    ack_text = "正在深度分析题目…"
-                    yield event_dict({"type": "assistant.delta", "message_id": message_id, "text": f"✅ {ack_text}\n\n> 💡 你可以在后台运行期间继续提问，分析完成后会自动推送到画布。"})
-                    yield event_dict({"type": "assistant.done", "message_id": message_id})
-                    yield event_dict({"type": "background.task_started", "run_id": run_id, "label": ack_text, "task_type": plan.task_type})
-                    self.save_chat_message(context, "assistant", f"✅ {ack_text}", run_id=run_id)
-
                 completed_detail = f"Hermes 完成：{detected_cap} · {hermes_result.summary[:100]}"
                 output = {
                     "summary": hermes_result.summary,
@@ -2530,40 +2522,24 @@ class UnifiedOrchestrator(OrchestratorAgent):
             step_order += 1
             await asyncio.sleep(0.01)
 
-        # ── Model Gateway: 生成最终导师回复 ──
-        provider = self.model_gateway.normalize_provider(context.model_provider)
-        provider_label = self.model_provider_label(provider)
-        yield event_dict(RunStepEvent(run_id=run_id, step_name="model_gateway", status="running", detail=f"调用 {provider_label} 大模型"))
-
-        try:
-            text, model_trace = await self.generate_model_tutor_response(plan, context, rag_context, step_outputs)
-        except (ProviderBlocked, Exception) as exc:
-            user_reason = (
-                self.model_failure_text(provider, f"{exc.code}: {exc.reason}")
-                if isinstance(exc, ProviderBlocked)
-                else self.model_failure_text(provider, f"{type(exc).__name__}: {exc}")
-            )
-            yield event_dict(RunStepEvent(run_id=run_id, step_name="model_gateway", status="failed", detail=user_reason))
-            yield event_dict(AssistantDelta(message_id=message_id, text=user_reason))
-            yield event_dict(RunDone(run_id=run_id, status="failed"))
-            yield event_dict(AssistantDone(message_id=message_id))
-            return
-
-        self.record_trace(run_id, "model_gateway", step_order, model_trace)
-        actual_provider = str(model_trace.get("provider") or provider)
-        actual_label = self.model_provider_label(actual_provider)
-        yield event_dict(RunStepEvent(run_id=run_id, step_name="model_gateway", status="completed", detail=f"{actual_label} {model_trace['model']} 已生成回复"))
+        # ── 直接输出 Hermes 的结果，不额外调用模型 ──
+        assistant_text = ""
+        if hermes_result:
+            if hermes_result.text_response:
+                assistant_text = hermes_result.text_response
+            elif hermes_result.raw_html:
+                assistant_text = f"✅ 分析完成！报告已推送到画布。"
+            elif hermes_result.summary:
+                assistant_text = hermes_result.summary
+            else:
+                assistant_text = "处理完成。"
 
         self.save_chat_message(
-            context, "assistant", strip_generation_markers(text),
+            context, "assistant", strip_generation_markers(assistant_text),
             run_id=run_id,
-            metadata={
-                "capability": hermes_result.capability if hermes_result else "unified_hermes",
-                "model_gateway": model_trace,
-                "artifact_verifier": step_outputs.get("artifact_verifier"),
-            },
+            metadata={"capability": hermes_result.capability if hermes_result else "unified_hermes"},
         )
-        for chunk in self._chunk_text(text):
+        for chunk in self._chunk_text(assistant_text):
             yield event_dict(AssistantDelta(message_id=message_id, text=chunk))
             await asyncio.sleep(0.005)
 
@@ -2571,12 +2547,7 @@ class UnifiedOrchestrator(OrchestratorAgent):
         yield event_dict(DashboardUpdateEvent(dashboard=dashboard))
         self.store.finish_run(
             run_id,
-            {
-                "assistant": strip_generation_markers(text),
-                "source_refs": source_refs,
-                "capability": hermes_result.capability if hermes_result else "unified_hermes",
-                "artifact_verifier": step_outputs.get("artifact_verifier"),
-            },
+            {"assistant": assistant_text, "capability": hermes_result.capability if hermes_result else "unified_hermes"},
             "completed",
         )
         yield event_dict(RunDone(run_id=run_id, status="completed"))

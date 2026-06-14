@@ -367,8 +367,6 @@ class HermesTaskExecutor:
         if not isinstance(data, dict):
             raise ModelGatewayError("Hermes JSON output must be an object.")
         result = HermesTaskResult.model_validate({**data, "raw_text": text})
-        if not result.resources and not result.apps:
-            raise ModelGatewayError("Hermes JSON must include at least one resource or app.")
         return result
 
     # Native demo app_types that have NO topic-specific visualization. They must never be
@@ -563,51 +561,17 @@ class HermesTaskExecutor:
             for i, img_path in enumerate(image_file_paths, 1):
                 parts.append(f"**图片 {i} 文件路径:** `{img_path}`")
 
-        # ── YOUR TASK ──
+        # ── 输出格式提示 ──
         parts.append("""
-## 🎯 你的任务
+## 📤 输出
 
-你是 LearnForge 的全能学习代理。根据用户的消息和上下文，自主判断用户需要什么，然后选择最合适的技能和输出格式来完成。
+你是全权代理，请自主判断用户需要什么。你可以自由选择输出格式：
 
-你拥有 18 个专业教育技能（见上方目录），可以处理几乎任何学习相关的请求：
-- 题目讲解、作业批改、试卷分析
-- 生成学习资源包（文档、思维导图、测验、代码实验、PPT课件、视频脚本等）
-- 创建交互式演示和仿真
-- 制作网页 PPT 幻灯片
-- 生成教学插图和信息图
-- 整理学习笔记
-- 规划学习路径
-- 更新学生记忆和学习画像
-- 摄取和处理课程内容
-- 以及其他任何学习支持任务
+- **HTML 报告**（题目讲解/作业批改等）：以 `---HERMES_HTML_OUTPUT---` 开头，输出完整 HTML
+- **JSON 产物**：{"capability": "...", "mode": "...", "summary": "...", "apps": [...], "resources": [...], "text_response": "..."}
+- **纯文本**：直接回复用户的问题
 
-根据你的判断选择以下**一种**输出格式：
-
-### 格式 A：HTML 分析报告（适用于详细解题、作业批改、题目讲解）
-以 `---HERMES_HTML_OUTPUT---` 开头，紧接着完整的 HTML 文档。HTML 应使用五步法（读题→析题→解题→品题→练题），引入 KaTeX CDN 渲染数学公式，采用美观现代的 CSS 设计，支持移动端响应式。
-
-### 格式 B：JSON 产物（适用于资源包、思维导图、测验、互动演示、PPT、视频脚本、笔记等生成类任务）
-返回一个完整的 JSON 对象（不要 markdown code fence），包含：
-- capability: 你判定的能力类型
-- mode: "synchronous" 或 "background"（长时间任务用 background）
-- summary: 简短中文摘要
-- apps: Canvas App 列表（每个含 app_type、title、payload）
-- resources: 学习资源列表（每个含 type、title、content、source_refs）
-- trace: 你所使用的技能和决策过程
-
-### 格式 C：纯文本回答（适用于概念问答、学习咨询、讨论等无需生成产物的对话）
-返回 JSON: {"capability": "answer_only", "mode": "synchronous", "summary": "简短摘要", "text_response": "完整的中文导师回复..."}
-
-## ⚠️ 关键规则
-
-1. **自主判断**：你全权决定用户需要什么，不需要遵循预设的关键词规则
-2. **图片优先**：如果用户上传了图片，必须认真分析图片内容，图片中的信息是用户问题的核心
-3. **中文文案**：所有面向用户的标题、内容、摘要必须使用中文，标题需根据实际内容生成，禁止通用占位符（如"测试题""学习资源"）
-4. **质量优先**：宁可输出少而精的内容，不要生成空洞的占位内容
-5. **互动演示**：custom.html 类型的互动演示必须包含真实的 Canvas/SVG/WebGL 场景、动画循环和交互控件，禁止返回 physics.work_energy_demo 或 math.gradient_descent_demo（它们是通用滑块，没有主题特定可视化）
-6. **PPT 课件**：必须生成完整的单文件 HTML 翻页 deck（Guizang 风格）
-7. **图片生成**：image.explanation 的 provider_alias 设为 "nanobanana"
-8. **不要写文件**：不要调用外部图片服务或写入磁盘文件
+图片中的信息是用户问题的核心，请务必仔细分析。不要写文件。
 """)
 
         return "\n".join(parts)
@@ -755,98 +719,70 @@ class HermesTaskExecutor:
     async def run_hermes(
         self, plan: AgentPlan, context: TutorTurnContext, rag_context: dict[str, Any]
     ) -> HermesTaskResult:
-        """统一 Hermes 调用 —— 加载全部 skill，由 Hermes 自主决定意图和输出格式。
+        """统一 Hermes 调用 —— 薄管道：加载全部 skill，调用一次，直接返回 Hermes 的输出。
 
-        替代原来的 run_resource_bundle() + run_detailed_analysis() 分离路径。
+        Python 层不干预 Hermes 的决策。不强制 JSON 格式，不强制 app 类型，不重试。
         """
         command = self.command_path()
-        base_prompt = self.build_unified_prompt(plan, context, rag_context)
+        prompt = self.build_unified_prompt(plan, context, rag_context)
         toolsets = self.settings.hermes_toolsets.strip()
-        # 加载全部 REQUIRED_HERMES_SKILLS，不做任何筛选
         from app.hermes_runtime.skill_sync import REQUIRED_HERMES_SKILLS
         skills = list(REQUIRED_HERMES_SKILLS)
 
-        fallback_trace: list[str] = []
-        last_error: ModelGatewayError | None = None
-        attempts = self.provider_attempts()
+        # 单次调用 — 使用当前默认 provider
+        provider = self.settings.hermes_provider
+        model = self.settings.gemini_text_model if provider == "gemini" else self.settings.mimo_text_model
 
-        for index, (provider, model) in enumerate(attempts):
-            has_next = index < len(attempts) - 1
-            prompt = base_prompt
+        returncode, output, error = await self._invoke_hermes(
+            command, prompt, provider, model, toolsets, skills
+        )
 
-            for repair_round in range(self.JSON_REPAIR_RETRIES + 1):
-                returncode, output, error = await self._invoke_hermes(
-                    command, prompt, provider, model, toolsets, skills
+        if returncode != 0:
+            raise ModelGatewayError(f"Hermes exited {returncode}: {error or output or 'no output'}")
+
+        if not output:
+            raise ModelGatewayError("Hermes returned empty output.")
+
+        # ── HTML sentinel 检测 ──
+        html_marker = "---HERMES_HTML_OUTPUT---"
+        if output.startswith(html_marker) or html_marker in output[:200]:
+            html_content = output.split(html_marker, 1)[-1].strip()
+            if html_content and ("<!DOCTYPE" in html_content[:200] or "<html" in html_content[:200].lower()):
+                return HermesTaskResult(
+                    capability="detailed_analysis",
+                    mode="background",
+                    summary="详细分析完成",
+                    raw_html=html_content,
+                    raw_text=output,
+                    trace=["detailed_analysis_html_generated"],
                 )
-                combined = error or output or "no output"
 
-                if returncode != 0:
-                    last_error = ModelGatewayError(f"Hermes exited {returncode}: {combined}")
-                    if has_next and self.looks_like_provider_failure(combined):
-                        fallback_trace.append(f"hermes_provider_fallback:{provider}->next:{combined[:160]}")
-                    break
+        # ── JSON 解析 ──
+        try:
+            result = self.parse_json_result(output)
+            data = self._parse_json_dict(output)
+            if data:
+                result.capability = str(data.get("capability", result.capability or ""))
+                result.mode = str(data.get("mode", result.mode or "synchronous"))
+                result.raw_html = str(data.get("raw_html", result.raw_html or ""))
+                result.text_response = str(data.get("text_response", result.text_response or ""))
+            return result
+        except ModelGatewayError:
+            pass
 
-                if not output:
-                    last_error = ModelGatewayError(f"Hermes returned empty output: {error}")
-                    if has_next and self.looks_like_provider_failure(combined):
-                        fallback_trace.append(f"hermes_provider_fallback:{provider}->next:{combined[:160]}")
-                    break
+        # ── 纯文本 fallback ──
+        clean_output = output.strip()[:4000]
+        if clean_output:
+            return HermesTaskResult(
+                capability="answer_only",
+                mode="synchronous",
+                summary="Hermes 回复",
+                text_response=clean_output,
+                raw_text=output,
+                trace=["text_fallback"],
+            )
 
-                # ── 检测 HTML sentinel ──
-                html_marker = "---HERMES_HTML_OUTPUT---"
-                if output.startswith(html_marker) or html_marker in output[:200]:
-                    html_content = output.split(html_marker, 1)[-1].strip()
-                    if html_content and ("<!DOCTYPE" in html_content[:200] or "<html" in html_content[:200].lower()):
-                        return HermesTaskResult(
-                            capability="detailed_analysis",
-                            mode="background",
-                            summary="详细分析完成",
-                            raw_html=html_content,
-                            raw_text=output,
-                            trace=[*fallback_trace, "detailed_analysis_html_generated"],
-                        )
-
-                # ── 尝试 JSON 解析 ──
-                try:
-                    result = self.parse_json_result(output)
-                    # 注入 Hermes 判定的 capability 和 mode
-                    data = self._parse_json_dict(output)
-                    if data:
-                        result.capability = str(data.get("capability", result.capability or "resource_bundle"))
-                        result.mode = str(data.get("mode", result.mode or "synchronous"))
-                        result.raw_html = str(data.get("raw_html", result.raw_html or ""))
-                        result.text_response = str(data.get("text_response", result.text_response or ""))
-                    # Enforce interactive_demo → custom.html
-                    result = self.enforce_interactive_demo_app_types(result, plan)
-                    if fallback_trace:
-                        result.trace = [*fallback_trace, *result.trace]
-                    return result
-                except ModelGatewayError as exc:
-                    last_error = exc
-                    if self.looks_like_provider_failure(output):
-                        if has_next:
-                            fallback_trace.append(f"hermes_provider_fallback:{provider}->next:{output[:160]}")
-                        break
-                    # JSON repair retry
-                    if repair_round < self.JSON_REPAIR_RETRIES and "{" in output:
-                        fallback_trace.append(f"hermes_json_repair_retry:{provider}#{repair_round + 1}:{str(exc)[:120]}")
-                        prompt = base_prompt + self._json_repair_suffix(output)
-                        continue
-                    # ── Graceful fallback: treat non-JSON output as plain text answer ──
-                    clean_output = output.strip()[:4000]
-                    if clean_output:
-                        fallback_trace.append(f"hermes_unstructured_fallback:{provider}:{str(exc)[:120]}")
-                        return HermesTaskResult(
-                            capability="answer_only",
-                            mode="synchronous",
-                            summary="Hermes 文本回复（非结构化输出）",
-                            text_response=clean_output,
-                            raw_text=output,
-                            trace=[*fallback_trace, "unstructured_fallback"],
-                        )
-                    break
-
-        raise last_error or ModelGatewayError("Hermes unified task failed.")
+        raise ModelGatewayError("Hermes returned unrecognizable output.")
 
     @staticmethod
     def _parse_json_dict(output: str) -> dict[str, Any] | None:
