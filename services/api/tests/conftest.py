@@ -74,6 +74,26 @@ class FakeHermesTaskExecutor:
             ],
         )
 
+    async def run_detailed_analysis(self, plan, context, rag_context):
+        """Fake detailed_analysis — returns sample HTML."""
+        return "<!DOCTYPE html><html lang='zh-CN'><head><meta charset='UTF-8'></head><body><h1>测试分析报告</h1><p>Fake Hermes 详细分析结果。</p></body></html>"
+
+    async def run_hermes(self, plan, context, rag_context):
+        """Fake unified hermes — delegates to run_resource_bundle for JSON, or returns HTML."""
+        message = (context.message or "").lower()
+        # If it looks like a detailed analysis request, return HTML
+        if any(marker in message for marker in ["分析这道题", "讲解这道题", "帮我讲解", "批改作业"]):
+            return HermesTaskResult(
+                capability="detailed_analysis",
+                mode="background",
+                summary="详细分析完成",
+                raw_html="<!DOCTYPE html><html><head></head><body><h1>分析报告</h1></body></html>",
+                raw_text="---HERMES_HTML_OUTPUT---\n<!DOCTYPE html>...",
+                trace=["detailed_analysis_html_generated"],
+            )
+        # Otherwise return resource bundle result
+        return await self.run_resource_bundle(plan, context, rag_context)
+
 
 @pytest.fixture(autouse=True)
 def use_fake_mimo_for_orchestrator(monkeypatch, fake_mimo_client):

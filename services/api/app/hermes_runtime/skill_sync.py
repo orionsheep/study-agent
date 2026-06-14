@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
+
+import yaml
 
 from app.core.config import get_settings
 
@@ -118,6 +121,32 @@ class HermesSkillSync:
         if not relative:
             return None
         return get_settings().api_root / relative
+
+    def build_skill_catalog(self) -> str:
+        """Read all SKILL.md files and extract name + description from YAML frontmatter.
+
+        Returns a Markdown-formatted catalog for inclusion in the unified Hermes prompt.
+        """
+        entries: list[str] = []
+        primary_root = self.skills_root()
+        for name in REQUIRED_HERMES_SKILLS:
+            skill_dir = primary_root / name
+            md_path = skill_dir / "SKILL.md"
+            if md_path.exists():
+                content = md_path.read_text(encoding="utf-8")
+                frontmatter_match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
+                if frontmatter_match:
+                    try:
+                        metadata = yaml.safe_load(frontmatter_match.group(1)) or {}
+                    except Exception:
+                        metadata = {}
+                    desc = metadata.get("description", f"LearnForge {name}")
+                else:
+                    desc = f"LearnForge {name}"
+            else:
+                desc = f"LearnForge {name}"
+            entries.append(f"- **{name}**: {desc}")
+        return "\n".join(entries)
 
     def sync_vendored_skill(self, name: str, destination: Path) -> None:
         source = self.vendor_skill_source(name)

@@ -74,11 +74,12 @@ class Settings:
     hermes_task_timeout_seconds: int = int(_env("HERMES_TASK_TIMEOUT_SECONDS", "600"))
     hermes_sdk_path: str = _env("HERMES_SDK_PATH", "")
     hermes_sdk_site_packages: str = _env("HERMES_SDK_SITE_PACKAGES", "")
-    hermes_toolsets: str = _env("HERMES_TOOLSETS", "web")
+    hermes_toolsets: str = _env("HERMES_TOOLSETS", "web,file,vision")
     hermes_default_skills: str = _env(
         "HERMES_DEFAULT_SKILLS",
-        "resource-bundle-skill,document-skill,mindmap-skill,quiz-skill,code-practice-skill,ppt-skill,guizang-ppt-skill,image-generation-skill,video-script-skill,reading-material-skill,custom-html-app-skill,notes-skill,verifier-skill,app-generation-skill",
+        "resource-bundle-skill,document-skill,mindmap-skill,quiz-skill,code-practice-skill,ppt-skill,guizang-ppt-skill,image-generation-skill,video-script-skill,reading-material-skill,custom-html-app-skill,notes-skill,dashboard-skill,verifier-skill,app-generation-skill,memory-update-skill,course-ingestion-skill,detailed-analysis-skill",
     )
+    unified_orchestrator_enabled: bool = _env("UNIFIED_ORCHESTRATOR", "false").lower() == "true"
     vector_store: str = _env("VECTOR_STORE", "pgvector")
 
     @property

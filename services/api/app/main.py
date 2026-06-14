@@ -12,7 +12,7 @@ from app.auth import hash_password, issue_session, verify_password
 from app.agents.app_canvas_agent import AppCanvasAgent
 from app.agents.base import TutorTurnContext
 from app.agents.evaluator_agent import EvaluatorAgent, EvaluatorAgentInput
-from app.agents.orchestrator_agent import OrchestratorAgent
+from app.agents.orchestrator_agent import OrchestratorAgent, UnifiedOrchestrator
 from app.agents.profile_agent import ProfileAgent, ProfileAgentInput
 from app.core.config import get_settings
 from app.core.session import SessionContext, SessionHeaders, get_session_headers, resolve_session_from_request
@@ -578,7 +578,8 @@ async def auth_logout(headers: SessionHeaders = Depends(get_session_headers)) ->
 @app.post("/api/chat/message")
 async def chat_message(request: ChatRequest, headers: SessionHeaders = Depends(get_session_headers)) -> dict[str, Any]:
     context = build_tutor_context(request, headers)
-    events = await OrchestratorAgent().run_turn(context)
+    orchestrator = UnifiedOrchestrator() if get_settings().unified_orchestrator_enabled else OrchestratorAgent()
+    events = await orchestrator.run_turn(context)
     assistant_text = "".join(event.get("text", "") for event in events if event.get("type") == "assistant.delta")
     return {"events": events, "assistant_text": assistant_text}
 
@@ -586,7 +587,7 @@ async def chat_message(request: ChatRequest, headers: SessionHeaders = Depends(g
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest, headers: SessionHeaders = Depends(get_session_headers)) -> StreamingResponse:
     context = build_tutor_context(request, headers)
-    orchestrator = OrchestratorAgent()
+    orchestrator = UnifiedOrchestrator() if get_settings().unified_orchestrator_enabled else OrchestratorAgent()
 
     async def generate() -> AsyncIterator[str]:
         plan = orchestrator.plan_turn(context)
@@ -704,12 +705,19 @@ async def get_profile(student_id: str, headers: SessionHeaders = Depends(get_ses
 @app.post("/api/learning-path/generate")
 async def generate_learning_path(request: ChatRequest, headers: SessionHeaders = Depends(get_session_headers)) -> dict[str, Any]:
     context = build_tutor_context(request, headers)
-    events = await OrchestratorAgent().run_turn(
+    orchestrator = UnifiedOrchestrator() if get_settings().unified_orchestrator_enabled else OrchestratorAgent()
+    events = await orchestrator.run_turn(
         TutorTurnContext(
             student_id=context.student_id,
             course_id=context.course_id,
             conversation_id=context.conversation_id,
             message=f"生成{request.message}学习路径",
+            image_data=context.image_data,
+            model_provider=context.model_provider,
+            recent_messages=context.recent_messages,
+            last_assistant_answer=context.last_assistant_answer,
+            recent_apps=context.recent_apps,
+            recent_resources=context.recent_resources,
         )
     )
     path_events = [event for event in events if event.get("type") == "path.update"]

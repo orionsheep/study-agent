@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from app.agents.base import AgentPlan, TutorTurnContext
 from app.core.config import get_settings
 from app.hermes_runtime.command import resolve_hermes_command
+from app.hermes_runtime.skill_sync import HermesSkillSync
 from app.model_gateway.errors import ProviderBlocked, ModelGatewayError
 from app.skills.custom_html_app_skill import CustomHtmlAppSkill
 
@@ -25,6 +26,11 @@ class HermesTaskResult(BaseModel):
     resources: list[dict[str, Any]] = Field(default_factory=list)
     apps: list[dict[str, Any]] = Field(default_factory=list)
     raw_text: str = ""
+    # Unified Hermes fields — Hermes decides the capability and output format
+    capability: str = ""       # e.g. "detailed_analysis", "resource_bundle", "answer_only"
+    mode: str = "synchronous"  # "synchronous" | "background"
+    raw_html: str = ""         # direct HTML output (detailed_analysis path)
+    text_response: str = ""    # plain-text tutor response (answer_only path)
 
 
 class HermesTaskExecutor:
@@ -140,31 +146,8 @@ class HermesTaskExecutor:
         if plan.payload.get("requires_canvas") and not expected_resource_types:
             required_outputs = ["document", *required_outputs]
         repair_missing = plan.payload.get("protocol_repair_missing", [])
-        # Include image data for vision-based analysis
         # Save base64 images to temp files so the Hermes agent can use its vision tool
-        image_data_list = getattr(context, "image_data", None) or []
-        image_file_paths: list[str] = []
-        if image_data_list:
-            images_dir = Path(self.settings.project_root) / ".data" / "hermes_images"
-            images_dir.mkdir(parents=True, exist_ok=True)
-            for i, img in enumerate(image_data_list):
-                if not isinstance(img, str) or len(img) < 128:
-                    continue
-                try:
-                    # Extract base64 data and determine mime type
-                    if img.startswith("data:image/"):
-                        header, b64_data = img.split(",", 1)
-                        mime = header.split(";")[0].replace("data:", "")
-                        ext = mime.split("/")[-1] if "/" in mime else "png"
-                    else:
-                        b64_data = img
-                        ext = "png"
-                    img_bytes = base64.b64decode(b64_data)
-                    img_path = images_dir / f"user_upload_{i + 1}.{ext}"
-                    img_path.write_bytes(img_bytes)
-                    image_file_paths.append(str(img_path))
-                except Exception:
-                    continue
+        image_file_paths = self._save_image_attachments(context)
         payload = {
             "task": "learnforge_resource_bundle",
             "student_id": context.student_id,
@@ -532,10 +515,114 @@ class HermesTaskExecutor:
                     break
         raise last_error or ModelGatewayError("Hermes task failed.")
 
+    # ── Unified Hermes Prompt ──────────────────────────────────────────────
+
+    def build_unified_prompt(
+        self, plan: AgentPlan, context: TutorTurnContext, rag_context: dict[str, Any]
+    ) -> str:
+        """构建统一 prompt —— 将所有 skill 呈现给 Hermes，让它自主决定意图和输出格式。
+
+        替代原来的 build_resource_bundle_prompt()（~300行分支规则）和 build_detailed_analysis_prompt()。
+        """
+        image_file_paths = self._save_image_attachments(context)
+        skill_catalog = HermesSkillSync().build_skill_catalog()
+
+        parts: list[str] = []
+
+        # ── SYSTEM IDENTITY ──
+        parts.append(
+            "你是 LearnForge 的统一执行代理（Unified Execution Agent）。"
+            "你可以使用 ALL LearnForge 技能来完成用户的请求。"
+            "你需要自主判断用户意图，选择合适的技能组合，并按照指定格式输出结果。"
+        )
+
+        # ── AVAILABLE SKILLS CATALOG ──
+        parts.append(f"\n## 📚 可用技能目录 (Available Skills)\n{skill_catalog}")
+
+        # ── USER CONTEXT ──
+        parts.append(f"\n## 👤 用户上下文\n- 学生ID: {context.student_id}\n- 课程ID: {context.course_id}")
+        parts.append(f"- 用户消息: {context.message}")
+        if context.last_assistant_answer:
+            parts.append(f"- 上轮助教回复: {self._truncate_text(context.last_assistant_answer, 2000)}")
+        if context.recent_messages:
+            parts.append(f"- 近期对话: {json.dumps([self._compact_item(m, text_limit=400) for m in context.recent_messages[-6:]], ensure_ascii=False)}")
+        if rag_context.get("context"):
+            parts.append(f"\n## 📖 课程资料参考\n{self._truncate_text(rag_context.get('context', ''), 6000)}")
+        if rag_context.get("source_refs"):
+            parts.append(f"- 来源引用: {json.dumps((rag_context.get('source_refs', []) or [])[:20], ensure_ascii=False)}")
+
+        # ── IMAGES ──
+        if image_file_paths:
+            parts.append(f"\n## 🖼️ 用户上传的图片 ({len(image_file_paths)} 张)")
+            parts.append("这些图片已保存到本地文件。你必须使用 **file** 工具读取每张图片文件的内容，"
+                         "然后使用 **vision** 能力仔细分析图片中的内容。")
+            parts.append("图片可能包含：手写题目、试卷截图、课本页面、公式推导、图表数据、流程图等。"
+                         "请精确提取图片中的所有文字、数字、公式和结构信息。")
+            parts.append("如果图片中包含题目，请以图片中的题目为主要分析对象，不要忽略图片内容。")
+            parts.append("**读取图片的命令示例：** 使用 file 工具打开下列路径即可读取图片内容。")
+            for i, img_path in enumerate(image_file_paths, 1):
+                parts.append(f"**图片 {i} 文件路径:** `{img_path}`")
+
+        # ── YOUR TASK ──
+        parts.append("""
+## 🎯 你的任务
+
+你是 LearnForge 的全能学习代理。根据用户的消息和上下文，自主判断用户需要什么，然后选择最合适的技能和输出格式来完成。
+
+你拥有 18 个专业教育技能（见上方目录），可以处理几乎任何学习相关的请求：
+- 题目讲解、作业批改、试卷分析
+- 生成学习资源包（文档、思维导图、测验、代码实验、PPT课件、视频脚本等）
+- 创建交互式演示和仿真
+- 制作网页 PPT 幻灯片
+- 生成教学插图和信息图
+- 整理学习笔记
+- 规划学习路径
+- 更新学生记忆和学习画像
+- 摄取和处理课程内容
+- 以及其他任何学习支持任务
+
+根据你的判断选择以下**一种**输出格式：
+
+### 格式 A：HTML 分析报告（适用于详细解题、作业批改、题目讲解）
+以 `---HERMES_HTML_OUTPUT---` 开头，紧接着完整的 HTML 文档。HTML 应使用五步法（读题→析题→解题→品题→练题），引入 KaTeX CDN 渲染数学公式，采用美观现代的 CSS 设计，支持移动端响应式。
+
+### 格式 B：JSON 产物（适用于资源包、思维导图、测验、互动演示、PPT、视频脚本、笔记等生成类任务）
+返回一个完整的 JSON 对象（不要 markdown code fence），包含：
+- capability: 你判定的能力类型
+- mode: "synchronous" 或 "background"（长时间任务用 background）
+- summary: 简短中文摘要
+- apps: Canvas App 列表（每个含 app_type、title、payload）
+- resources: 学习资源列表（每个含 type、title、content、source_refs）
+- trace: 你所使用的技能和决策过程
+
+### 格式 C：纯文本回答（适用于概念问答、学习咨询、讨论等无需生成产物的对话）
+返回 JSON: {"capability": "answer_only", "mode": "synchronous", "summary": "简短摘要", "text_response": "完整的中文导师回复..."}
+
+## ⚠️ 关键规则
+
+1. **自主判断**：你全权决定用户需要什么，不需要遵循预设的关键词规则
+2. **图片优先**：如果用户上传了图片，必须认真分析图片内容，图片中的信息是用户问题的核心
+3. **中文文案**：所有面向用户的标题、内容、摘要必须使用中文，标题需根据实际内容生成，禁止通用占位符（如"测试题""学习资源"）
+4. **质量优先**：宁可输出少而精的内容，不要生成空洞的占位内容
+5. **互动演示**：custom.html 类型的互动演示必须包含真实的 Canvas/SVG/WebGL 场景、动画循环和交互控件，禁止返回 physics.work_energy_demo 或 math.gradient_descent_demo（它们是通用滑块，没有主题特定可视化）
+6. **PPT 课件**：必须生成完整的单文件 HTML 翻页 deck（Guizang 风格）
+7. **图片生成**：image.explanation 的 provider_alias 设为 "nanobanana"
+8. **不要写文件**：不要调用外部图片服务或写入磁盘文件
+""")
+
+        return "\n".join(parts)
+
     # ── detailed_analysis 专用方法 ──────────────────────────────────────────
 
     def _save_image_attachments(self, context: TutorTurnContext) -> list[str]:
-        """将 context.image_data 中的 base64 图片保存到本地文件，返回文件路径列表。"""
+        """将 context.image_data 中的 base64 图片保存到本地文件，返回文件路径列表。
+
+        支持多种编码格式：
+        - data:image/png;base64,<b64>
+        - data:image/jpeg;base64,<b64>
+        - 纯 base64 字符串（无 data: 前缀）
+        - URL-safe base64（- → +, _ → /）
+        """
         image_data_list = getattr(context, "image_data", None) or []
         image_file_paths: list[str] = []
         if not image_data_list:
@@ -543,9 +630,13 @@ class HermesTaskExecutor:
         images_dir = Path(self.settings.project_root) / ".data" / "hermes_images"
         images_dir.mkdir(parents=True, exist_ok=True)
         for i, img in enumerate(image_data_list):
-            if not isinstance(img, str) or len(img) < 128:
+            if not isinstance(img, str) or len(img) < 64:
+                if isinstance(img, str) and len(img) > 0:
+                    import logging
+                    logging.getLogger("learnforge").warning(f"hermes_image: skipping image {i+1} — too short ({len(img)} chars)")
                 continue
             try:
+                # Parse data URL or raw base64
                 if img.startswith("data:image/"):
                     header, b64_data = img.split(",", 1)
                     mime = header.split(";")[0].replace("data:", "")
@@ -553,11 +644,21 @@ class HermesTaskExecutor:
                 else:
                     b64_data = img
                     ext = "png"
+                # Fix URL-safe base64 if needed
+                b64_data = b64_data.replace("-", "+").replace("_", "/")
+                # Pad missing = signs
+                padding = 4 - len(b64_data) % 4
+                if padding != 4:
+                    b64_data += "=" * padding
                 img_bytes = base64.b64decode(b64_data)
                 img_path = images_dir / f"user_upload_{i + 1}.{ext}"
                 img_path.write_bytes(img_bytes)
                 image_file_paths.append(str(img_path))
-            except Exception:
+            except Exception as exc:
+                import logging
+                logging.getLogger("learnforge").warning(
+                    f"hermes_image: failed to decode image {i+1} ({len(img)} chars, starts with: {img[:50]}...): {exc}"
+                )
                 continue
         return image_file_paths
 
@@ -648,3 +749,102 @@ class HermesTaskExecutor:
             return output.strip()
 
         raise ModelGatewayError(last_error or "detailed_analysis: Hermes 未返回有效输出")
+
+    # ── Unified run_hermes() ───────────────────────────────────────────────
+
+    async def run_hermes(
+        self, plan: AgentPlan, context: TutorTurnContext, rag_context: dict[str, Any]
+    ) -> HermesTaskResult:
+        """统一 Hermes 调用 —— 加载全部 skill，由 Hermes 自主决定意图和输出格式。
+
+        替代原来的 run_resource_bundle() + run_detailed_analysis() 分离路径。
+        """
+        command = self.command_path()
+        base_prompt = self.build_unified_prompt(plan, context, rag_context)
+        toolsets = self.settings.hermes_toolsets.strip()
+        # 加载全部 REQUIRED_HERMES_SKILLS，不做任何筛选
+        from app.hermes_runtime.skill_sync import REQUIRED_HERMES_SKILLS
+        skills = list(REQUIRED_HERMES_SKILLS)
+
+        fallback_trace: list[str] = []
+        last_error: ModelGatewayError | None = None
+        attempts = self.provider_attempts()
+
+        for index, (provider, model) in enumerate(attempts):
+            has_next = index < len(attempts) - 1
+            prompt = base_prompt
+
+            for repair_round in range(self.JSON_REPAIR_RETRIES + 1):
+                returncode, output, error = await self._invoke_hermes(
+                    command, prompt, provider, model, toolsets, skills
+                )
+                combined = error or output or "no output"
+
+                if returncode != 0:
+                    last_error = ModelGatewayError(f"Hermes exited {returncode}: {combined}")
+                    if has_next and self.looks_like_provider_failure(combined):
+                        fallback_trace.append(f"hermes_provider_fallback:{provider}->next:{combined[:160]}")
+                    break
+
+                if not output:
+                    last_error = ModelGatewayError(f"Hermes returned empty output: {error}")
+                    if has_next and self.looks_like_provider_failure(combined):
+                        fallback_trace.append(f"hermes_provider_fallback:{provider}->next:{combined[:160]}")
+                    break
+
+                # ── 检测 HTML sentinel ──
+                html_marker = "---HERMES_HTML_OUTPUT---"
+                if output.startswith(html_marker) or html_marker in output[:200]:
+                    html_content = output.split(html_marker, 1)[-1].strip()
+                    if html_content and ("<!DOCTYPE" in html_content[:200] or "<html" in html_content[:200].lower()):
+                        return HermesTaskResult(
+                            capability="detailed_analysis",
+                            mode="background",
+                            summary="详细分析完成",
+                            raw_html=html_content,
+                            raw_text=output,
+                            trace=[*fallback_trace, "detailed_analysis_html_generated"],
+                        )
+
+                # ── 尝试 JSON 解析 ──
+                try:
+                    result = self.parse_json_result(output)
+                    # 注入 Hermes 判定的 capability 和 mode
+                    data = self._parse_json_dict(output)
+                    if data:
+                        result.capability = str(data.get("capability", result.capability or "resource_bundle"))
+                        result.mode = str(data.get("mode", result.mode or "synchronous"))
+                        result.raw_html = str(data.get("raw_html", result.raw_html or ""))
+                        result.text_response = str(data.get("text_response", result.text_response or ""))
+                    # Enforce interactive_demo → custom.html
+                    result = self.enforce_interactive_demo_app_types(result, plan)
+                    if fallback_trace:
+                        result.trace = [*fallback_trace, *result.trace]
+                    return result
+                except ModelGatewayError as exc:
+                    last_error = exc
+                    if self.looks_like_provider_failure(output):
+                        if has_next:
+                            fallback_trace.append(f"hermes_provider_fallback:{provider}->next:{output[:160]}")
+                        break
+                    # JSON repair retry
+                    if repair_round < self.JSON_REPAIR_RETRIES and "{" in output:
+                        fallback_trace.append(f"hermes_json_repair_retry:{provider}#{repair_round + 1}:{str(exc)[:120]}")
+                        prompt = base_prompt + self._json_repair_suffix(output)
+                        continue
+                    break
+
+        raise last_error or ModelGatewayError("Hermes unified task failed.")
+
+    @staticmethod
+    def _parse_json_dict(output: str) -> dict[str, Any] | None:
+        """轻量 JSON parse，不抛异常，用于提取 capability/mode 等元数据。"""
+        try:
+            cleaned = HermesTaskExecutor._strip_markdown_fences(output)
+            candidate = HermesTaskExecutor._extract_json_object(cleaned)
+            if candidate:
+                data = json.loads(candidate)
+                return data if isinstance(data, dict) else None
+        except Exception:
+            pass
+        return None

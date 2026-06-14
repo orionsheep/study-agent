@@ -847,7 +847,7 @@ def test_dashboard_filters_conversation_scoped_session_notes():
 async def test_answer_only_does_not_create_notes_app_or_session_memory():
     agent = OrchestratorAgent()
     context = TutorTurnContext(
-        message="请详细讲解一下排序算法的核心思想和常见类型",
+        message="排序算法的核心思想是什么，有哪些常见类型",
         conversation_id="answer-only-no-notes-test",
         last_assistant_answer="我们正在学习排序算法。",
     )
