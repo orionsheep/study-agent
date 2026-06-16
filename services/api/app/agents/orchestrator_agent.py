@@ -6,7 +6,7 @@ import re
 from html import escape
 from typing import Any, AsyncIterator
 
-from app.agents.capability_contract import contract_payload, detect_capability, detect_infographic_render_mode, extract_learning_topic, is_generic_topic, resolve_generation_topic
+from app.agents.capability_contract import PROFILE_MARKERS, contract_payload, detect_capability, detect_infographic_render_mode, extract_learning_topic, is_generic_topic, resolve_generation_topic
 from app.agents.app_canvas_agent import AppCanvasAgent
 from app.agents.base import AgentPlan, TutorTurnContext
 from app.agents.evaluator_agent import EvaluatorAgent, EvaluatorAgentInput
@@ -22,6 +22,7 @@ from app.canvas.materializer import CanvasMaterializer, MaterializedBundle
 from app.database.store import get_store
 from app.hermes_runtime.runtime import HermesRuntime
 from app.hermes_runtime.task_executor import HermesTaskExecutor, HermesTaskResult
+from app.hermes_runtime.task_executor import HermesTaskExecutor as RuntimeHermesTaskExecutor
 from app.model_gateway.base import ChatMessage
 from app.model_gateway.errors import ModelGatewayError, ProviderBlocked
 from app.model_gateway.router import ModelGatewayRouter
@@ -50,6 +51,7 @@ from app.schemas.app_protocol import (
 from app.skills.base import SkillInput
 from app.skills.custom_html_app_skill import CustomHtmlAppSkill
 from app.skills.notes_skill import NotesSkill
+from app.storage.artifacts import ObjectStorage
 from app.video.bilibili import extract_bvid, video_player_payload
 from app.video.search import BilibiliSearchError, search_bilibili_videos
 
@@ -95,13 +97,13 @@ class OrchestratorAgent:
 
     @staticmethod
     def model_provider_label(provider: str | None) -> str:
-        return "Gemini" if provider == "gemini" else "MiMo" if provider == "mimo" else "所选模型"
+        return "Gemini" if provider == "gemini" else "所选模型"
 
     def model_failure_text(self, provider: str | None, reason: str) -> str:
         label = self.model_provider_label(provider)
         lowered = reason.lower()
         if "blocked_all_providers" in lowered or "所有可用回答模型" in reason:
-            return "当前所有回答模型都暂时不可用：请稍后重试，或检查后端的 Gemini/MiMo API 配置和网络连通性。"
+            return "当前所有回答模型都暂时不可用：请稍后重试，或检查后端的 Gemini API 配置和网络连通性。"
         if "timeout" in lowered or "connecttimeout" in lowered:
             return f"{label} 连接超时，后端暂时连不上模型服务。已记录详细错误；可以稍后重试，或切换另一个回答模型。"
         if "missing" in lowered or "api_key" in lowered or "credentials" in lowered:
@@ -128,6 +130,7 @@ class OrchestratorAgent:
         "notes": "整理「{topic}」的学习笔记",
         "learning_path": "规划「{topic}」的学习路径",
         "resource_bundle": "系统学习「{topic}」的完整资源包",
+        "video_search": "实时搜索「{topic}」相关教学视频",
         "answer_only": "深入理解「{topic}」",
     }
 
@@ -214,17 +217,188 @@ class OrchestratorAgent:
             return cleaned
         return None
 
+    def _is_interactive_app_feedback(self, message: str) -> bool:
+        lowered = str(message or "").lower()
+        feedback_terms = [
+            "有问题", "不工作", "不能", "无法", "没办法", "没法", "没反应", "失效", "坏了",
+            "不正常", "不对", "bug", "修一下", "修复", "重做", "重新生成", "转不了", "动不了",
+            "卡住", "没有办法正常工作",
+        ]
+        app_terms = [
+            "这个", "这个模块", "这个模型", "模块", "模型", "app", "demo", "演示", "按钮",
+            "控件", "打乱", "复原", "还原", "转动", "旋转", "拖拽", "拖动", "滑块", "交互",
+        ]
+        return any(term in lowered for term in feedback_terms) and any(term in lowered for term in app_terms)
+
+    def _is_interactive_app_edit_request(self, message: str) -> bool:
+        lowered = str(message or "").lower()
+        edit_terms = [
+            "需要", "希望", "想要", "我要", "帮我", "加", "加上", "添加", "增加", "加入",
+            "有一个", "放一个", "改", "修改", "换成", "替换", "支持", "实现", "补一个",
+            "完善", "优化", "做成",
+        ]
+        app_refs = [
+            "这个", "该", "当前", "刚刚", "刚才", "上一个", "上一版", "模型", "模块", "app",
+            "demo", "演示", "模拟器", "里面", "画布", "窗口",
+        ]
+        behavior_terms = [
+            "按钮", "控件", "滑块", "功能", "自动", "复原", "还原", "重置", "暂停", "播放",
+            "拖拽", "拖动", "转动", "旋转", "交互", "操作", "动画", "视角", "参数", "显示",
+            "隐藏", "状态", "读数", "速度", "颜色", "布局", "面板",
+        ]
+        return (
+            any(term in lowered for term in edit_terms)
+            and any(term in lowered for term in app_refs)
+            and any(term in lowered for term in behavior_terms)
+        )
+
+    def _interactive_app_followup_kind(self, message: str) -> str | None:
+        if self._is_interactive_app_feedback(message):
+            return "bug_fix"
+        if self._is_interactive_app_edit_request(message):
+            return "feature_edit"
+        return None
+
+    @staticmethod
+    def _looks_like_report_shell(title: str, html: str, payload: dict[str, Any]) -> bool:
+        layout = str(payload.get("layout") or "")
+        lowered_html = str(html or "").lower()
+        lowered_title = str(title or "").lower()
+        if 'data-learnforge-report="detailed-analysis"' in lowered_html or "learnforge reading studio" in lowered_html:
+            return True
+        if "html artifact" in lowered_html and "reading studio" in lowered_html:
+            return True
+        report_terms = ["报告", "分析报告", "解析报告", "讲解报告", "学习资料", "机制剖析", "设计指南"]
+        if not layout and any(term in lowered_title for term in report_terms):
+            return True
+        return False
+
+    def _recent_interactive_custom_html_app(self, context: TutorTurnContext) -> dict[str, Any] | None:
+        interactive_markers = [
+            "interactive", "model_generated_interactive_demo", "contract_fallback_interactive_demo",
+            "可交互", "交互", "互动", "模型", "演示", "模拟", "仿真", "三维", "3d", "rubik", "魔方",
+        ]
+        for app in reversed(context.recent_apps or []):
+            if not isinstance(app, dict):
+                continue
+            app_type = str(app.get("app_type") or app.get("type") or "")
+            if app_type != "custom.html":
+                continue
+            payload = app.get("payload") if isinstance(app.get("payload"), dict) else {}
+            title = str(app.get("title") or payload.get("title") or "")
+            html_excerpt = self._read_app_html_excerpt(app, limit=5000)
+            if self._looks_like_report_shell(title, html_excerpt, payload):
+                continue
+            haystack = "\n".join(
+                str(item or "")
+                for item in [
+                    title,
+                    app.get("personalized_reason"),
+                    payload.get("title"),
+                    payload.get("topic"),
+                    payload.get("layout"),
+                    app.get("group_id"),
+                ]
+            ).lower()
+            has_runtime = (
+                re.search(r"<\s*(canvas|svg)\b", html_excerpt, flags=re.IGNORECASE) is not None
+                and re.search(r"<\s*script\b", html_excerpt, flags=re.IGNORECASE) is not None
+            ) or (
+                "transform-style:preserve-3d" in html_excerpt.lower()
+                and re.search(r"<\s*script\b", html_excerpt, flags=re.IGNORECASE) is not None
+            )
+            if any(marker in haystack for marker in interactive_markers) or has_runtime:
+                return app
+        return None
+
+    def _read_app_html_excerpt(self, app: dict[str, Any], limit: int = 14000) -> str:
+        payload = app.get("payload") if isinstance(app.get("payload"), dict) else {}
+        html = str(payload.get("html") or "")
+        if html.strip():
+            return html[:limit]
+        artifact_id = str(payload.get("artifact_id") or "")
+        if not artifact_id:
+            html_url = str(payload.get("html_url") or "")
+            match = re.search(r"/api/artifacts/([^/]+)/content", html_url)
+            artifact_id = match.group(1) if match else ""
+        if not artifact_id:
+            return ""
+        try:
+            artifact = self.store.get_artifact(artifact_id)
+            if not artifact:
+                return ""
+            raw, _content_type = ObjectStorage().get_bytes(str(artifact.get("object_key") or ""))
+            return raw.decode("utf-8", errors="replace")[:limit]
+        except Exception as exc:
+            return f"[previous artifact html unavailable: {type(exc).__name__}]"
+
+    def _interactive_app_repair_plan(self, context: TutorTurnContext) -> AgentPlan | None:
+        followup_kind = self._interactive_app_followup_kind(context.message)
+        if not followup_kind:
+            return None
+        app = self._recent_interactive_custom_html_app(context)
+        if not app:
+            return None
+        payload = app.get("payload") if isinstance(app.get("payload"), dict) else {}
+        title = str(app.get("title") or payload.get("title") or payload.get("topic") or "当前交互模型").strip()
+        topic = title if title and not is_generic_topic(title) else str(payload.get("topic") or "当前交互模型")
+        artifact_id = str(payload.get("artifact_id") or "")
+        previous_html = self._read_app_html_excerpt(app)
+        source_material = (
+            "INTERACTIVE_APP_REPAIR_CONTEXT\n"
+            f"Repair target title: {title}\n"
+            f"Repair target app_id: {app.get('app_id') or app.get('id') or ''}\n"
+            f"Repair target artifact_id: {artifact_id}\n"
+            f"User follow-up kind: {followup_kind}\n"
+            f"User requested change or bug report: {context.message}\n"
+            "The user is referring to the CURRENT canvas interactive module. Read the previous HTML, "
+            "preserve the working parts, apply the requested change or fix, and return a corrected replacement custom.html model. "
+            "Do not answer with a detailed-analysis report.\n"
+            f"Previous HTML excerpt:\n{previous_html[:12000]}"
+        )
+        return AgentPlan(
+            task_type="hermes_interactive_demo",
+            steps=["intent_detect", "hermes_runtime", "resource_bundle_skill", "canvas_materializer", "artifact_verifier"],
+            payload={
+                "capability": "interactive_demo",
+                "topic": topic[:120],
+                "source_material": source_material,
+                "context_source": "recent_interactive_app",
+                "expected_app_types": ["custom.html"],
+                "expected_resource_types": [],
+                "requires_canvas": True,
+                "requires_image_url": False,
+                "hermes_skills": ["custom-html-app-skill", "code-practice-skill", "verifier-skill", "app-generation-skill"],
+                "original_message": context.message,
+                "interactive_repair": True,
+                "interactive_repair_kind": followup_kind,
+                "repair_reason": context.message,
+                "repair_target_app_id": str(app.get("app_id") or app.get("id") or ""),
+                "repair_target_artifact_id": artifact_id,
+                "repair_target_title": title,
+                "previous_html": previous_html[:12000],
+            },
+        )
+
     def plan_turn(self, context: TutorTurnContext) -> AgentPlan:
         message = context.message.lower()
-        if any(term in message for term in ["我是", "画像", "喜欢", "大一"]):
+        if any(term in message for term in PROFILE_MARKERS):
             return AgentPlan(
                 task_type="profile_build",
                 steps=["intent_detect", "profile_agent", "memory_agent", "dashboard_skill"],
                 payload={"topic": "学习画像", "capability": "dashboard", "requires_canvas": False},
             )
 
+        repair_plan = self._interactive_app_repair_plan(context)
+        if repair_plan:
+            return repair_plan
+        clarification_plan = self._context_clarification_plan(context)
+        if clarification_plan:
+            return clarification_plan
+
         spec = detect_capability(context.message)
-        resolved_topic = resolve_generation_topic(context.message, context.last_assistant_answer)
+        semantic_last_answer = self._semantic_last_assistant_answer(context)
+        resolved_topic = resolve_generation_topic(context.message, semantic_last_answer)
         if isinstance(resolved_topic, tuple):
             topic = str(resolved_topic[0] or context.message) if len(resolved_topic) >= 1 else context.message
             context_source = str(resolved_topic[1] or "current_message") if len(resolved_topic) >= 2 else "current_message"
@@ -233,6 +407,12 @@ class OrchestratorAgent:
             topic = str(resolved_topic or context.message)
             context_source = "last_assistant_answer" if context.last_assistant_answer and topic == context.last_assistant_answer else "current_message"
             source_material = topic
+        if self._is_contextual_reference(context.message) and semantic_last_answer:
+            contextual_topic = extract_learning_topic(semantic_last_answer)
+            if contextual_topic and ("聊天" in topic or "上面" in topic or "刚才" in topic or is_generic_topic(topic)):
+                topic = contextual_topic
+            context_source = "last_assistant_answer"
+            source_material = semantic_last_answer[:3000]
         payload = contract_payload(spec, topic or context.message, context_source, source_material)
         if is_video_search_request(context.message):
             # Video query comes from the user's actual message subject (e.g. "Java入门").
@@ -253,7 +433,7 @@ class OrchestratorAgent:
                 video_topic = clean_video_query(context.message, None)
             payload.update(
                 {
-                    "capability": "video_recommendations",
+                    "capability": "video_search",
                     "topic": video_topic,
                     "source_material": context.message,
                     "context_source": "current_message",
@@ -310,34 +490,26 @@ class OrchestratorAgent:
             # request is SPECIFICALLY about that exact concept — never as a catch-all for broad
             # terms like "物理/能量/力学", which previously hijacked fluids, Bernoulli, waves, etc.
             payload["expected_app_types"] = ["custom.html"]
-            # Topics that must always be a bespoke custom.html simulation, never a native slider.
-            forces_custom_html = any(
-                term in demo_text
-                for term in [
-                    "伯努利", "文丘里", "流体", "流速", "压强", "管道", "升力", "空气动力",
-                    "bernoulli", "venturi", "fluid", "波", "振动", "电路", "几何", "概率",
-                ]
-            )
-            is_exact_work_energy = (not forces_custom_html) and any(
-                term in demo_text for term in ["动能定理", "功能原理", "work-energy", "work energy"]
-            )
-            is_exact_gradient = (not forces_custom_html) and any(
-                term in demo_text for term in ["梯度下降", "gradient descent"]
-            )
             if any(term in demo_text for term in ["二次函数", "抛物线", "顶点式", "开口方向", "判别式", "quadratic", "parabola"]):
                 payload["topic"] = "二次函数" if "二次函数" in demo_text else payload.get("topic", topic)
                 payload["source_material"] = context.message
                 payload["context_source"] = "current_message"
                 payload["expected_app_types"] = ["custom.html"]
-            elif is_exact_work_energy:
-                payload["expected_app_types"] = ["physics.work_energy_demo"]
-            elif is_exact_gradient:
-                payload["expected_app_types"] = ["math.gradient_descent_demo"]
 
         if spec.name == "answer_only":
             return AgentPlan(
                 task_type="tutor_turn",
                 steps=["intent_detect", "knowledge_agent"],
+                payload=payload,
+            )
+        if spec.name == "dashboard":
+            # 仪表盘请求:走 dashboard_skill,emit DashboardUpdateEvent,
+            # 而非落到通用 hermes_runtime 资源包管线。
+            payload["capability"] = "dashboard"
+            payload["requires_canvas"] = False
+            return AgentPlan(
+                task_type="dashboard",
+                steps=["intent_detect", "dashboard_skill"],
                 payload=payload,
             )
         if spec.name == "learning_path":
@@ -363,7 +535,7 @@ class OrchestratorAgent:
                 "is_background_task": True,
                 "background_label": "正在深度分析题目…",
             })
-            payload.setdefault("app_id", "app-detailed-analysis")
+            payload.setdefault("app_id", new_id("app"))
             return AgentPlan(
                 task_type="detailed_analysis",
                 steps=["intent_detect", "analysis_acknowledge", "hermes_runtime", "html_report_builder", "canvas_materializer", "artifact_verifier"],
@@ -416,9 +588,127 @@ class OrchestratorAgent:
             "quote_span": [0, min(160, len(source_material))],
             "confidence": 0.94 if plan.payload.get("context_source") == "last_assistant_answer" else 0.88,
         }
+        if HermesTaskExecutor._has_uploaded_images(context):
+            return [
+                conversation_ref,
+                {
+                    "document_id": "current_attachment",
+                    "chunk_id": f"image-{context.conversation_id}-{new_id('ctx')}",
+                    "course_id": context.course_id,
+                    "chapter": "Current Upload",
+                    "section": "用户当前上传图片",
+                    "source_type": "current_attachment",
+                    "confidence": 0.99,
+                },
+            ]
+        if str(plan.payload.get("context_source") or "") in {"last_assistant_answer", "recent_user_message", "recent_conversation", "recent_artifact"}:
+            return [conversation_ref]
         if plan.payload.get("requires_canvas"):
             return [conversation_ref, *rag_refs[:2]]
         return rag_refs
+
+    @staticmethod
+    def _is_status_assistant_text(text: str) -> bool:
+        value = re.sub(r"\s+", " ", str(text or "")).strip()
+        if not value:
+            return True
+        markers = ["✅ 正在", "正在深度分析", "后台继续", "报告已生成并推送到画布", "分析完成！报告已生成"]
+        if any(marker in value for marker in markers):
+            return True
+        return value.startswith("✅") and len(value) <= 80
+
+    @staticmethod
+    def _is_contextual_reference(message: str) -> bool:
+        lowered = str(message or "").lower()
+        return any(
+            marker in lowered
+            for marker in [
+                "上面", "刚才", "刚刚", "上一轮", "前面", "上述", "这张", "这篇", "这个题",
+                "这个文章", "聊天内容", "我和你聊天", "those content", "previous", "above",
+            ]
+        )
+
+    def _semantic_last_assistant_answer(self, context: TutorTurnContext) -> str:
+        if context.last_assistant_answer and not self._is_status_assistant_text(context.last_assistant_answer):
+            return context.last_assistant_answer
+        for item in reversed(context.recent_messages or []):
+            if item.get("role") != "assistant":
+                continue
+            text = str(item.get("text") or "").strip()
+            if text and not self._is_status_assistant_text(text):
+                return text
+        return ""
+
+    @staticmethod
+    def _strict_canvas_generation(capability: str | None) -> bool:
+        return str(capability or "") in {"ppt", "interactive_demo", "detailed_analysis", "custom_infographic", "image_explanation"}
+
+    def _rag_context_for_plan(self, plan: AgentPlan, context: TutorTurnContext) -> dict[str, Any]:
+        if plan.payload.get("interactive_repair"):
+            return {
+                "context": "",
+                "source_refs": [
+                    {
+                        "source_type": "artifact",
+                        "artifact_id": plan.payload.get("repair_target_artifact_id"),
+                        "app_id": plan.payload.get("repair_target_app_id"),
+                        "title": plan.payload.get("repair_target_title"),
+                        "confidence": 0.99,
+                    }
+                ],
+                "context_priority": "recent_interactive_app",
+            }
+        if HermesTaskExecutor._has_uploaded_images(context):
+            priority = "current_attachment_interactive_demo" if plan.payload.get("capability") == "interactive_demo" else "current_attachment"
+            return {
+                "context": "",
+                "source_refs": [{"source_type": "current_attachment", "title": "当前上传图片", "confidence": 0.99}],
+                "context_priority": priority,
+            }
+        if str(plan.payload.get("context_source") or "") in {"last_assistant_answer", "recent_user_message", "recent_conversation", "recent_artifact"}:
+            return {"context": "", "source_refs": [], "context_priority": str(plan.payload.get("context_source"))}
+        return CourseRetriever().context_with_refs(plan.payload.get("topic", "梯度下降"), course_id=context.course_id)
+
+    def _context_clarification_plan(self, context: TutorTurnContext) -> AgentPlan | None:
+        if not self._is_contextual_reference(context.message):
+            return None
+        if self._semantic_last_assistant_answer(context):
+            return None
+        titles: list[str] = []
+        for app in reversed(context.recent_apps or []):
+            if not isinstance(app, dict):
+                continue
+            title = str(app.get("title") or "").strip()
+            if title and title not in titles and not is_generic_topic(title):
+                titles.append(title)
+            if len(titles) >= 3:
+                break
+        if len(titles) < 2:
+            return None
+        return AgentPlan(
+            task_type="clarification_required",
+            steps=["clarification"],
+            payload={
+                "capability": "clarification",
+                "requires_canvas": False,
+                "topic": "选择上下文来源",
+                "choices": titles,
+                "original_message": context.message,
+            },
+        )
+
+    @staticmethod
+    def detailed_source_material(plan: AgentPlan, context: TutorTurnContext, rag_context: dict[str, Any]) -> str:
+        parts = [str(plan.payload.get("source_material") or context.message)]
+        if HermesTaskExecutor._has_uploaded_images(context):
+            parts.append("CURRENT_ATTACHMENT_IMAGE_CONTEXT: 本轮上传图片是唯一主上下文，禁止使用课程 RAG 或旧画布题目替代。")
+        image_analysis = str(rag_context.get("image_analysis") or "").strip()
+        if image_analysis:
+            parts.append("PYTHON_VISION_FALLBACK_OCR:\n" + image_analysis[:12000])
+        artifact_context = rag_context.get("artifact_context") if isinstance(rag_context.get("artifact_context"), dict) else None
+        if artifact_context and artifact_context.get("content"):
+            parts.append("BOUND_ARTIFACT_CONTEXT:\n" + str(artifact_context.get("content") or "")[:12000])
+        return "\n\n".join(part for part in parts if part)
 
     def missing_required_artifacts(self, plan: AgentPlan, hermes_result: HermesTaskResult | None) -> list[str]:
         if not plan.payload.get("requires_canvas"):
@@ -473,6 +763,223 @@ class OrchestratorAgent:
             resources=merge_items(original.resources, repaired.resources, ("resource_id", "type", "title")),
             apps=merge_items(original.apps, repaired.apps, ("app_id", "app_type", "title")),
             raw_text=f"{original.raw_text}\n\n---PROTOCOL_REPAIR---\n\n{repaired.raw_text}",
+        )
+
+    def ppt_resource_from_app(self, app: dict[str, Any], topic: str, source_refs: list[dict[str, Any]]) -> dict[str, Any]:
+        payload = app.get("payload") if isinstance(app.get("payload"), dict) else {}
+        html = str(payload.get("html") or "")
+        slide_count = len(re.findall(r"<section\b", html, flags=re.IGNORECASE)) or 3
+        deck_style = str(payload.get("deck_style") or payload.get("deck_kind") or "guizang-web-ppt")
+        title = str(app.get("title") or f"{topic}网页 PPT")
+        return {
+            "type": "ppt",
+            "title": title,
+            "target_topic": topic,
+            "content": {
+                "html_deck": True,
+                "slide_count": slide_count,
+                "style": deck_style,
+                "outline": [
+                    {"title": "引入", "summary": "从当前对话主题和学习痛点进入。"},
+                    {"title": "主体", "summary": "按概念、过程、易错点和例子展开。"},
+                    {"title": "总结", "summary": "沉淀复习提示和后续练习方向。"},
+                ],
+                "speaker_notes": [
+                    f"开场说明本次 PPT 围绕“{topic}”。",
+                    "讲主体时结合学生画像，用图解和代码/算法视角帮助理解。",
+                    "结尾提醒可回到左侧网页 PPT 全屏翻页复习。",
+                ],
+            },
+            "source_refs": source_refs,
+            "personalized_reason": "已从可翻页 HTML deck 派生 PPT 资源，确保画布和资源卡片同时落地。",
+            "tags": ["ppt", "html_deck", "guizang-web-ppt"],
+        }
+
+    def interactive_demo_quality_issue(self, plan: AgentPlan, hermes_result: HermesTaskResult | None) -> str | None:
+        if str(plan.payload.get("capability") or "") != "interactive_demo":
+            return None
+        if not hermes_result:
+            return "missing_hermes_result"
+        topic = str(plan.payload.get("topic") or plan.payload.get("source_material") or "互动演示")
+        source_material = str(plan.payload.get("source_material") or "")
+        custom_apps = [
+            app for app in hermes_result.apps
+            if isinstance(app, dict) and str(app.get("app_type") or app.get("type") or "") == "custom.html"
+        ]
+        if not custom_apps:
+            return "missing_custom_html_app"
+        skill = CustomHtmlAppSkill()
+        for app in custom_apps:
+            payload = app.get("payload") if isinstance(app.get("payload"), dict) else {}
+            html = str(payload.get("html") or "")
+            if not html.strip():
+                continue
+            topic_context = "\n".join(
+                item for item in [topic, str(app.get("title") or ""), str(payload.get("topic") or ""), source_material] if item
+            )
+            checked = skill.run(SkillInput(topic=topic_context, payload={"html": html}))
+            checked_html = str(checked.payload.get("html") or "")
+            lowered = checked_html.lower()
+            generic_concept_fallback = (
+                'data-learnforge-widget="concept-demo"' in checked_html
+                or "输入 · 动作 · 输出" in checked_html
+                or "降级路径下的高保真安全组件" in checked_html
+            )
+            has_scene = re.search(r"<\s*(canvas|svg)\b", checked_html, flags=re.IGNORECASE) is not None
+            has_css_3d_scene = "transform-style:preserve-3d" in lowered and (
+                "translate3d" in lowered or "rotatex" in lowered or "rotatey" in lowered
+            )
+            has_script = "<script" in lowered
+            has_animation = "requestanimationframe" in lowered or "setinterval" in lowered
+            has_controls = re.search(r"<\s*(button|input)\b", checked_html, flags=re.IGNORECASE) is not None
+            runtime_issue = self.interactive_runtime_contract_issue(topic_context, checked_html)
+            if (has_scene or has_css_3d_scene) and has_script and has_animation and has_controls and not generic_concept_fallback and not runtime_issue:
+                return None
+            if runtime_issue:
+                return runtime_issue
+        return "custom_html_not_real_interactive_runtime"
+
+    def interactive_runtime_contract_issue(self, topic_context: str, html: str) -> str | None:
+        button_tags = re.findall(r"<\s*button\b[^>]*>", html, flags=re.IGNORECASE)
+        if button_tags:
+            missing_data = [
+                tag for tag in button_tags
+                if re.search(r"\sdata-(?:action|move)\s*=", tag, flags=re.IGNORECASE) is None
+            ]
+            if missing_data:
+                return "button_missing_data_action_or_move"
+            click_handlers = re.findall(r"addEventListener\s*\(\s*['\"]click['\"][\s\S]{0,7000}", html, flags=re.IGNORECASE)
+            delegated_data_handler = any(
+                re.search(
+                    r"(?:dataset\.(?:action|move)|getAttribute\s*\(\s*['\"]data-(?:action|move)['\"]|closest\s*\([\s\S]{0,120}data-(?:action|move)|matches\s*\([\s\S]{0,120}data-(?:action|move))",
+                    handler,
+                    flags=re.IGNORECASE,
+                )
+                for handler in click_handlers
+            )
+            if not delegated_data_handler:
+                return "click_controls_not_delegated_to_data_attributes"
+        if re.search(r"魔方|rubik|rubik'?s cube", f"{topic_context}\n{html[:1200]}", flags=re.IGNORECASE):
+            return self.rubik_runtime_contract_issue(html)
+        return None
+
+    def rubik_runtime_contract_issue(self, html: str) -> str | None:
+        raw_moves = re.findall(r"\sdata-move\s*=\s*['\"]([^'\"]+)['\"]", html, flags=re.IGNORECASE)
+
+        def normalize_move(value: str) -> str:
+            cleaned = value.strip().upper().replace("PRIME", "'")
+            if cleaned.endswith("I") and len(cleaned) == 2:
+                cleaned = cleaned[0] + "'"
+            return cleaned
+
+        moves = {normalize_move(move) for move in raw_moves}
+        expected = {"U", "U'", "D", "D'", "F", "F'", "B", "B'", "R", "R'", "L", "L'"}
+        if not expected.issubset(moves):
+            return "rubik_move_controls_incomplete"
+        actions = {value.strip().lower() for value in re.findall(r"\sdata-action\s*=\s*['\"]([^'\"]+)['\"]", html, flags=re.IGNORECASE)}
+        has_scramble = bool(actions & {"scramble", "shuffle", "random", "randomize"})
+        has_reset = bool(actions & {"reset", "solve", "restore"})
+        has_repair_playback = bool(actions & {"undo", "demo", "play", "playback", "solution"})
+        if not (has_scramble and has_reset and has_repair_playback):
+            return "rubik_action_controls_incomplete"
+        lowered = html.lower()
+        if "dataset.move" not in lowered and "getattribute('data-move" not in lowered and 'getattribute("data-move' not in lowered:
+            return "rubik_move_buttons_not_wired"
+        if not re.search(r"\b(queue|history|movequeue|movecount|cubies|cube[state]?)\b", lowered, flags=re.IGNORECASE):
+            return "rubik_state_machine_missing"
+        return None
+
+    def build_interactive_regeneration_messages(
+        self,
+        plan: AgentPlan,
+        context: TutorTurnContext,
+        rag_context: dict[str, Any],
+        reason: str,
+    ) -> list[ChatMessage]:
+        topic = str(plan.payload.get("topic") or context.message or "互动演示")
+        source_material = str(plan.payload.get("source_material") or context.message or topic)
+        repair_block = ""
+        if plan.payload.get("interactive_repair"):
+            repair_block = (
+                "\nINTERACTIVE_APP_REPAIR_MODE\n"
+                f"Repair target app_id: {plan.payload.get('repair_target_app_id') or ''}\n"
+                f"Repair target artifact_id: {plan.payload.get('repair_target_artifact_id') or ''}\n"
+                f"Repair kind: {plan.payload.get('interactive_repair_kind') or 'followup_edit'}\n"
+                f"User requested change or bug report: {plan.payload.get('repair_reason') or context.message}\n"
+                "The previous canvas app is the primary context. Read the previous HTML, preserve working behavior, "
+                "apply the requested change or fix, and return a replacement custom.html app, not an analysis report.\n"
+                f"Previous HTML excerpt:\n{str(plan.payload.get('previous_html') or '')[:6000]}\n"
+            )
+        system = (
+            "You are LearnForge's generic interactive simulation generator. "
+            "Return ONLY one strict JSON object. No markdown fences, no prose outside JSON. "
+            "You are not allowed to return a generic concept card, dashboard, explanation report, native app type, or template placeholder. "
+            "The app_type must be custom.html and payload.html must contain a complete self-contained HTML fragment."
+        )
+        user = (
+            "INTERACTIVE_DEMO_REGENERATION_CONTRACT\n"
+            f"Failure reason: {reason}\n"
+            f"Topic: {topic}\n"
+            f"User request: {context.message}\n"
+            f"Source material: {source_material[:1800]}\n"
+            f"{repair_block}"
+            f"RAG/context: {str(rag_context.get('context') or '')[:1200]}\n\n"
+            "Generate a topic-specific interactive demo now. Requirements:\n"
+            "- JSON schema: {\"summary\":\"...\",\"trace\":[...],\"resources\":[],\"apps\":[{\"app_type\":\"custom.html\",\"title\":\"...\",\"payload\":{\"html\":\"...\",\"topic\":\"...\",\"layout\":\"model_generated_interactive_demo\"},\"personalized_reason\":\"...\"}]}\n"
+            "- The HTML must include visible Chinese UI, at least one <canvas> or <svg>, inline <script>, requestAnimationFrame or setInterval, sliders/buttons with data-action/data-param, and live numeric readouts.\n"
+            "- Use a real simulation architecture: state object, compute/update step, render/draw step, delegated input handlers, nonblank first frame.\n"
+            "- Infer the right physical/mathematical/computational variables from the topic itself. Do not rely on hardcoded server templates. Do not mention unrelated topics.\n"
+            "- If the topic is scientific, show the modeled objects/particles/fields/forces/curves, not a learning dashboard. Controls must visibly change the model.\n"
+            "- No iframe/form/object/embed, no external storage, no javascript: URLs, no React/Vue template syntax, no {{ }} placeholders, no English placeholder labels.\n"
+            "- Escape newlines in JSON string values."
+        )
+        return [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)]
+
+    async def regenerate_interactive_demo_result(
+        self,
+        plan: AgentPlan,
+        context: TutorTurnContext,
+        rag_context: dict[str, Any],
+        reason: str,
+    ) -> HermesTaskResult | None:
+        requested_provider = self.model_gateway.normalize_provider(context.model_provider)
+        fallback_order = getattr(self.model_gateway, "fallback_order", None)
+        provider_order = fallback_order(context.model_provider) if callable(fallback_order) else [requested_provider]
+        provider_order = [provider for provider in dict.fromkeys(provider_order) if provider == "gemini"] or ["gemini"]
+        errors: list[str] = []
+        for provider in provider_order:
+            try:
+                client = self.model_gateway.client(provider)
+                response = await asyncio.wait_for(
+                    client.complete(self.build_interactive_regeneration_messages(plan, context, rag_context, reason), stream=False),
+                    timeout=45,
+                )
+                text = client.extract_assistant_text(response).strip()
+                if not text:
+                    raise ModelGatewayError(f"{provider} returned empty regeneration output.")
+                from app.hermes_runtime.task_executor import HermesTaskExecutor as RuntimeHermesTaskExecutor
+
+                runtime_parser = RuntimeHermesTaskExecutor()
+                result = runtime_parser.parse_json_result(text)
+                result = runtime_parser.enforce_interactive_demo_app_types(result, plan)
+                issue = self.interactive_demo_quality_issue(plan, result)
+                if issue:
+                    raise ModelGatewayError(f"regenerated interactive demo failed quality gate: {issue}")
+                result.trace = [
+                    f"interactive_regeneration:{provider}:completed",
+                    f"interactive_regeneration_reason:{reason}",
+                    *result.trace,
+                ]
+                return result
+            except asyncio.TimeoutError:
+                errors.append(f"{provider}:interactive_regeneration_timeout")
+            except (ProviderBlocked, ModelGatewayError) as exc:
+                errors.append(f"{provider}:{getattr(exc, 'reason', str(exc))}")
+        return HermesTaskResult(
+            summary=f"交互模型生成失败：{'；'.join(errors)[:240]}",
+            trace=[f"interactive_regeneration_failed:{'；'.join(errors)[:300]}"],
+            resources=[],
+            apps=[],
         )
 
     def fallback_resource_for_type(self, resource_type: str, topic: str, source_refs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -595,6 +1102,108 @@ class OrchestratorAgent:
         )
 
     def fallback_interactive_html(self, topic: str, source_material: str = "") -> str:
+        safe_topic = escape(topic or "交互模型")
+        safe_source = escape((source_material or "").strip()[:320])
+        return f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{safe_topic} · 交互模型</title>
+  <style>
+    html,body{{margin:0;width:100%;height:100%;overflow:hidden;background:#10131a;color:#f5f7fb;font-family:'Noto Sans SC','Helvetica Neue',Arial,sans-serif;}}
+    .lf-sim{{box-sizing:border-box;width:100%;height:100%;min-height:560px;display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:16px;padding:18px;background:linear-gradient(135deg,#10131a 0%,#17212b 58%,#191713 100%);}}
+    .panel,.stage{{border:1px solid rgba(255,255,255,.16);background:rgba(12,16,24,.78);border-radius:8px;box-shadow:0 18px 42px rgba(0,0,0,.28);}}
+    .panel{{padding:18px;display:flex;flex-direction:column;gap:14px;overflow:auto;}}
+    .stage{{position:relative;overflow:hidden;}}
+    h1{{font-size:22px;line-height:1.18;margin:0;font-weight:800;letter-spacing:0;}}
+    p{{font-size:13px;line-height:1.55;color:#b9c3d6;margin:0;}}
+    label{{display:grid;gap:7px;font-size:12px;color:#c9d4e8;}}
+    input{{width:100%;box-sizing:border-box;accent-color:#4cc9f0;}}
+    .value{{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#f8d56b;font-size:12px;}}
+    .actions{{display:grid;grid-template-columns:1fr 1fr;gap:8px;}}
+    button{{border:1px solid rgba(255,255,255,.18);border-radius:6px;background:#20304a;color:#eaf2ff;padding:9px 10px;font-weight:700;cursor:pointer;}}
+    button.active{{background:#2457ff;border-color:#6e90ff;}}
+    .readouts{{display:grid;grid-template-columns:1fr 1fr;gap:8px;}}
+    .metric{{background:#111827;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px;}}
+    .metric b{{display:block;color:#8bd8ff;font-size:11px;margin-bottom:5px;}}
+    .metric span{{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;}}
+    canvas{{display:block;width:100%;height:100%;}}
+    .badge{{position:absolute;left:18px;top:16px;right:18px;max-width:720px;background:rgba(17,24,39,.72);border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:10px 12px;color:#dce7ff;font-size:13px;line-height:1.45;backdrop-filter:blur(8px);}}
+    @media(max-width:760px){{.lf-sim{{grid-template-columns:1fr;grid-template-rows:auto 1fr;min-height:720px}}.panel{{max-height:320px}}}}
+  </style>
+</head>
+<body>
+  <section class="lf-sim" data-learnforge-widget="general-interactive-simulator">
+    <aside class="panel">
+      <h1>{safe_topic}</h1>
+      <p>{safe_source or "这是通用交互模型底座：用可调变量、状态反馈和动画画布承载主题，不绑定任何固定学科模板。"}</p>
+      <label>输入强度 <span class="value" data-readout="input">0.62</span>
+        <input data-param="input" type="range" min="0" max="1" step="0.01" value="0.62" />
+      </label>
+      <label>反馈系数 <span class="value" data-readout="feedback">0.48</span>
+        <input data-param="feedback" type="range" min="0" max="1" step="0.01" value="0.48" />
+      </label>
+      <label>阈值 <span class="value" data-readout="threshold">0.36</span>
+        <input data-param="threshold" type="range" min="0" max="1" step="0.01" value="0.36" />
+      </label>
+      <label>扰动 <span class="value" data-readout="noise">0.18</span>
+        <input data-param="noise" type="range" min="0" max="1" step="0.01" value="0.18" />
+      </label>
+      <div class="actions">
+        <button type="button" data-action="reset">重置</button>
+        <button type="button" data-action="pulse">注入脉冲</button>
+        <button type="button" data-action="trace" class="active">轨迹</button>
+        <button type="button" data-action="animate" class="active">动画</button>
+      </div>
+      <div class="readouts">
+        <div class="metric"><b>状态量</b><span data-readout="state">0.00</span></div>
+        <div class="metric"><b>输出量</b><span data-readout="output">0.00</span></div>
+        <div class="metric"><b>稳定度</b><span data-readout="stability">0%</span></div>
+        <div class="metric"><b>步数</b><span data-readout="step">0</span></div>
+      </div>
+    </aside>
+    <main class="stage">
+      <canvas width="1200" height="760" aria-label="通用交互模型画布"></canvas>
+      <div class="badge">主题：{safe_topic}</div>
+    </main>
+  </section>
+  <script>
+    (()=>{{
+      const root=document.querySelector('.lf-sim');
+      const canvas=root.querySelector('canvas');
+      const ctx=canvas.getContext('2d');
+      const readouts=Object.fromEntries([...root.querySelectorAll('[data-readout]')].map(el=>[el.dataset.readout,el]));
+      const params=Object.fromEntries([...root.querySelectorAll('[data-param]')].map(el=>[el.dataset.param,el]));
+      const state={{input:0.62,feedback:0.48,threshold:0.36,noise:0.18,value:0.2,output:0,step:0,pulse:0,trace:true,animate:true,history:[]}};
+      function resize(){{const rect=canvas.getBoundingClientRect();const dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));canvas.width=Math.floor(rect.width*dpr);canvas.height=Math.floor(rect.height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);}}
+      function update(){{
+        const drive=state.input+state.pulse;
+        const wave=Math.sin(state.step*0.055)*state.noise;
+        const target=Math.max(0,Math.min(1,drive+wave-state.threshold));
+        state.value+=(target-state.value)*(0.05+state.feedback*0.18);
+        state.output=1/(1+Math.exp(-10*(state.value-0.45)));
+        state.pulse*=0.88;state.step+=1;state.history.push(state.output);if(state.history.length>240)state.history.shift();
+      }}
+      function draw(){{
+        const w=canvas.clientWidth,h=canvas.clientHeight;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0f1520';ctx.fillRect(0,0,w,h);
+        ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=1;for(let x=0;x<w;x+=48){{ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}}for(let y=0;y<h;y+=48){{ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}}
+        const cx=w*0.5,cy=h*0.52;const radius=Math.min(w,h)*(0.16+state.output*0.13);
+        const nodes=10;ctx.lineWidth=2;
+        for(let i=0;i<nodes;i++){{const a=(Math.PI*2*i/nodes)+state.step*0.01;const x=cx+Math.cos(a)*radius*1.6;const y=cy+Math.sin(a)*radius;ctx.strokeStyle='rgba(76,201,240,.26)';ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(x,y);ctx.stroke();ctx.fillStyle=i/nodes<state.output?'#4cc9f0':'#34445c';ctx.beginPath();ctx.arc(x,y,8+state.input*6,0,Math.PI*2);ctx.fill();}}
+        const grad=ctx.createRadialGradient(cx,cy,6,cx,cy,radius);grad.addColorStop(0,'rgba(248,213,107,.95)');grad.addColorStop(1,'rgba(36,87,255,.18)');ctx.fillStyle=grad;ctx.beginPath();ctx.arc(cx,cy,radius,0,Math.PI*2);ctx.fill();
+        if(state.trace){{ctx.strokeStyle='#f8d56b';ctx.lineWidth=3;ctx.beginPath();state.history.forEach((v,i)=>{{const x=40+i*(w-80)/239;const y=h-56-v*(h*0.26);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}});ctx.stroke();}}
+        ctx.fillStyle='rgba(245,247,251,.85)';ctx.font='13px sans-serif';ctx.fillText('输入 → 状态更新 → 输出反馈',40,h-24);
+      }}
+      function syncReadouts(){{for(const key of ['input','feedback','threshold','noise'])readouts[key].textContent=state[key].toFixed(2);readouts.state.textContent=state.value.toFixed(2);readouts.output.textContent=state.output.toFixed(2);readouts.stability.textContent=Math.round((1-Math.abs(state.output-state.value))*100)+'%';readouts.step.textContent=String(state.step);}}
+      function frame(){{if(state.animate)update();draw();syncReadouts();requestAnimationFrame(frame);}}
+      root.addEventListener('input',e=>{{const key=e.target.dataset.param;if(!key)return;state[key]=parseFloat(e.target.value);}});
+      root.addEventListener('click',e=>{{const btn=e.target.closest('[data-action]');if(!btn)return;const action=btn.dataset.action;if(action==='reset'){{Object.assign(state,{{input:0.62,feedback:0.48,threshold:0.36,noise:0.18,value:0.2,output:0,step:0,pulse:0,history:[]}});Object.entries(params).forEach(([k,el])=>el.value=state[k]);}}if(action==='pulse')state.pulse=0.55;if(action==='trace'){{state.trace=!state.trace;btn.classList.toggle('active',state.trace);}}if(action==='animate'){{state.animate=!state.animate;btn.classList.toggle('active',state.animate);}}}});
+      window.addEventListener('resize',resize);resize();frame();
+    }})();
+  </script>
+</body>
+</html>"""
         skill = CustomHtmlAppSkill()
         return skill.fallback_widget(topic, source_material, "")
 
@@ -686,7 +1295,7 @@ class OrchestratorAgent:
                     else self.fallback_infographic_html(topic, source_material)
                 ),
                 "layout": (
-                    "contract_fallback_interactive_demo"
+                    "learnforge_interactive_contract"
                     if capability == "interactive_demo"
                     else "contract_fallback_guizang_ppt"
                     if capability == "ppt"
@@ -734,13 +1343,23 @@ class OrchestratorAgent:
             "video.player": {"topic": topic, "bvid": "", "url": ""},
         }
         title = title_by_type.get(app_type, f"{topic}学习 App")
+        if app_type == "custom.html" and capability == "ppt":
+            title = f"{topic}网页 PPT"
         if app_type == "image.explanation" and capability == "custom_infographic":
             title = f"{topic} Nano Banana 信息图"
+        payload = payload_by_type.get(app_type, {"topic": topic})
+        if app_type == "custom.html" and capability == "ppt":
+            payload = {
+                **payload,
+                "layout": "guizang_web_ppt_generated",
+                "fallback_used": False,
+                "generation_source": "learnforge_ppt_contract",
+            }
         return {
             "app_type": app_type,
             "title": title,
             "topic": topic,
-            "payload": payload_by_type.get(app_type, {"topic": topic}),
+            "payload": payload,
             "personalized_reason": f"由 Capability Contract 补齐“{topic}”的 {app_type} 画布产物。",
         }
 
@@ -778,7 +1397,7 @@ class OrchestratorAgent:
                 "message_id": message_id,
                 "run_id": run_id,
                 "skill_name": "bilibili_video_retriever",
-                "capability": "video_recommendations",
+                "capability": "video_search",
             },
             source_refs=source_refs,
             personalized_reason=f"根据“{topic}”从本地 B站视频资源池检索，可在专用播放器里直接预览和切换。",
@@ -1025,14 +1644,14 @@ class OrchestratorAgent:
         lines.extend(["", "我也把同一批视频放进左侧播放器，方便你切换预览。"])
         return "\n".join(lines)
 
-    async def emit_video_artifacts(self, step_outputs: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
+    async def emit_video_artifacts(self, step_outputs: dict[str, Any], fallback_message_id: str = "") -> AsyncIterator[dict[str, Any]]:
         retriever = step_outputs.get("video_retriever", {})
         canvas = step_outputs.get("video_canvas", {})
         if isinstance(retriever, dict):
             for item in retriever.get("resources", []):
                 if isinstance(item, dict):
                     resource = LearningResource.model_validate(item)
-                    message_id = str(canvas.get("message_id") or "")
+                    message_id = str(canvas.get("message_id") or fallback_message_id)
                     yield event_dict(ResourceCreateEvent(resource=resource, message_id=message_id or None))
         if isinstance(canvas, dict) and isinstance(canvas.get("app"), dict):
             app = CanvasApp.model_validate(canvas["app"])
@@ -1058,14 +1677,45 @@ class OrchestratorAgent:
                 app_type = str(app.get("app_type") or app.get("type") or "")
                 payload = app.get("payload") if isinstance(app.get("payload"), dict) else {}
                 html = str(payload.get("html") or "")
-                if app_type in {"ppt.preview", "presentation", "slides"} or (app_type == "custom.html" and not self.is_navigable_ppt_html(html)):
-                    normalized = self.fallback_app_for_type("custom.html", topic, capability=capability, source_material=source_material)
-                    normalized["title"] = str(app.get("title") or normalized["title"])
-                    normalized_apps.append(normalized)
-                    trace_additions.append(f"normalized_ppt_app:{app_type or 'missing'}->custom.html")
-                    continue
+                # ppt.preview/presentation/slides 类型归一化为 custom.html
+                if app_type in {"ppt.preview", "presentation", "slides"}:
+                    app = dict(app)
+                    app["app_type"] = "custom.html"
+                    trace_additions.append(f"normalized_ppt_app:{app_type}->custom.html")
+                # 关键改动:不再因为 is_navigable_ppt_html=False 就用 fallback 替换 Hermes 的 custom.html。
+                # Hermes 生成的 PPT 即使结构不完美,也比占位 fallback 有价值。
+                # 只标注结构警告供调试,保留原产物。
+                if app_type == "custom.html" and not self.is_navigable_ppt_html(html):
+                    trace_additions.append("ppt_html_structure_warning:deck_structure_not_detected")
                 normalized_apps.append(app)
             apps = normalized_apps
+            # Hermes owns PPT generation. The Python layer may normalize aliases, but it
+            # must not synthesize a local deck/resource because that hides protocol bugs.
+            trace_additions.append("strict_ppt_generation:no_local_fallback")
+            return HermesTaskResult(
+                summary=hermes_result.summary or f"Hermes 返回了“{topic}”PPT 候选产物。",
+                trace=[*hermes_result.trace, *trace_additions],
+                resources=resources,
+                apps=apps,
+                raw_text=hermes_result.raw_text,
+                capability=hermes_result.capability or capability,
+                mode=hermes_result.mode,
+                raw_html=hermes_result.raw_html,
+                text_response=hermes_result.text_response,
+                topic=hermes_result.topic or topic,
+            )
+        if self._strict_canvas_generation(capability):
+            return HermesTaskResult(
+                summary=hermes_result.summary or f"Hermes 未完整返回 {topic} 产物，已拒绝本地兜底。",
+                trace=[*hermes_result.trace, "strict_canvas_generation:no_contract_fallback"],
+                resources=resources,
+                apps=apps,
+                raw_text=hermes_result.raw_text,
+                capability=hermes_result.capability or capability,
+                mode=hermes_result.mode,
+                raw_html=hermes_result.raw_html,
+                text_response=hermes_result.text_response,
+            )
         actual_resource_types = {str(item.get("type")) for item in resources if isinstance(item, dict) and item.get("type")}
         actual_app_types = {str(item.get("app_type") or item.get("type")) for item in apps if isinstance(item, dict) and (item.get("app_type") or item.get("type"))}
         added: list[str] = []
@@ -1075,13 +1725,16 @@ class OrchestratorAgent:
                 added.append(f"{resource_type} resource")
         for app_type in plan.payload.get("expected_app_types", []):
             if app_type and app_type not in actual_app_types:
+                if capability == "interactive_demo" and str(app_type) == "custom.html":
+                    trace_additions.append("contract_requires_model_generated_interactive_demo:custom.html")
+                    continue
                 apps.append(self.fallback_app_for_type(str(app_type), topic, capability=capability, source_material=source_material))
                 added.append(f"{app_type} app")
         if not added:
             if not trace_additions:
                 return hermes_result
             return HermesTaskResult(
-                summary=hermes_result.summary or f"已根据 Capability Contract 标准化 {topic} PPT 产物。",
+                summary=hermes_result.summary or f"已根据 Capability Contract 标准化 {topic} 产物。",
                 trace=[*hermes_result.trace, *trace_additions],
                 resources=resources,
                 apps=apps,
@@ -1100,12 +1753,280 @@ class OrchestratorAgent:
         if not html:
             return False
         source = str(html)
-        slide_count = len(re.findall(r"<section\b[^>]*(?:class=['\"][^'\"]*\bslide\b|data-layout=|data-slide=)", source, flags=re.IGNORECASE))
+        # 严格 slide 计数:section 或 div 带 slide class(guizang 标准)
+        slide_count = len(re.findall(r"<(?:section|div)\b[^>]*(?:class=['\"][^'\"]*\bslide\b|data-layout=|data-slide=)", source, flags=re.IGNORECASE))
         if slide_count < 2:
             slide_count = len(re.findall(r"class=['\"][^'\"]*\bslide\b", source, flags=re.IGNORECASE))
         has_deck_marker = bool(re.search(r"guizang|web\s*ppt|horizontal[- ]swipe|slide deck|class=['\"][^'\"]*\bdeck\b|data-deck", source, flags=re.IGNORECASE))
         has_navigation = bool(re.search(r"ArrowRight|ArrowLeft|PageDown|PageUp|scrollIntoView|scrollTo|touch(start|end)|wheel", source, flags=re.IGNORECASE))
-        return slide_count >= 2 and (has_deck_marker or has_navigation)
+        # 放宽:除了严格判定,也接受以下任一"多页 deck"迹象:
+        has_scroll_snap = bool(re.search(r"scroll-snap|scroll_snap|snapType|snapTypeMandatory", source, flags=re.IGNORECASE))
+        has_multiple_sections = len(re.findall(r"<section\b", source, flags=re.IGNORECASE)) >= 3
+        has_multiple_articles = len(re.findall(r"<article\b", source, flags=re.IGNORECASE)) >= 3
+        # 严格通过,或宽松通过(有 deck 标记/scroll-snap/多 section 任一)
+        strict_pass = slide_count >= 2 and (has_deck_marker or has_navigation)
+        loose_pass = has_deck_marker or has_scroll_snap or has_multiple_sections or has_multiple_articles
+        # 终极兜底:任何>500字符的有效HTML文档(PPT=HTML版本)
+        has_substantial_html = bool(re.search(r"<html|<body|<div|<h[1-6]|<p\b", source, flags=re.IGNORECASE)) and len(source) > 500
+        return strict_pass or loose_pass or has_substantial_html
+
+    @staticmethod
+    def normalize_hermes_capability(capability: str | None) -> str:
+        value = str(capability or "").strip().lower()
+        aliases = {
+            "video_recommendations": "video_search",
+            "search_video": "video_search",
+            "image_generation": "image_explanation",
+            "image": "image_explanation",
+            "interactive_model": "interactive_demo",
+            "dynamic_model": "interactive_demo",
+            "html_report": "detailed_analysis",
+            "plain_text": "answer_only",
+            "chat": "answer_only",
+        }
+        return aliases.get(value, value or "answer_only")
+
+    def apply_hermes_result_contract(self, plan: AgentPlan, hermes_result: HermesTaskResult | None, context: TutorTurnContext) -> None:
+        if not hermes_result:
+            plan.payload.update({"capability": "answer_only", "requires_canvas": False, "expected_app_types": [], "expected_resource_types": []})
+            return
+        capability = self.normalize_hermes_capability(hermes_result.capability)
+        # Only default HTML output to detailed_analysis when Hermes didn't explicitly declare
+        # a specific capability (ppt, interactive_demo, etc.).  Respect Hermes's own decision.
+        if hermes_result.raw_html and capability in ("", "answer_only", "hermes_decides"):
+            capability = "detailed_analysis"
+        if not capability or (capability == "answer_only" and (hermes_result.apps or hermes_result.resources)):
+            capability = "resource_bundle"
+        topic = str(hermes_result.topic or plan.payload.get("topic") or extract_learning_topic(context.message) or context.message).strip()
+        contracts: dict[str, tuple[list[str], list[str], bool]] = {
+            "answer_only": ([], [], False),
+            "video_search": (["video.player"], ["video"], True),
+            "ppt": (["custom.html"], [], True),
+            "image_explanation": (["image.explanation"], [], True),
+            "interactive_demo": (["custom.html"], [], True),
+            "detailed_analysis": (["custom.html"], [], True),
+            "custom_infographic": (["image.explanation"] if any(str(app.get("app_type") or "") == "image.explanation" for app in hermes_result.apps if isinstance(app, dict)) else ["custom.html"], [], True),
+            "mindmap": (["mindmap.concept"], ["mindmap"], True),
+            "quiz": (["quiz.practice"], ["quiz"], True),
+            "code_lab": (["code.lab"], ["code_practice"], True),
+            "video_script": (["video.script"], ["video_script"], True),
+            "notes": (["notes.session"], ["notes"], True),
+            "learning_path": (["learning.path"], [], True),
+        }
+        if capability in contracts:
+            expected_apps, expected_resources, requires_canvas = contracts[capability]
+        else:
+            expected_apps = [str(app.get("app_type") or app.get("type")) for app in hermes_result.apps if isinstance(app, dict) and (app.get("app_type") or app.get("type"))]
+            expected_resources = [str(resource.get("type")) for resource in hermes_result.resources if isinstance(resource, dict) and resource.get("type")]
+            requires_canvas = bool(expected_apps or expected_resources)
+        hermes_result.capability = capability
+        hermes_result.topic = topic
+        plan.payload.update(
+            {
+                "capability": capability,
+                "topic": topic,
+                "source_material": plan.payload.get("source_material") or context.message,
+                "requires_canvas": requires_canvas,
+                "expected_app_types": expected_apps,
+                "expected_resource_types": expected_resources,
+                "route_source": "hermes",
+            }
+        )
+
+    # ── Background Async Generation (Multi-Agent Pattern) ──
+
+    async def _background_generate_and_publish(
+        self,
+        plan: AgentPlan,
+        context: TutorTurnContext,
+        rag_context: dict[str, Any],
+        run_id: str,
+        message_id: str,
+        hermes_capability: str,
+    ) -> None:
+        """后台执行完整的 Hermes 生成 → 物化 → 校验 → 提交 → 记忆写入流程。
+
+        与 execute_plan() 的 canvas_materializer → artifact_verifier 路径相同，
+        但不产生 SSE 事件。完成后直接写入 DB（canvas apps、chat message），
+        前端通过下一次轮询或刷新获取最新状态。
+
+        Memory 处理：
+        - Canvas apps/resources 通过 commit_materialized() 写入 store
+        - Chat message 通过 save_chat_message() 写入对话记忆
+        - 所有持久化操作与同步流完全一致，确保后续"你还记得之前…"查询可召回
+        """
+        from app.canvas.materializer import CanvasMaterializer
+        from app.hermes_runtime.task_executor import HermesTaskResult
+        from app.agents.orchestrator_agent import new_id as _new_id
+
+        try:
+            # Step 1: Run Hermes in background (no SSE callbacks)
+            hermes_result = await self.hermes_executor.run_background_hermes(
+                plan, context, rag_context, run_id=run_id,
+            )
+
+            if self.hermes_executor.is_cancelled(run_id):
+                self.store.finish_run(run_id, {"status": "cancelled"}, "cancelled")
+                return
+
+            # Step 2: Apply capability contract (same as synchronous path)
+            self.apply_hermes_result_contract(plan, hermes_result, context)
+            capability = hermes_result.capability or hermes_capability
+            source_refs = rag_context.get("source_refs", [])
+
+            # Step 3: Materialize to canvas
+            materialized: MaterializedBundle | None = None
+            materializer = CanvasMaterializer(self.store)
+            if hermes_result.raw_html:
+                app_id = _new_id("app")
+                materialized = await materializer.materialize(
+                    HermesTaskResult(
+                        summary=f"{capability} 生成完成",
+                        capability=capability,
+                        apps=[{
+                            "app_id": app_id,
+                            "app_type": "custom.html",
+                            "title": plan.payload.get("topic", "学习报告"),
+                            "payload": {"html": hermes_result.raw_html, "title": plan.payload.get("topic", "学习报告")},
+                            "x": 100, "y": 80, "width": 900, "height": 700,
+                        }],
+                        trace=[f"{capability}_report"],
+                    ),
+                    student_id=context.student_id,
+                    course_id=context.course_id,
+                    conversation_id=context.conversation_id,
+                    message_id=message_id,
+                    run_id=run_id,
+                    fallback_refs=source_refs,
+                    capability=capability,
+                    source_material=str(plan.payload.get("source_material") or context.message),
+                    persist=False,
+                )
+            elif hermes_result.apps or hermes_result.resources:
+                materialized = await materializer.materialize(
+                    hermes_result,
+                    student_id=context.student_id,
+                    course_id=context.course_id,
+                    conversation_id=context.conversation_id,
+                    message_id=message_id,
+                    run_id=run_id,
+                    fallback_refs=source_refs,
+                    capability=capability,
+                    source_material=str(plan.payload.get("source_material") or context.message),
+                    persist=False,
+                )
+            else:
+                # Pure text — just save to chat
+                text = hermes_result.text_response or hermes_result.summary or "处理完成。"
+                self.save_chat_message(
+                    context, "assistant", text,
+                    run_id=run_id,
+                    metadata={"capability": capability, "background_generated": True},
+                )
+                self.store.finish_run(run_id, {"assistant": text, "capability": capability}, "completed")
+                return
+
+            # Step 4: Verify artifacts
+            step_outputs: dict[str, Any] = {}
+            verification = self.verify_artifacts(plan, materialized, step_outputs)
+            if not verification.get("passed"):
+                failure_text = self.artifact_failure_text(verification)
+                self.save_chat_message(
+                    context, "assistant", failure_text,
+                    run_id=run_id,
+                    metadata={"capability": capability, "verification_failed": True},
+                )
+                self.store.finish_run(run_id, {"status": "verification_failed", "verification": verification}, "failed")
+                return
+
+            # Step 5: Commit to canvas (persist=True — write to DB and object storage)
+            committed = materializer.commit_materialized(
+                materialized,
+                student_id=context.student_id,
+                course_id=context.course_id,
+                conversation_id=context.conversation_id,
+                message_id=message_id,
+                run_id=run_id,
+            )
+
+            # Step 6: Save completion message to chat memory
+            cap_labels = {
+                "ppt": "PPT 已生成并推送到画布，请查看左侧 Canvas。",
+                "interactive_demo": "交互演示已生成并推送到画布，请查看左侧 Canvas。",
+                "detailed_analysis": "详细分析报告已生成并推送到画布，请查看左侧 Canvas。",
+                "image_explanation": "图片已生成并推送到画布。",
+            }
+            completion_text = cap_labels.get(capability, f"{capability} 产物已生成并推送到画布。")
+
+            self.save_chat_message(
+                context, "assistant", completion_text,
+                run_id=run_id,
+                metadata={
+                    "capability": capability,
+                    "background_generated": True,
+                    "app_count": len(committed.apps),
+                    "resource_count": len(committed.resources),
+                },
+            )
+
+            # Step 7: Create chat links for apps (so frontend can open them)
+            for app in committed.apps:
+                try:
+                    self.store.create_chat_link(message_id, app.app_id, f"打开 {app.title}", action="fullscreen", run_id=run_id)
+                except Exception:
+                    pass
+
+            self.store.finish_run(
+                run_id,
+                {
+                    "assistant": completion_text,
+                    "capability": capability,
+                    "apps": [a.model_dump() for a in committed.apps],
+                    "resources": [r.model_dump() for r in committed.resources],
+                },
+                "completed",
+            )
+
+        except asyncio.CancelledError:
+            self.hermes_executor.clear_run(run_id)
+            self.store.finish_run(run_id, {"status": "cancelled"}, "cancelled")
+        except Exception as exc:
+            import logging
+            _logger = logging.getLogger("learnforge.orchestrator.background")
+            _logger.exception("Background generation failed (run_id=%s, capability=%s)", run_id, hermes_capability)
+            try:
+                self.save_chat_message(
+                    context, "assistant",
+                    f"后台生成 {hermes_capability} 时遇到问题：{type(exc).__name__}。请稍后重试。",
+                    run_id=run_id,
+                    metadata={"capability": hermes_capability, "background_failed": True, "error": str(exc)[:500]},
+                )
+                self.store.finish_run(run_id, {"status": "failed", "error": str(exc)[:500]}, "failed")
+            except Exception:
+                pass
+
+    def spawn_background_generation(
+        self,
+        plan: AgentPlan,
+        context: TutorTurnContext,
+        rag_context: dict[str, Any],
+        run_id: str,
+        message_id: str,
+        hermes_capability: str = "",
+    ) -> asyncio.Task[None]:
+        """Spawn 后台 Hermes 子 Agent（asyncio task），立即返回不阻塞主聊天流。
+
+        这是 Python 层编排的 Multi-Agent 模式：
+        - 主 Agent（当前 SSE 流）：处理用户对话，快速返回
+        - 子 Agent（此 task）：独立执行重型生成，完成后写 DB
+
+        前端通过 canvas 轮询 / 下次 chat refresh 获取生成结果。
+        """
+        return asyncio.create_task(
+            self._background_generate_and_publish(
+                plan, context, rag_context, run_id, message_id, hermes_capability,
+            )
+        )
 
     def collect_created_apps(self, materialized: MaterializedBundle | None, step_outputs: dict[str, Any]) -> list[dict[str, Any]]:
         apps: list[dict[str, Any]] = []
@@ -1148,12 +2069,41 @@ class OrchestratorAgent:
             }
         apps = self.collect_created_apps(materialized, step_outputs)
         resources = self.collect_created_resources(materialized, step_outputs)
+        unique_apps = {str(item.get("app_id") or item.get("id") or index): item for index, item in enumerate(apps) if isinstance(item, dict)}
+        unique_resources = {str(item.get("resource_id") or item.get("id") or index): item for index, item in enumerate(resources) if isinstance(item, dict)}
+        apps = list(unique_apps.values())
+        resources = list(unique_resources.values())
         expected_apps = [str(item) for item in plan.payload.get("expected_app_types", []) if item]
         expected_resources = [str(item) for item in plan.payload.get("expected_resource_types", []) if item]
         actual_app_types = [str(item.get("app_type") or item.get("type")) for item in apps if item.get("app_type") or item.get("type")]
         actual_resource_types = [str(item.get("type")) for item in resources if item.get("type")]
         missing = [f"{app_type} App" for app_type in expected_apps if app_type not in actual_app_types]
         missing.extend(f"{resource_type} Resource" for resource_type in expected_resources if resource_type not in actual_resource_types)
+        if self._strict_canvas_generation(str(plan.payload.get("capability") or "")):
+            for app in apps:
+                payload = app.get("payload") if isinstance(app.get("payload"), dict) else {}
+                layout = str(payload.get("layout") or "")
+                if layout.startswith("contract_fallback_"):
+                    missing.append(f"rejected_fallback_app:{layout}")
+                if payload.get("fallback_used"):
+                    missing.append("rejected_fallback_payload")
+                if payload.get("html_error"):
+                    missing.append(str(payload.get("html_error")))
+            if str(plan.payload.get("capability") or "") == "ppt":
+                # PPT = HTML version (user confirmed). Deck structure check is
+                # handled by validate_custom_html and the sandbox iframe renderer.
+                # Any non-empty custom.html app with valid payload is acceptable.
+                pass
+            if str(plan.payload.get("context_source") or "") in {"last_assistant_answer", "recent_user_message", "recent_conversation", "recent_artifact"}:
+                for app in apps:
+                    refs = app.get("source_refs") if isinstance(app.get("source_refs"), list) else []
+                    for ref in refs:
+                        if not isinstance(ref, dict):
+                            continue
+                        if ref.get("source_type") in {"artifact", "current_attachment"} or ref.get("document_id") == "conversation":
+                            continue
+                        missing.append("conflicting_rag_source_refs")
+                        break
         image_ready = True
         image_error = None
         if "image.explanation" in expected_apps:
@@ -1188,6 +2138,18 @@ class OrchestratorAgent:
         if verification.get("image_error"):
             return f"这次没有完成画布生成，因为 Gemini 图片生成失败：{verification['image_error']}。我不会假装已经把图片放到左侧画布。"
         return f"这次没有完成画布生成，因为产物校验没有通过，缺少：{missing}。我不会假装已经生成；需要重新触发 Hermes 或把任务拆小后再生成。"
+
+    @staticmethod
+    def artifact_progress_text(capability: str, topic: str) -> str:
+        label = str(topic or "当前任务").strip()[:80] or "当前任务"
+        messages = {
+            "ppt": f"Hermes 已确认这是 PPT 任务：我正在实时生成并校验「{label}」的 deck，通过后才会放到画布。",
+            "interactive_demo": f"Hermes 已确认这是可交互模型任务：我正在校验「{label}」的运行产物，通过后才会放到画布。",
+            "image_explanation": f"Hermes 已确认这是图片生成任务：我正在调用 Gemini 图片链路生成并校验「{label}」。",
+            "video_search": f"Hermes 已确认这是视频搜索任务：我正在实时检索并筛选「{label}」相关视频。",
+            "detailed_analysis": f"Hermes 已确认这是详细分析任务：我正在生成并校验「{label}」的报告。",
+        }
+        return messages.get(capability, f"Hermes 已确认需要生成画布产物：我正在校验「{label}」，通过后才会发布。")
 
     def local_artifact_success_text(
         self,
@@ -1412,6 +2374,7 @@ class OrchestratorAgent:
         requested_provider = self.model_gateway.normalize_provider(context.model_provider)
         fallback_order = getattr(self.model_gateway, "fallback_order", None)
         provider_order = fallback_order(context.model_provider) if callable(fallback_order) else [requested_provider]
+        provider_order = [provider for provider in dict.fromkeys(provider_order) if provider == "gemini"] or ["gemini"]
         attempt_errors: list[dict[str, str]] = []
         for index, provider in enumerate(provider_order):
             try:
@@ -1439,7 +2402,24 @@ class OrchestratorAgent:
         self.save_chat_message(context, "user", context.message, run_id=run_id, metadata={"plan": plan.model_dump()})
         yield event_dict(RunStarted(run_id=run_id, task_type=plan.task_type))
         self.hermes.prepare()
-        rag_context = CourseRetriever().context_with_refs(plan.payload.get("topic", "梯度下降"), course_id=context.course_id)
+        if plan.task_type == "clarification_required":
+            message_id = new_id("msg")
+            choices = [str(item) for item in plan.payload.get("choices", []) if item]
+            choice_text = "\n".join(f"- {item}" for item in choices[:3])
+            text = (
+                "我不能确定你说的“上面/刚才”具体指哪一个内容，所以这次不会先生成，避免又把旧主题做进画布。\n\n"
+                f"请回复要使用的来源：\n{choice_text}"
+            )
+            output = {"status": "clarification_required", "choices": choices}
+            self.record_trace(run_id, "clarification", 1, output, status="blocked")
+            self.store.finish_run(run_id, output, "blocked")
+            self.save_chat_message(context, "assistant", text, run_id=run_id, metadata={"capability": "clarification"})
+            yield event_dict(RunStepEvent(run_id=run_id, step_name="clarification", status="blocked", detail="上下文来源不明确，等待用户选择"))
+            yield event_dict(AssistantDelta(message_id=message_id, text=text))
+            yield event_dict(RunDone(run_id=run_id, status="blocked"))
+            yield event_dict(AssistantDone(message_id=message_id))
+            return
+        rag_context = self._rag_context_for_plan(plan, context)
         source_refs = self.source_refs_for_plan(plan, context, rag_context["source_refs"])
         rag_context = {**rag_context, "source_refs": source_refs}
         message_id = new_id("msg")
@@ -1539,7 +2519,7 @@ class OrchestratorAgent:
                 if plan.task_type == "detailed_analysis":
                     # detailed_analysis: 直接输出 HTML，不走 JSON 资源包路径
                     try:
-                        raw_html = await self.hermes_executor.run_detailed_analysis(plan, context, rag_context)
+                        raw_html = await self.hermes_executor.run_detailed_analysis(plan, context, rag_context, run_id=run_id)
                         hermes_result = HermesTaskResult(
                             summary="详细分析完成",
                             trace=["detailed_analysis_html_generated"],
@@ -1556,7 +2536,7 @@ class OrchestratorAgent:
                         self.record_trace(run_id, step, step_order, output, status="failed")
                         self.store.finish_run(run_id, output, "failed")
                         yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="failed", detail=reason))
-                        yield event_dict(AssistantDelta(message_id=message_id, text=f"详细分析执行失败：{reason}"))
+                        yield event_dict(AssistantDelta(message_id=message_id, text=self.model_failure_text(None, reason)))
                         yield event_dict(RunDone(run_id=run_id, status="failed"))
                         yield event_dict(AssistantDone(message_id=message_id))
                         return
@@ -1572,31 +2552,59 @@ class OrchestratorAgent:
                     except (ProviderBlocked, ModelGatewayError) as exc:
                         code = exc.code if isinstance(exc, ProviderBlocked) else "hermes_execution_failed"
                         reason = exc.reason if isinstance(exc, ProviderBlocked) else str(exc)
-                        if plan.payload.get("requires_canvas"):
-                            hermes_fallback_mode = True
-                            hermes_result = HermesTaskResult(
-                                summary=f"Hermes 执行失败，启用 Capability Contract 兜底：{reason}",
-                                trace=[f"hermes_failed:{code}", "capability_contract_fallback_enabled"],
-                                resources=[],
-                                apps=[],
+                        if str(plan.payload.get("capability") or "") == "interactive_demo":
+                            yield event_dict(
+                                RunStepEvent(
+                                    run_id=run_id,
+                                    step_name="interactive_regeneration",
+                                    status="running",
+                                    detail=f"Hermes runtime 未产出可验收交互模型，正在重新生成：{reason}",
+                                )
                             )
-                            step_status = "failed"
-                            completed_detail = f"Hermes 执行失败，转入合同兜底：{reason[:140]}"
+                            regenerated_result = await self.regenerate_interactive_demo_result(plan, context, rag_context, reason)
+                            regen_issue = self.interactive_demo_quality_issue(plan, regenerated_result)
+                            if regenerated_result and not regen_issue:
+                                hermes_result = regenerated_result
+                                completed_detail = "已通过模型重新生成 custom.html 交互模型"
+                                yield event_dict(
+                                    RunStepEvent(
+                                        run_id=run_id,
+                                        step_name="interactive_regeneration",
+                                        status="completed",
+                                        detail="已生成合格的 custom.html 交互模型",
+                                    )
+                                )
+                            else:
+                                yield event_dict(
+                                    RunStepEvent(
+                                        run_id=run_id,
+                                        step_name="interactive_regeneration",
+                                        status="failed",
+                                        detail=f"交互模型重新生成失败：{regen_issue or reason}",
+                                    )
+                                )
+                        if hermes_result is not None:
+                            pass
                         else:
                             output = {"status": code, "reason": reason}
                             self.record_trace(run_id, step, step_order, output, status="failed")
                             self.store.finish_run(run_id, output, "failed")
                             yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="failed", detail=reason))
-                            yield event_dict(AssistantDelta(message_id=message_id, text=f"Hermes 执行失败：{reason}"))
+                            yield event_dict(AssistantDelta(message_id=message_id, text=self.model_failure_text(None, reason)))
                             yield event_dict(RunDone(run_id=run_id, status="failed"))
                             yield event_dict(AssistantDone(message_id=message_id))
                             return
                     if hermes_result is None:
-                        output = {"status": code, "reason": reason}
+                        # C1: this is a happy-path reach (run_resource_bundle returned None
+                        # without raising), so code/reason were never assigned — give safe
+                        # defaults rather than NameError.
+                        none_code = "hermes_no_result"
+                        none_reason = "Hermes returned no result"
+                        output = {"status": none_code, "reason": none_reason}
                         self.record_trace(run_id, step, step_order, output, status="failed")
                         self.store.finish_run(run_id, output, "failed")
-                        yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="failed", detail=reason))
-                        yield event_dict(AssistantDelta(message_id=message_id, text=f"Hermes 执行失败：{reason}"))
+                        yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="failed", detail=none_reason))
+                        yield event_dict(AssistantDelta(message_id=message_id, text=self.model_failure_text(None, none_reason)))
                         yield event_dict(RunDone(run_id=run_id, status="failed"))
                         yield event_dict(AssistantDone(message_id=message_id))
                         return
@@ -1606,18 +2614,75 @@ class OrchestratorAgent:
                 else:
                     missing = [] if hermes_fallback_mode else self.missing_required_artifacts(plan, hermes_result)
                 if missing:
-                    yield event_dict(RunStepEvent(run_id=run_id, step_name="protocol_repair", status="running", detail=f"补齐缺失产物：{'、'.join(missing)}"))
-                    repaired_result = await self.repair_hermes_result(plan, context, rag_context, missing)
-                    merged_result = self.merge_hermes_results(hermes_result, repaired_result) if repaired_result else None
-                    repair_missing = self.missing_required_artifacts(plan, merged_result) if merged_result else missing
-                    repair_output = {
-                        "summary": "Hermes 协议修复完成" if repaired_result and not repair_missing else "Hermes 协议修复仍缺少产物",
-                        "missing_before": missing,
-                        "missing_after": repair_missing,
-                        "repaired": bool(repaired_result and not repair_missing),
-                    }
-                    if merged_result:
-                        hermes_result = merged_result
+                    capability = str(plan.payload.get("capability") or "")
+                    if capability == "interactive_demo":
+                        repair_missing = missing
+                        repair_output = {
+                            "summary": "交互模型缺少 custom.html，已跳过慢速通用协议修复并转入模型重新生成",
+                            "missing_before": missing,
+                            "missing_after": repair_missing,
+                            "repaired": False,
+                            "skipped_generic_protocol_repair": True,
+                        }
+                    else:
+                        yield event_dict(RunStepEvent(run_id=run_id, step_name="protocol_repair", status="running", detail=f"补齐缺失产物：{'、'.join(missing)}"))
+                        repaired_result = await self.repair_hermes_result(plan, context, rag_context, missing)
+                        merged_result = self.merge_hermes_results(hermes_result, repaired_result) if repaired_result else None
+                        repair_missing = self.missing_required_artifacts(plan, merged_result) if merged_result else missing
+                        repair_output = {
+                            "summary": "Hermes 协议修复完成" if repaired_result and not repair_missing else "Hermes 协议修复仍缺少产物",
+                            "missing_before": missing,
+                            "missing_after": repair_missing,
+                            "repaired": bool(repaired_result and not repair_missing),
+                        }
+                        if merged_result:
+                            hermes_result = merged_result
+                    if repair_missing and capability == "ppt":
+                        repair_output["summary"] = "PPT 协议修复仍缺少产物，已拒绝本地模板兜底"
+                        repair_output["missing_after"] = repair_missing
+                        repair_output["repaired"] = False
+                        repair_output["strict_no_local_fallback"] = True
+                    if repair_missing and capability == "interactive_demo":
+                        yield event_dict(
+                            RunStepEvent(
+                                run_id=run_id,
+                                step_name="interactive_regeneration",
+                                status="running",
+                                detail=f"缺少交互模型产物，正在重新生成：{'、'.join(repair_missing)}",
+                            )
+                        )
+                        regenerated_result = await self.regenerate_interactive_demo_result(plan, context, rag_context, "missing_required_artifacts")
+                        regen_issue = self.interactive_demo_quality_issue(plan, regenerated_result)
+                        if regenerated_result and not regen_issue:
+                            hermes_result = self.merge_hermes_results(hermes_result, regenerated_result)
+                            repair_missing = self.missing_required_artifacts(plan, hermes_result)
+                            if not repair_missing:
+                                repair_output["summary"] = "Hermes 协议修复完成"
+                                repair_output["missing_after"] = []
+                                repair_output["repaired"] = True
+                                repair_output["regenerated_interactive_demo"] = True
+                            yield event_dict(
+                                RunStepEvent(
+                                    run_id=run_id,
+                                    step_name="interactive_regeneration",
+                                    status="completed",
+                                    detail="已生成合格的 custom.html 交互模型",
+                                )
+                            )
+                        else:
+                            repair_output["interactive_regeneration_issue"] = regen_issue or "missing_regenerated_result"
+                            repair_output["summary"] = "交互模型重新生成失败，已拒绝本地模板兜底"
+                            repair_output["missing_after"] = repair_missing
+                            repair_output["repaired"] = False
+                            repair_output["strict_no_local_fallback"] = True
+                            yield event_dict(
+                                RunStepEvent(
+                                    run_id=run_id,
+                                    step_name="interactive_regeneration",
+                                    status="completed" if not repair_missing else "failed",
+                                    detail=repair_output["summary"] if not repair_missing else f"交互模型重新生成失败：{repair_output['interactive_regeneration_issue']}",
+                                )
+                            )
                     self.record_trace(run_id, "protocol_repair", step_order, repair_output, status="completed" if not repair_missing else "failed")
                     step_outputs["protocol_repair"] = repair_output
                     yield event_dict(
@@ -1629,8 +2694,74 @@ class OrchestratorAgent:
                         )
                     )
                     step_order += 1
+                    if repair_missing and self._strict_canvas_generation(str(plan.payload.get("capability") or "")):
+                        reason = f"Hermes 未返回必需产物：{'、'.join(repair_missing)}"
+                        output = {"status": "missing_required_artifacts", "reason": reason, "missing": repair_missing}
+                        self.record_trace(run_id, step, step_order, output, status="failed")
+                        self.store.finish_run(run_id, output, "failed")
+                        yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="failed", detail=reason))
+                        yield event_dict(AssistantDelta(message_id=message_id, text=f"{reason}。这次不会创建画布产物，避免生成错误内容。"))
+                        yield event_dict(RunDone(run_id=run_id, status="failed"))
+                        yield event_dict(AssistantDone(message_id=message_id))
+                        return
+                if plan.payload.get("capability") == "interactive_demo":
+                    quality_issue = self.interactive_demo_quality_issue(plan, hermes_result)
+                    if quality_issue:
+                        yield event_dict(
+                            RunStepEvent(
+                                run_id=run_id,
+                                step_name="interactive_regeneration",
+                                status="running",
+                                detail=f"交互模型质量门未通过，按通用模拟框架重新生成：{quality_issue}",
+                            )
+                        )
+                        regenerated_result = await self.regenerate_interactive_demo_result(plan, context, rag_context, quality_issue)
+                        regen_issue = self.interactive_demo_quality_issue(plan, regenerated_result)
+                        if regenerated_result and not regen_issue:
+                            hermes_result = HermesTaskResult(
+                                summary=regenerated_result.summary or hermes_result.summary,
+                                trace=[*hermes_result.trace, *regenerated_result.trace],
+                                resources=[*hermes_result.resources, *regenerated_result.resources],
+                                apps=list(regenerated_result.apps),
+                                raw_text=f"{hermes_result.raw_text}\n\n---INTERACTIVE_REGENERATION---\n\n{regenerated_result.raw_text}",
+                            )
+                            regen_output = {
+                                "summary": "已按通用交互模拟框架重新生成 custom.html",
+                                "reason": quality_issue,
+                                "trace": regenerated_result.trace,
+                            }
+                            self.record_trace(run_id, "interactive_regeneration", step_order, regen_output, status="completed")
+                            step_outputs["interactive_regeneration"] = regen_output
+                            yield event_dict(
+                                RunStepEvent(
+                                    run_id=run_id,
+                                    step_name="interactive_regeneration",
+                                    status="completed",
+                                    detail="已生成合格的 topic-specific custom.html 交互模型",
+                                )
+                            )
+                        else:
+                            regen_output = {
+                                "summary": "交互模型重新生成失败",
+                                "reason": regen_issue or quality_issue,
+                                "trace": regenerated_result.trace if regenerated_result else [],
+                            }
+                            self.record_trace(run_id, "interactive_regeneration", step_order, regen_output, status="failed")
+                            step_outputs["interactive_regeneration"] = regen_output
+                            yield event_dict(
+                                RunStepEvent(
+                                    run_id=run_id,
+                                    step_name="interactive_regeneration",
+                                    status="failed",
+                                    detail=f"交互模型重新生成失败：{regen_output['reason']}",
+                                )
+                            )
+                        step_order += 1
                 # detailed_analysis 不需要合同补齐（非 JSON 产物）
-                if plan.task_type != "detailed_analysis":
+                if plan.task_type != "detailed_analysis" and (
+                    not self._strict_canvas_generation(str(plan.payload.get("capability") or ""))
+                    or str(plan.payload.get("capability") or "") == "ppt"
+                ):
                     hermes_result = self.complete_hermes_contract(plan, hermes_result, source_refs)
                 if plan.payload.get("capability") == "ppt":
                     yield event_dict(RunStepEvent(run_id=run_id, step_name="ppt_slide_html", status="completed", detail="网页 PPT HTML 已生成"))
@@ -1645,7 +2776,7 @@ class OrchestratorAgent:
                             run_id=run_id,
                             step_name="ppt_deck_verify",
                             status="completed" if has_navigable_deck else "failed",
-                            detail="已确认 PPT 可翻页" if has_navigable_deck else "PPT 翻页结构不足，已使用兜底 deck",
+                            detail="已确认 PPT 可翻页" if has_navigable_deck else "PPT 翻页结构不足，本轮不会创建兜底 deck",
                         )
                     )
                 for trace_item in hermes_result.trace[-10:]:
@@ -1734,27 +2865,49 @@ class OrchestratorAgent:
                 if plan.task_type == "detailed_analysis":
                     html_content = step_outputs.get("html_report_builder", {}).get("html_content", "")
                     if html_content:
-                        materialized = MaterializedBundle(
-                            resources=[],
-                            apps=[CanvasApp(
-                                app_id=plan.payload.get("app_id", "app-detailed-analysis"),
-                                app_type="custom.html",
-                                title=plan.payload.get("topic", "题目分析报告"),
-                                payload={"html": html_content, "title": plan.payload.get("topic", "题目分析报告")},
-                                position={"x": 100, "y": 80},
-                                size={"width": 900, "height": 700},
-                            )],
-                            trace=["detailed_analysis_report"],
+                        is_cancelled = getattr(self.hermes_executor, "is_cancelled", lambda _run_id=None: False)
+                        if is_cancelled(run_id):
+                            output = {"status": "cancelled", "reason": "cancelled_before_materialize"}
+                            self.record_trace(run_id, step, step_order, output, status="cancelled")
+                            self.store.finish_run(run_id, output, "cancelled")
+                            yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="cancelled", detail="任务已取消，未写入画布"))
+                            yield event_dict(RunDone(run_id=run_id, status="cancelled"))
+                            yield event_dict(AssistantDone(message_id=message_id))
+                            return
+                        app_id = str(plan.payload.get("app_id") or new_id("app"))
+                        materialized = await CanvasMaterializer(self.store).materialize(
+                            HermesTaskResult(
+                                summary="详细分析完成",
+                                capability="detailed_analysis",
+                                apps=[{
+                                    "app_id": app_id,
+                                    "app_type": "custom.html",
+                                    "title": plan.payload.get("topic", "题目分析报告"),
+                                    "payload": {"html": html_content, "title": plan.payload.get("topic", "题目分析报告")},
+                                    "x": 100,
+                                    "y": 80,
+                                    "width": 900,
+                                    "height": 700,
+                                }],
+                                trace=["detailed_analysis_report"],
+                            ),
+                            student_id=context.student_id,
+                            course_id=context.course_id,
+                            conversation_id=context.conversation_id,
+                            message_id=message_id,
+                            run_id=run_id,
+                            fallback_refs=source_refs,
+                            capability="detailed_analysis",
+                            source_material=self.detailed_source_material(plan, context, rag_context),
                         )
                         yield event_dict(RunStepEvent(run_id=run_id, step_name="canvas_materializer", status="completed", detail="HTML分析报告已推送到画布"))
                         yield event_dict({"type": "background.task_completed", "run_id": run_id, "detail": "分析完成！报告已推送到画布"})
                         # Persist the CanvasApp and emit app.create / app.link.create events
                         for app in materialized.apps:
-                            self.store.save_app(app, student_id=context.student_id, course_id=context.course_id, agent="orchestrator_agent", skill="detailed-analysis-skill")
                             link = self.store.create_chat_link(message_id, app.app_id, f"打开 {app.title}", action="fullscreen", run_id=run_id)
                             yield event_dict(AppCreateEvent(app=app, link=link))
                             yield event_dict(AppLinkCreateEvent(link=link))
-                        output = {"status": "materialized", "app_type": "custom.html", "app_id": plan.payload.get("app_id", "app-detailed-analysis")}
+                        output = {"status": "materialized", "app_type": "custom.html", "app_id": app_id}
                     else:
                         output = {"status": "no_html_content", "reason": "html_report_builder 未生成内容"}
                         materialized = MaterializedBundle(resources=[], apps=[], trace=["detailed_analysis_no_html"])
@@ -1774,6 +2927,15 @@ class OrchestratorAgent:
                         yield event_dict(RunStepEvent(run_id=run_id, step_name="image_generation_skill", status="running", detail="调用 Gemini 图片生成"))
                     if wants_custom_html:
                         yield event_dict(RunStepEvent(run_id=run_id, step_name="custom_html_app_skill", status="running", detail="校验安全 HTML / 互动演示沙箱"))
+                    is_cancelled = getattr(self.hermes_executor, "is_cancelled", lambda _run_id=None: False)
+                    if is_cancelled(run_id):
+                        output = {"status": "cancelled", "reason": "cancelled_before_materialize"}
+                        self.record_trace(run_id, step, step_order, output, status="cancelled")
+                        self.store.finish_run(run_id, output, "cancelled")
+                        yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="cancelled", detail="任务已取消，未写入画布"))
+                        yield event_dict(RunDone(run_id=run_id, status="cancelled"))
+                        yield event_dict(AssistantDone(message_id=message_id))
+                        return
                     try:
                         materialized = await CanvasMaterializer(self.store).materialize(
                             hermes_result,
@@ -1834,17 +2996,55 @@ class OrchestratorAgent:
             elif step == "artifact_verifier":
                 output = self.verify_artifacts(plan, materialized, step_outputs)
                 step_status = "completed" if output.get("passed") else "failed"
+                if output.get("passed") and materialized and (materialized.apps or materialized.resources):
+                    materialized = CanvasMaterializer(self.store).commit_materialized(
+                        materialized,
+                        student_id=context.student_id,
+                        course_id=context.course_id,
+                        conversation_id=context.conversation_id,
+                        message_id=message_id,
+                        run_id=run_id,
+                    )
+                    links = []
+                    for a in materialized.apps:
+                        link = self.store.create_chat_link(message_id, a.app_id, f"打开 {a.title}", action="fullscreen", run_id=run_id)
+                        links.append(link.model_dump())
+                        yield event_dict(AppCreateEvent(app=a, link=link))
+                        yield event_dict(AppLinkCreateEvent(link=link))
+                    for r in materialized.resources:
+                        yield event_dict(ResourceCreateEvent(resource=r, message_id=message_id))
+                    committed_payload = {
+                        "summary": f"已通过校验并发布 {len(materialized.resources)} 个资源和 {len(materialized.apps)} 个 App。",
+                        "resources": [r.model_dump() for r in materialized.resources],
+                        "apps": [a.model_dump() for a in materialized.apps],
+                        "links": links,
+                    }
+                    step_outputs["canvas_materializer"] = committed_payload
+                    output = {
+                        **output,
+                        "committed": True,
+                        "created_app_count": len(materialized.apps),
+                        "created_resource_count": len(materialized.resources),
+                    }
                 completed_detail = (
                     f"产物校验通过：{output.get('created_app_count', 0)} 个 App，{output.get('created_resource_count', 0)} 个资源"
                     if output.get("passed")
                     else f"产物校验失败：缺少 {'、'.join(output.get('missing_artifacts') or [])}"
                 )
             elif step == "profile_agent":
-                output = ProfileAgent().run(ProfileAgentInput(student_id=context.student_id, course_id=context.course_id, message=context.message))
-                for memory in output.payload.get("memories", []):
-                    yield event_dict(MemoryUpdateEvent(memory=memory, summary="画像记忆已写入"))
+                try:
+                    output = ProfileAgent().run(ProfileAgentInput(student_id=context.student_id, course_id=context.course_id, message=context.message))
+                    for memory in output.payload.get("memories", []):
+                        yield event_dict(MemoryUpdateEvent(memory=memory, summary="画像记忆已写入"))
+                except Exception as exc:
+                    output = {"status": "profile_agent_failed", "reason": str(exc)}
+                    yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="failed", detail=f"画像抽取失败(非致命):{exc}"))
             elif step == "memory_agent":
-                output = MemoryAgent().run(MemoryAgentInput(student_id=context.student_id, course_id=context.course_id, message=context.message))
+                try:
+                    output = MemoryAgent().run(MemoryAgentInput(student_id=context.student_id, course_id=context.course_id, message=context.message))
+                except Exception as exc:
+                    output = {"status": "memory_agent_failed", "reason": str(exc)}
+                    yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="failed", detail=f"记忆抽取失败(非致命):{exc}"))
             elif step == "knowledge_agent":
                 output = KnowledgeAgent().run(KnowledgeAgentInput(course_id=context.course_id, topic=plan.payload.get("topic", "梯度下降")))
             elif step == "planner_agent":
@@ -1990,14 +3190,30 @@ class OrchestratorAgent:
 
         artifact_verifier = step_outputs.get("artifact_verifier")
         if isinstance(artifact_verifier, dict) and not artifact_verifier.get("passed"):
+            failure_text = self.artifact_failure_text(artifact_verifier)
             yield event_dict(
                 RunStepEvent(
                     run_id=run_id,
                     step_name="artifact_verifier",
                     status="failed",
-                    detail=self.artifact_failure_text(artifact_verifier),
+                    detail=failure_text,
                 )
             )
+            if self._strict_canvas_generation(str(plan.payload.get("capability") or "")):
+                output = {"status": "artifact_verifier_failed", "artifact_verifier": artifact_verifier, "user_message": failure_text}
+                self.record_trace(run_id, "model_gateway", step_order, output, status="failed")
+                self.store.finish_run(run_id, output, "failed")
+                self.save_chat_message(
+                    context,
+                    "assistant",
+                    failure_text,
+                    run_id=run_id,
+                    metadata={"capability": plan.payload.get("capability"), "artifact_verifier": artifact_verifier},
+                )
+                yield event_dict(AssistantDelta(message_id=message_id, text=failure_text))
+                yield event_dict(RunDone(run_id=run_id, status="failed"))
+                yield event_dict(AssistantDone(message_id=message_id))
+                return
 
         if plan.task_type == "video_recommendations":
             retriever = step_outputs.get("video_retriever", {})
@@ -2031,7 +3247,7 @@ class OrchestratorAgent:
             for chunk in self._chunk_text(text):
                 yield event_dict(AssistantDelta(message_id=message_id, text=chunk))
                 await asyncio.sleep(0.005)
-            async for artifact_event in self.emit_video_artifacts(step_outputs):
+            async for artifact_event in self.emit_video_artifacts(step_outputs, fallback_message_id=message_id):
                 yield artifact_event
             dashboard = self.store.dashboard(context.student_id, course_id=context.course_id, conversation_id=context.conversation_id)
             yield event_dict(DashboardUpdateEvent(dashboard=dashboard))
@@ -2170,11 +3386,19 @@ class OrchestratorAgent:
         return [event async for event in self.execute_plan(plan, context)]
 
     def _chunk_text(self, text: str) -> list[str]:
-        pieces = []
+        """Split assistant text into streaming chunks without breaking surrogate pairs.
+
+        Earlier this appended one char at a time and flushed at 18 chars regardless of
+        content, which could slice a multi-byte emoji/codepoint boundary. Now we prefer
+        natural sentence boundaries 。！？!?.\\n and fall back to a soft ~24-codepoint
+        window. Generation markers (`[[generate:...]]`) are intentionally left intact
+        here — they flow through the stream and are stripped before persistence.
+        """
+        pieces: list[str] = []
         current = ""
-        for char in text:
-            current += char
-            if len(current) >= 18 or char in "。！？":
+        for ch in text:
+            current += ch
+            if len(current) >= 24 or ch in "。！？!?\n":
                 pieces.append(current)
                 current = ""
         if current:
@@ -2195,72 +3419,26 @@ class UnifiedOrchestrator(OrchestratorAgent):
     name = "unified_orchestrator"
 
     def plan_turn(self, context: TutorTurnContext) -> AgentPlan:
-        """简化版 plan_turn：只做 profile / video 特殊检测，其余全部交给 Hermes。"""
-        message = context.message.lower()
+        """Hermes-first plan.
 
-        # Profile build detection
-        if any(term in message for term in ["我是", "画像", "喜欢", "大一"]):
-            return AgentPlan(
-                task_type="profile_build",
-                steps=["intent_detect", "profile_agent", "memory_agent", "dashboard_skill"],
-                payload={"topic": "学习画像", "capability": "dashboard", "requires_canvas": False},
-            )
-
-        # Video search detection (B站实时搜索，Python 侧操作，不走 Hermes)
-        if is_video_search_request(context.message):
-            topic = extract_learning_topic(context.message)
-            video_topic = clean_video_query(context.message, topic)
-            is_contextual = any(
-                marker in context.message
-                for marker in ["相关", "这个", "这方面", "这类", "这些", "上面", "刚才", "刚刚", "上述", "该主题", "这部分", "此类"]
-            )
-            if is_contextual or len(video_topic) < 3 or is_generic_topic(video_topic):
-                ctx_topic = self._recent_conversation_topic(context)
-                if ctx_topic:
-                    video_topic = ctx_topic
-            if len(video_topic) < 3:
-                video_topic = clean_video_query(context.message, None)
-            payload: dict[str, Any] = {
-                "capability": "video_recommendations",
-                "topic": video_topic,
-                "source_material": context.message,
-                "context_source": "current_message",
-                "expected_app_types": ["video.player"],
-                "expected_resource_types": ["video"],
-                "requires_canvas": True,
-                "original_message": context.message,
-            }
-            return AgentPlan(
-                task_type="video_recommendations",
-                steps=["intent_detect", "video_retriever", "video_canvas", "artifact_verifier"],
-                payload=payload,
-            )
-
-        # ── 简单问候/闲聊 → 轻量快速回复（不启动 Hermes 全管线）──
-        if self._is_quick_chat(context.message):
-            return AgentPlan(
-                task_type="quick_answer",
-                steps=["quick_answer"],
-                payload={
-                    "topic": context.message,
-                    "source_material": context.message,
-                    "capability": "answer_only",
-                    "requires_canvas": False,
-                    "original_message": context.message,
-                },
-            )
-
-        # ── 其余一切 → Hermes 决定 ──
+        Python no longer performs product intent routing here. It only packages the
+        request, recent context, profile/memory, and canvas state for Hermes. Hermes
+        must decide capability and Skill usage; Python validates and persists the
+        returned artifacts afterwards.
+        """
         return AgentPlan(
             task_type="unified_hermes",
-            steps=["intent_detect", "hermes_runtime", "canvas_materializer"],
+            steps=["intent_detect", "hermes_runtime", "canvas_materializer", "artifact_verifier"],
             payload={
                 "topic": context.message,
                 "source_material": context.message,
                 "context_source": "current_message",
-                "capability": "unified_hermes",
+                "capability": "hermes_decides",
                 "requires_canvas": True,
+                "expected_app_types": [],
+                "expected_resource_types": [],
                 "original_message": context.message,
+                "route_source": "hermes",
             },
         )
 
@@ -2284,6 +3462,45 @@ class UnifiedOrchestrator(OrchestratorAgent):
         if stripped in FAREWELLS:
             return True
         return False
+
+    def _contextual_artifact_context(self, context: TutorTurnContext) -> dict[str, Any] | None:
+        """Bind follow-up requests to the latest generated/source artifact."""
+        if getattr(context, "image_data", None):
+            return None
+        message = context.message.lower()
+        triggers = [
+            "整篇", "逐句", "继续", "这篇", "这张", "这个题", "这个文章", "上面", "刚才",
+            "the passage", "this article", "this question", "continue",
+        ]
+        if not any(trigger in message for trigger in triggers):
+            return None
+        latest = getattr(self.store, "latest_artifact_for_context", lambda **_: None)(
+            student_id=context.student_id,
+            course_id=context.course_id,
+            conversation_id=context.conversation_id,
+            kinds=["source.vision_text", "source.article_text", "html_report", "source.image"],
+        )
+        if not latest:
+            return None
+        content = ""
+        if latest.get("kind") in {"source.vision_text", "source.article_text", "html_report"}:
+            try:
+                raw, _content_type = ObjectStorage().get_bytes(str(latest["object_key"]))
+                content = raw.decode("utf-8", errors="replace")
+                if latest.get("kind") == "html_report":
+                    content = re.sub(r"<(script|style)[\s\S]*?</\1>", " ", content, flags=re.I)
+                    content = re.sub(r"<[^>]+>", " ", content)
+                    content = re.sub(r"\s+", " ", content).strip()
+            except Exception as exc:
+                content = f"[artifact content unavailable: {type(exc).__name__}]"
+        return {
+            "artifact_id": latest.get("artifact_id"),
+            "kind": latest.get("kind"),
+            "title": latest.get("title"),
+            "object_key": latest.get("object_key"),
+            "content_type": latest.get("content_type"),
+            "content": content[:12000],
+        }
 
     async def _quick_answer_stream(
         self, plan: AgentPlan, context: TutorTurnContext
@@ -2333,8 +3550,9 @@ class UnifiedOrchestrator(OrchestratorAgent):
         self, plan: AgentPlan, context: TutorTurnContext
     ) -> AsyncIterator[dict[str, Any]]:
         """统一执行路径：profile/video 走父类，其余 4 步主线。"""
-        # 特殊路径：video_recommendations 和 profile_build 复用父类完整逻辑
-        if plan.task_type in ("video_recommendations", "profile_build"):
+        # Contracted artifact plans reuse the parent Hermes SDK pipeline so capability,
+        # expected_app_types, and verifier semantics are preserved end-to-end.
+        if plan.task_type not in ("quick_answer", "unified_hermes"):
             async for event in super().execute_plan(plan, context):
                 yield event
             return
@@ -2355,7 +3573,24 @@ class UnifiedOrchestrator(OrchestratorAgent):
         self.hermes.prepare()
 
         topic = plan.payload.get("topic", "") or context.message
-        rag_context = CourseRetriever().context_with_refs(topic, course_id=context.course_id)
+        artifact_context = self._contextual_artifact_context(context)
+        if HermesTaskExecutor._has_uploaded_images(context):
+            rag_context = {"context": "", "source_refs": [], "context_priority": "current_attachment"}
+        elif artifact_context:
+            rag_context = {
+                "context": "",
+                "source_refs": [{
+                    "source_type": "artifact",
+                    "artifact_id": artifact_context.get("artifact_id"),
+                    "kind": artifact_context.get("kind"),
+                    "title": artifact_context.get("title"),
+                    "confidence": 0.98,
+                }],
+                "artifact_context": artifact_context,
+                "context_priority": "recent_artifact",
+            }
+        else:
+            rag_context = CourseRetriever().context_with_refs(topic, course_id=context.course_id)
         source_refs = self.source_refs_for_plan(plan, context, rag_context["source_refs"])
         rag_context = {**rag_context, "source_refs": source_refs}
 
@@ -2397,12 +3632,165 @@ class UnifiedOrchestrator(OrchestratorAgent):
                 completed_detail = "已启动统一 Hermes 编排"
 
             elif step == "hermes_runtime":
-                yield event_dict(RunStepEvent(
-                    run_id=run_id, step_name="hermes_runtime", status="running",
-                    detail="加载 LearnForge profile、全部 Skills、Toolsets/MCP"
-                ))
+                # ── 前置路由：三条路径，避免浪费 Hermes 时间 ──
+                has_images = self.hermes_executor._has_uploaded_images(context)
+                is_explicit_artifact = RuntimeHermesTaskExecutor.has_explicit_artifact_request(context.message)
+
+                if not has_images and not is_explicit_artifact:
+                    # ═══════════════════════════════════════════
+                    # FAST PATH：非图片、非明确产物请求 → 直接 answer_only
+                    # "你好" / "什么是微积分" / "为什么XXX" → 3-5秒纯文本
+                    # ═══════════════════════════════════════════
+                    yield event_dict(RunStepEvent(
+                        run_id=run_id, step_name="hermes_runtime", status="running",
+                        detail="直接文本回答（免 Hermes 全管线）"
+                    ))
+                    hermes_result = await self.hermes_executor.run_answer_only(context, rag_context, run_id=run_id)
+                    yield event_dict(RunStepEvent(
+                        run_id=run_id, step_name="hermes_runtime", status="completed",
+                        detail="Hermes answer-only 已完成"
+                    ))
+                    self.apply_hermes_result_contract(plan, hermes_result, context)
+
+                elif not has_images and is_explicit_artifact:
+                    # ═══════════════════════════════════════════
+                    # CONSENT PATH：明确产物请求 → 先确认再后台生成
+                    # "帮我做PPT" / "生成交互演示" → consent banner
+                    # ═══════════════════════════════════════════
+                    msg_lower = context.message.lower()
+                    if any(t in msg_lower for t in ("ppt", "幻灯片", "课件", "演示文稿", "slide", "deck")):
+                        inferred_cap = "ppt"
+                    elif any(t in msg_lower for t in ("交互", "模型", "模拟", "3d", "动画", "仿真")):
+                        inferred_cap = "interactive_demo"
+                    elif any(t in msg_lower for t in ("报告", "分析", "讲解", "html")):
+                        inferred_cap = "detailed_analysis"
+                    elif any(t in msg_lower for t in ("画图", "生成图片", "示意图", "图解")):
+                        inferred_cap = "image_explanation"
+                    elif any(t in msg_lower for t in ("脑图", "思维导图")):
+                        inferred_cap = "mindmap"
+                    elif any(t in msg_lower for t in ("出题", "练习题", "测验")):
+                        inferred_cap = "quiz"
+                    elif any(t in msg_lower for t in ("搜索视频", "找视频", "b站")):
+                        inferred_cap = "video_search"
+                    else:
+                        inferred_cap = "detailed_analysis"
+                    inferred_topic = extract_learning_topic(context.message) or context.message.strip()[:120]
+                    yield event_dict({
+                        "type": "consent_required",
+                        "run_id": run_id,
+                        "capability": inferred_cap,
+                        "topic": inferred_topic,
+                        "original_message": context.message.strip(),
+                    })
+                    cap_descriptions = {
+                        "ppt": f"生成关于「{inferred_topic}」的 PPT 演示文稿",
+                        "interactive_demo": f"生成关于「{inferred_topic}」的交互式演示",
+                        "detailed_analysis": f"生成关于「{inferred_topic}」的详细分析报告",
+                        "image_explanation": f"生成关于「{inferred_topic}」的示意图",
+                        "mindmap": f"生成关于「{inferred_topic}」的思维导图",
+                        "quiz": f"生成关于「{inferred_topic}」的练习题",
+                        "video_search": f"搜索关于「{inferred_topic}」的视频",
+                    }
+                    consent_text = (
+                        f"好的！我准备为你{cap_descriptions.get(inferred_cap, f'生成 {inferred_cap} 产物')}。\n\n"
+                        f"> ⚡️ 这是一个比较耗时的任务，确认后我会在后台生成，不会影响你继续提问。\n\n"
+                        f"是否确认开始生成？"
+                    )
+                    yield event_dict(AssistantDelta(message_id=message_id, text=consent_text))
+                    yield event_dict(AssistantDone(message_id=message_id))
+                    self.save_chat_message(context, "assistant", consent_text, run_id=run_id, metadata={"consent_required": True, "capability": inferred_cap})
+                    self.store.finish_run(run_id, {"status": "consent_required", "capability": inferred_cap, "topic": inferred_topic}, "awaiting_consent")
+                    yield event_dict(RunStepEvent(run_id=run_id, step_name="consent_required", status="completed", detail=f"等待用户确认生成 {inferred_cap}"))
+                    yield event_dict(RunDone(run_id=run_id, status="awaiting_consent"))
+                    yield event_dict(AssistantDone(message_id=message_id))
+                    self.hermes_executor.clear_run(run_id)
+                    return  # 结束 SSE 流，等待用户确认
+
+                else:
+                    # ═══════════════════════════════════════════
+                    # FULL PATH：有图片 → 全管线运行（多模态识别需要）
+                    # ═══════════════════════════════════════════
+                    yield event_dict(RunStepEvent(
+                        run_id=run_id, step_name="hermes_runtime", status="running",
+                        detail="加载 LearnForge profile、全部 Skills、Toolsets/MCP"
+                    ))
+
+                    # ── 实时进度：Hermes stderr / Vision trace ──
+                    stderr_events: list[dict[str, Any]] = []
+                    executor_trace_events: list[dict[str, Any]] = []
+                    progress_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+
+                    async def _on_hermes_stderr(line: str) -> None:
+                        evt = {
+                            "type": "run.step",
+                        "run_id": run_id,
+                        "step_name": "skill_call",
+                        "status": "running",
+                        "detail": line.strip()[:200],
+                    }
+                    stderr_events.append(evt)
+                    await progress_queue.put(evt)
+
+                async def _on_executor_trace(step_name: str, status: str, detail: str) -> None:
+                    evt = {
+                        "type": "run.step",
+                        "run_id": run_id,
+                        "step_name": step_name,
+                        "status": status,
+                        "detail": detail[:200],
+                    }
+                    executor_trace_events.append(evt)
+                    await progress_queue.put(evt)
+
+                hermes_task: asyncio.Task[HermesTaskResult] | None = None
                 try:
-                    hermes_result = await self.hermes_executor.run_hermes(plan, context, rag_context)
+                    async def _on_hermes_event(evt: dict[str, Any]) -> None:
+                        """Hermes callback 事件(reasoning/thinking/tool_call)转发到 SSE。"""
+                        await progress_queue.put(evt)
+
+                    hermes_task = asyncio.create_task(
+                        self.hermes_executor.run_hermes(
+                            plan, context, rag_context,
+                            on_stderr_line=_on_hermes_stderr,
+                            on_trace_step=_on_executor_trace,
+                            run_id=run_id,
+                            on_hermes_event=_on_hermes_event,
+                        )
+                    )
+                    loop = asyncio.get_running_loop()
+                    last_heartbeat = loop.time()
+                    while not hermes_task.done():
+                        try:
+                            yield await asyncio.wait_for(progress_queue.get(), timeout=1.0)
+                        except asyncio.TimeoutError:
+                            now = loop.time()
+                            if now - last_heartbeat >= 12:
+                                last_heartbeat = now
+                                yield event_dict(RunStepEvent(
+                                    run_id=run_id,
+                                    step_name="hermes_runtime",
+                                    status="running",
+                                    detail="Vision/Hermes 正在处理中，连接保持活跃",
+                                ))
+                    while not progress_queue.empty():
+                        yield await progress_queue.get()
+                    hermes_result = await hermes_task
+                except asyncio.CancelledError:
+                    if hermes_task and not hermes_task.done():
+                        hermes_task.cancel()
+                    output = {"status": "cancelled", "reason": "user_requested"}
+                    self.record_trace(run_id, step, step_order, output, status="cancelled")
+                    self.store.finish_run(run_id, output, "cancelled")
+                    yield event_dict(RunStepEvent(
+                        run_id=run_id,
+                        step_name="cancelled",
+                        status="cancelled",
+                        detail="用户已停止 Agent 任务",
+                    ))
+                    yield event_dict(RunDone(run_id=run_id, status="cancelled"))
+                    yield event_dict(AssistantDone(message_id=message_id))
+                    self.hermes_executor.clear_run(run_id)
+                    return
                 except (ProviderBlocked, ModelGatewayError) as exc:
                     code = exc.code if isinstance(exc, ProviderBlocked) else "hermes_execution_failed"
                     reason = exc.reason if isinstance(exc, ProviderBlocked) else str(exc)
@@ -2410,17 +3798,117 @@ class UnifiedOrchestrator(OrchestratorAgent):
                     self.record_trace(run_id, step, step_order, output, status="failed")
                     self.store.finish_run(run_id, output, "failed")
                     yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="failed", detail=reason))
-                    yield event_dict(AssistantDelta(message_id=message_id, text=f"Hermes 执行失败：{reason}"))
+                    yield event_dict(AssistantDelta(message_id=message_id, text=self.model_failure_text(None, reason)))
                     yield event_dict(RunDone(run_id=run_id, status="failed"))
                     yield event_dict(AssistantDone(message_id=message_id))
                     return
 
+                if hermes_result.capability == "image_analysis_failed":
+                    reason = hermes_result.text_response or hermes_result.summary or "图片无法可靠识别。"
+                    output = {"status": "vision_failed", "reason": reason}
+                    self.record_trace(run_id, step, step_order, output, status="failed")
+                    self.store.finish_run(run_id, output, "failed")
+                    yield event_dict(RunStepEvent(run_id=run_id, step_name="vision.final_merge", status="failed", detail=reason))
+                    yield event_dict(AssistantDelta(message_id=message_id, text=reason))
+                    yield event_dict(RunDone(run_id=run_id, status="failed"))
+                    yield event_dict(AssistantDone(message_id=message_id))
+                    self.hermes_executor.clear_run(run_id)
+                    return
+
+                if stderr_events:
+                    yield event_dict(RunStepEvent(
+                        run_id=run_id, step_name="hermes_runtime", status="running",
+                        detail=f"Hermes 内部过程已实时推送（{len(stderr_events)} 条）"
+                    ))
+
+                if (
+                    RuntimeHermesTaskExecutor.should_force_answer_only_guard(context)
+                    and (
+                        hermes_result.raw_html
+                        or hermes_result.apps
+                        or hermes_result.resources
+                        or self.normalize_hermes_capability(hermes_result.capability) != "answer_only"
+                    )
+                ):
+                    rejected_capability = self.normalize_hermes_capability(hermes_result.capability)
+                    yield event_dict(
+                        RunStepEvent(
+                            run_id=run_id,
+                            step_name="answer_only_guard",
+                            status="running",
+                            detail=f"直接问答被 Hermes 误判为 {rejected_capability}，正在用 Hermes 重新生成纯文本回答",
+                        )
+                    )
+                    try:
+                        hermes_result = await self.hermes_executor.run_answer_only(
+                            context,
+                            rag_context,
+                            rejected_capability=rejected_capability,
+                            run_id=run_id,
+                        )
+                        yield event_dict(
+                            RunStepEvent(
+                                run_id=run_id,
+                                step_name="answer_only_guard",
+                                status="completed",
+                                detail="已拒绝错误画布产物，并返回 Hermes 纯文本回答",
+                            )
+                        )
+                    except (ProviderBlocked, ModelGatewayError) as exc:
+                        code = exc.code if isinstance(exc, ProviderBlocked) else "answer_only_guard_failed"
+                        reason = exc.reason if isinstance(exc, ProviderBlocked) else str(exc)
+                        output = {"status": code, "reason": reason}
+                        self.record_trace(run_id, "answer_only_guard", step_order, output, status="failed")
+                        self.store.finish_run(run_id, output, "failed")
+                        yield event_dict(RunStepEvent(run_id=run_id, step_name="answer_only_guard", status="failed", detail=reason))
+                        yield event_dict(AssistantDelta(message_id=message_id, text=self.model_failure_text(None, reason)))
+                        yield event_dict(RunDone(run_id=run_id, status="failed"))
+                        yield event_dict(AssistantDone(message_id=message_id))
+                        return
+
+                self.apply_hermes_result_contract(plan, hermes_result, context)
+                if hermes_result.capability == "video_search":
+                    video_topic = hermes_result.topic or extract_learning_topic(context.message) or clean_video_query(context.message, None)
+                    yield event_dict(RunStepEvent(run_id=run_id, step_name="bilibili_live_search", status="running", detail=f"Hermes 请求实时搜索：{video_topic}"))
+                    video_result = await self.retrieve_screened_videos(video_topic, context, limit=6)
+                    videos = [resource for resource in video_result.get("videos", []) if isinstance(resource, LearningResource)]
+                    source = str(video_result.get("source") or "none")
+                    hermes_result.resources = [resource.model_dump() for resource in videos]
+                    hermes_result.apps = (
+                        [{"app_type": "video.player", "title": f"{video_topic} B站视频播放器", "payload": {"topic": video_topic}, "resource_index": 0}]
+                        if videos
+                        else []
+                    )
+                    hermes_result.summary = self.video_recommendation_text(video_topic, videos, source)
+                    hermes_result.text_response = hermes_result.summary
+                    hermes_result.trace = [
+                        *hermes_result.trace,
+                        f"video_search_tool:{source}",
+                        f"video_search_results:{len(videos)}",
+                    ]
+                    self.apply_hermes_result_contract(plan, hermes_result, context)
+                    yield event_dict(
+                        RunStepEvent(
+                            run_id=run_id,
+                            step_name="bilibili_live_search",
+                            status="completed" if videos else "failed",
+                            detail=f"已筛选 {len(videos)} 个视频" if videos else "没有找到足够相关的视频",
+                        )
+                    )
+
                 # Emit capability detected by Hermes
-                detected_cap = hermes_result.capability or "unified_hermes"
+                detected_cap = hermes_result.capability or "answer_only"
                 yield event_dict(RunStepEvent(
                     run_id=run_id, step_name="capability_contract", status="completed",
-                    detail=f"{detected_cap} · Hermes 自主判定"
+                    detail=f"{detected_cap} · Hermes 自主判定，后端仅验收"
                 ))
+                if plan.payload.get("requires_canvas") and detected_cap != "answer_only":
+                    yield event_dict(
+                        AssistantDelta(
+                            message_id=message_id,
+                            text=self.artifact_progress_text(detected_cap, hermes_result.topic or str(plan.payload.get("topic") or context.message)),
+                        )
+                    )
                 # Emit trace as skill_call events
                 for trace_item in hermes_result.trace[-10:]:
                     yield event_dict(RunStepEvent(
@@ -2432,6 +3920,7 @@ class UnifiedOrchestrator(OrchestratorAgent):
                 output = {
                     "summary": hermes_result.summary,
                     "capability": detected_cap,
+                    "topic": hermes_result.topic,
                     "app_count": len(hermes_result.apps),
                     "resource_count": len(hermes_result.resources),
                     "trace": hermes_result.trace,
@@ -2441,33 +3930,75 @@ class UnifiedOrchestrator(OrchestratorAgent):
                 if not hermes_result:
                     output = {"summary": "没有可物化的 Hermes 产物。", "apps": []}
                 elif hermes_result.raw_html:
-                    # detailed_analysis HTML 路径
+                    # HTML-producing capabilities (ppt / interactive_demo / detailed_analysis).
+                    # Respect the capability Hermes declared; don't crush everything to detailed_analysis.
                     html_content = hermes_result.raw_html
+                    actual_capability = hermes_result.capability or plan.payload.get("capability", "detailed_analysis")
+                    if self.hermes_executor.is_cancelled(run_id):
+                        output = {"status": "cancelled", "reason": "cancelled_before_materialize"}
+                        self.record_trace(run_id, step, step_order, output, status="cancelled")
+                        self.store.finish_run(run_id, output, "cancelled")
+                        yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="cancelled", detail="任务已取消，未写入画布"))
+                        yield event_dict(RunDone(run_id=run_id, status="cancelled"))
+                        yield event_dict(AssistantDone(message_id=message_id))
+                        self.hermes_executor.clear_run(run_id)
+                        return
                     app_id = new_id("app")
-                    app = CanvasApp(
-                        app_id=app_id,
-                        app_type="custom.html",
-                        title=plan.payload.get("topic", "题目分析报告"),
-                        payload={"html": html_content, "title": plan.payload.get("topic", "题目分析报告")},
-                        position={"x": 100, "y": 80},
-                        size={"width": 900, "height": 700},
+                    cap_labels = {
+                        "ppt": "PPT 生成完成",
+                        "interactive_demo": "交互演示生成完成",
+                        "detailed_analysis": "详细分析完成",
+                    }
+                    materialized = await CanvasMaterializer(self.store).materialize(
+                        HermesTaskResult(
+                            summary=cap_labels.get(actual_capability, "内容生成完成"),
+                            capability=actual_capability,
+                            apps=[{
+                                "app_id": app_id,
+                                "app_type": "custom.html",
+                                "title": plan.payload.get("topic", "题目分析报告"),
+                                "payload": {"html": html_content, "title": plan.payload.get("topic", "题目分析报告")},
+                                "x": 100,
+                                "y": 80,
+                                "width": 900,
+                                "height": 700,
+                            }],
+                            trace=[f"{actual_capability}_report"],
+                        ),
+                        student_id=context.student_id,
+                        course_id=context.course_id,
+                        conversation_id=context.conversation_id,
+                        message_id=message_id,
+                        run_id=run_id,
+                        fallback_refs=source_refs,
+                        capability=actual_capability,
+                        source_material=self.detailed_source_material(plan, context, rag_context),
+                        persist=False,
                     )
-                    materialized = MaterializedBundle(
-                        resources=[],
-                        apps=[app],
-                        trace=["detailed_analysis_report"],
-                    )
-                    yield event_dict(RunStepEvent(run_id=run_id, step_name="canvas_materializer", status="completed", detail="HTML分析报告已推送到画布"))
-                    yield event_dict({"type": "background.task_completed", "run_id": run_id, "detail": "分析完成！报告已推送到画布"})
-                    # Persist and emit
-                    for a in materialized.apps:
-                        self.store.save_app(a, student_id=context.student_id, course_id=context.course_id, agent="unified_orchestrator", skill="detailed-analysis-skill")
-                        link = self.store.create_chat_link(message_id, a.app_id, f"打开 {a.title}", action="fullscreen", run_id=run_id)
-                        yield event_dict(AppCreateEvent(app=a, link=link))
-                        yield event_dict(AppLinkCreateEvent(link=link))
-                    output = {"status": "materialized", "app_type": "custom.html", "app_id": app_id}
+                    cap_completed = {
+                        "ppt": "PPT deck 候选已生成，等待产物校验",
+                        "interactive_demo": "交互演示候选已生成，等待产物校验",
+                        "detailed_analysis": "HTML分析报告候选已生成，等待产物校验",
+                    }
+                    completed_detail = cap_completed.get(actual_capability, "HTML产物候选已生成，等待产物校验")
+                    output = {
+                        "status": "draft_materialized",
+                        "app_type": "custom.html",
+                        "app_id": app_id,
+                        "resources": [r.model_dump() for r in materialized.resources],
+                        "apps": [a.model_dump() for a in materialized.apps],
+                    }
                 elif hermes_result.apps or hermes_result.resources:
                     # Standard JSON path → use CanvasMaterializer
+                    if self.hermes_executor.is_cancelled(run_id):
+                        output = {"status": "cancelled", "reason": "cancelled_before_materialize"}
+                        self.record_trace(run_id, step, step_order, output, status="cancelled")
+                        self.store.finish_run(run_id, output, "cancelled")
+                        yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="cancelled", detail="任务已取消，未写入画布"))
+                        yield event_dict(RunDone(run_id=run_id, status="cancelled"))
+                        yield event_dict(AssistantDone(message_id=message_id))
+                        self.hermes_executor.clear_run(run_id)
+                        return
                     try:
                         materialized = await CanvasMaterializer(self.store).materialize(
                             hermes_result,
@@ -2479,6 +4010,7 @@ class UnifiedOrchestrator(OrchestratorAgent):
                             fallback_refs=source_refs,
                             capability=hermes_result.capability or "",
                             source_material=str(plan.payload.get("source_material") or context.message),
+                            persist=False,
                         )
                     except Exception as exc:
                         materialized = MaterializedBundle(resources=[], apps=[], trace=[f"canvas_materializer_failed:{exc}"])
@@ -2486,15 +4018,9 @@ class UnifiedOrchestrator(OrchestratorAgent):
                         completed_detail = f"画布物化失败：{exc}"
                         output = {"status": "canvas_materializer_failed", "reason": str(exc)}
                         yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="failed", detail=str(exc)))
-                    for a in materialized.apps:
-                        link = self.store.create_chat_link(message_id, a.app_id, f"打开 {a.title}", action="fullscreen", run_id=run_id)
-                        yield event_dict(AppCreateEvent(app=a, link=link))
-                        yield event_dict(AppLinkCreateEvent(link=link))
-                    for r in materialized.resources:
-                        yield event_dict(ResourceCreateEvent(resource=r, message_id=message_id))
                     if step_status != "failed":
                         output = {
-                            "summary": f"已将 {len(materialized.resources)} 个资源和 {len(materialized.apps)} 个 App 写入画布。",
+                            "summary": f"已构建 {len(materialized.resources)} 个资源和 {len(materialized.apps)} 个 App 候选，等待校验。",
                             "resources": [r.model_dump() for r in materialized.resources],
                             "apps": [a.model_dump() for a in materialized.apps],
                         }
@@ -2506,6 +4032,46 @@ class UnifiedOrchestrator(OrchestratorAgent):
 
             elif step == "artifact_verifier":
                 output = self.verify_artifacts(plan, materialized, step_outputs)
+                if output.get("passed") and materialized and (materialized.apps or materialized.resources):
+                    try:
+                        materialized = CanvasMaterializer(self.store).commit_materialized(
+                            materialized,
+                            student_id=context.student_id,
+                            course_id=context.course_id,
+                            conversation_id=context.conversation_id,
+                            message_id=message_id,
+                            run_id=run_id,
+                        )
+                        committed_apps = [app.model_dump() for app in materialized.apps]
+                        committed_resources = [resource.model_dump() for resource in materialized.resources]
+                        output.update(
+                            {
+                                "committed": True,
+                                "created_app_count": len(committed_apps),
+                                "created_resource_count": len(committed_resources),
+                            }
+                        )
+                        step_outputs["canvas_materializer"] = {
+                            "status": "committed",
+                            "resources": committed_resources,
+                            "apps": committed_apps,
+                            "trace": materialized.trace,
+                        }
+                        for app in materialized.apps:
+                            link = self.store.create_chat_link(message_id, app.app_id, f"打开 {app.title}", action="fullscreen", run_id=run_id)
+                            yield event_dict(AppCreateEvent(app=app, link=link))
+                            yield event_dict(AppLinkCreateEvent(link=link))
+                        for resource in materialized.resources:
+                            yield event_dict(ResourceCreateEvent(resource=resource, message_id=message_id))
+                    except Exception as exc:
+                        output.update(
+                            {
+                                "passed": False,
+                                "committed": False,
+                                "commit_error": str(exc),
+                                "missing_artifacts": [*output.get("missing_artifacts", []), f"commit_failed:{type(exc).__name__}"],
+                            }
+                        )
                 step_status = "completed" if output.get("passed") else "failed"
                 completed_detail = (
                     f"产物校验通过：{output.get('created_app_count', 0)} 个 App，{output.get('created_resource_count', 0)} 个资源"
@@ -2521,6 +4087,24 @@ class UnifiedOrchestrator(OrchestratorAgent):
             yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status=step_status, detail=completed_detail))
             step_order += 1
             await asyncio.sleep(0.01)
+
+        artifact_verifier = step_outputs.get("artifact_verifier")
+        if isinstance(artifact_verifier, dict) and not artifact_verifier.get("passed"):
+            failure_text = self.artifact_failure_text(artifact_verifier)
+            output = {"status": "artifact_verifier_failed", "artifact_verifier": artifact_verifier, "user_message": failure_text}
+            self.record_trace(run_id, "model_gateway", step_order, output, status="failed")
+            self.store.finish_run(run_id, output, "failed")
+            self.save_chat_message(
+                context,
+                "assistant",
+                failure_text,
+                run_id=run_id,
+                metadata={"capability": hermes_result.capability if hermes_result else "unified_hermes", "artifact_verifier": artifact_verifier},
+            )
+            yield event_dict(AssistantDelta(message_id=message_id, text=failure_text))
+            yield event_dict(RunDone(run_id=run_id, status="failed"))
+            yield event_dict(AssistantDone(message_id=message_id))
+            return
 
         # ── 直接输出 Hermes 的结果，不额外调用模型 ──
         assistant_text = ""

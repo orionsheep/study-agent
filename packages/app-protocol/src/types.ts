@@ -87,9 +87,15 @@ export type AgentStreamEvent =
   | { type: 'verifier.result'; resource_id: string; result: VerifierResult }
   | { type: 'context.update'; topic: string; capability: string; course_label?: string; learning_objective?: string }
   | { type: 'error'; message: string; code?: string }
+  | { type: 'consent_required'; run_id: string; capability: string; topic: string; original_message: string }
   | { type: 'background.task_started'; run_id: string; label: string; task_type: string }
   | { type: 'background.task_progress'; run_id: string; progress: number; detail: string }
-  | { type: 'background.task_completed'; run_id: string; detail: string };
+  | { type: 'background.task_completed'; run_id: string; detail: string }
+  // Hermes SDK callback 透传的实时状态
+  | { type: 'hermes.reasoning'; text: string; run_id: string }
+  | { type: 'hermes.thinking'; text: string; run_id: string }
+  | { type: 'hermes.status'; text: string; run_id: string }
+  | { type: 'hermes.tool_call'; iteration: number; tools: string[]; run_id: string };
 
 export type ResourceType = 'document' | 'mindmap' | 'quiz' | 'ppt' | 'code_practice' | 'image' | 'video_script' | 'reading' | 'notes' | 'dashboard' | 'app_bundle' | 'video';
 export interface LearningResource {

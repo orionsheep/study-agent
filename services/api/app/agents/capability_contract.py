@@ -80,23 +80,37 @@ CAPABILITIES: dict[str, CapabilitySpec] = {
         name="interactive_demo",
         task_type="hermes_interactive_demo",
         keywords=[
+            # "演示" 仍保留——但 ppt 在 ordered 检测里排在前面,
+            # 所以"演示文稿"会先命中 ppt,不会被这里的"演示"劫持。
             "互动演示", "演示一下", "演示", "动画", "模拟", "仿真", "可交互", "交互演示", "动态演示",
             # phrasings like "生成一个X的交互模型" must be a single demo, not a resource bundle
             "交互模型", "互动模型", "演示模型", "动态模型", "可视化模型", "仿真模型",
             "交互式", "互动式", "交互", "互动", "可视化", "模拟器", "演示动画", "交互动画",
+            "可以玩", "可玩的", "能玩", "能操作", "可操作", "操作模型",
         ],
         hermes_skills=["custom-html-app-skill", "code-practice-skill", "verifier-skill", "app-generation-skill"],
         expected_app_types=["custom.html"],
-        expected_resource_types=["document"],
+        expected_resource_types=[],
         requires_canvas=True,
     ),
     "ppt": CapabilitySpec(
         name="ppt",
         task_type="hermes_ppt",
-        keywords=["ppt", "幻灯", "课件", "演示文稿"],
-        hermes_skills=["guizang-ppt-skill", "ppt-skill", "custom-html-app-skill", "verifier-skill", "app-generation-skill"],
+        keywords=["ppt", "幻灯", "课件", "演示文稿", "讲义", "汇报", "报告", "slide", "deck", "presentation"],
+        # hermes_skills 去掉 custom-html-app-skill:避免 Hermes 在 PPT 场景误选动画 skill。
+        # PPT 只用 guizang-ppt-skill / ppt-skill,这俩才是真正的 PPT 生成器。
+        hermes_skills=["guizang-ppt-skill", "ppt-skill", "verifier-skill", "app-generation-skill"],
         expected_app_types=["custom.html"],
         expected_resource_types=["ppt"],
+        requires_canvas=True,
+    ),
+    "video_search": CapabilitySpec(
+        name="video_search",
+        task_type="video_recommendations",
+        keywords=["搜索视频", "找视频", "推荐视频", "查视频", "b站", "哔哩", "bilibili", "课程视频"],
+        hermes_skills=[],
+        expected_app_types=["video.player"],
+        expected_resource_types=["video"],
         requires_canvas=True,
     ),
     "video_script": CapabilitySpec(
@@ -151,11 +165,33 @@ CAPABILITIES: dict[str, CapabilitySpec] = {
 }
 
 
-GENERATION_MARKERS = ["生成", "制作", "做成", "放到画布", "画布", "canvas", "app", "创建", "转成", "输出", "演示", "动画", "模拟", "仿真"]
+GENERATION_MARKERS = ["生成", "制作", "做成", "做一个", "放到画布", "画布", "canvas", "app", "创建", "转成", "输出", "演示", "动画", "模拟", "仿真"]
 CONTEXT_MARKERS = ["上一句", "刚刚", "上面", "基于", "把刚才", "上一轮", "刚才"]
-PROFILE_MARKERS = ["我是", "画像", "喜欢", "大一"]
+# 画像标记收紧:不再用宽泛的"我是"/"喜欢"做子串匹配——它们会劫持
+# "我是不是应该..."/"我喜欢用动画学物理"等正常请求。改用完整短语,
+# 要求明确的"自我介绍/画像构建"语义。
+PROFILE_MARKERS = [
+    "我是大一", "我是高三", "我是高二", "我是高一", "我是初三", "我是初二",
+    "我是初一", "我是大四", "我是大三", "我是大二", "我是一名学生", "我是学生",
+    "我的画像", "学习画像", "更新画像", "建立画像",
+]
 IMAGE_ASSET_MARKERS = ["图片", "图像", "插图", "配图", "出图", "画图", "教学图片", "教学插画", "image", "illustration"]
 INFOGRAPHIC_MARKERS = ["信息图", "infographic", "海报", "可视化海报", "视觉总结", "图文卡片"]
+PPT_STRONG_MARKERS = ["ppt", "幻灯", "课件", "演示文稿", "slide", "deck", "presentation"]
+PPT_GENERATIVE_MARKERS = ["讲义", "汇报", "报告"]
+IMAGE_GENERATIVE_MARKERS = ["生成图片", "生成图像", "生成一张", "生成张", "画图", "出图", "做图", "配图", "教学图", "示意图", "插图"]
+DIRECT_ANSWER_RECALL_MARKERS = [
+    "还记得", "记不记得", "前面聊", "刚才聊", "之前聊", "聊了什么", "说了什么",
+    "我和你聊", "我跟你聊", "上面说", "前面说", "刚刚说",
+]
+DIRECT_ANSWER_EXPLAIN_MARKERS = [
+    "是什么", "为什么", "怎么理解", "如何理解", "解释一下", "讲一下", "说一下",
+    "区别是什么", "有什么区别", "核心思想", "原理是什么",
+]
+PROBLEM_ANALYSIS_CONTEXT_MARKERS = [
+    "这道题", "这题", "题目", "作业", "试卷", "拍题", "批改", "逐题", "每题",
+    "图片", "截图", "上传",
+]
 DETAILED_ANALYSIS_MARKERS = [
     "分析这道题", "讲解这道题", "分析这道", "讲解这道", "帮我讲解", "讲解一下",
     "给我讲", "给我讲解", "帮忙讲解", "批改作业", "改作业", "帮我看看这道题",
@@ -182,6 +218,35 @@ def _contains_any(message: str, terms: list[str]) -> bool:
     return any(term.lower() in message for term in terms)
 
 
+def has_explicit_artifact_intent(message: str) -> bool:
+    lowered = message.lower()
+    if _contains_any(lowered, PPT_STRONG_MARKERS):
+        return True
+    if _contains_any(lowered, PPT_GENERATIVE_MARKERS) and _contains_any(lowered, GENERATION_MARKERS):
+        return True
+    if _contains_any(lowered, IMAGE_GENERATIVE_MARKERS):
+        return True
+    if _contains_any(lowered, INFOGRAPHIC_MARKERS):
+        return True
+    if _contains_any(lowered, INTERACTIVE_MODEL_SIGNALS) and (
+        _contains_any(lowered, GENERATION_MARKERS) or _contains_any(lowered, INTERACTIVE_CORRECTION)
+    ):
+        return True
+    artifact_capabilities = ["mindmap", "quiz", "code_lab", "video_search", "video_script", "notes", "learning_path", "dashboard", "resource_bundle"]
+    return any(_contains_any(lowered, CAPABILITIES[name].keywords) for name in artifact_capabilities)
+
+
+def is_direct_answer_request(message: str) -> bool:
+    lowered = message.lower().strip()
+    if not lowered or has_explicit_artifact_intent(lowered):
+        return False
+    if _contains_any(lowered, DIRECT_ANSWER_RECALL_MARKERS):
+        return True
+    if _contains_any(lowered, DIRECT_ANSWER_EXPLAIN_MARKERS):
+        return True
+    return False
+
+
 def detect_infographic_render_mode(message: str) -> str:
     lowered = message.lower()
     if _contains_any(lowered, INFOGRAPHIC_HTML_MARKERS):
@@ -193,7 +258,9 @@ def detect_infographic_render_mode(message: str) -> str:
 
 def clean_topic(candidate: str) -> str:
     topic = candidate.strip(" ：:，。！？、\n\t\"'《》“”")
-    prefixes = ["请", "你", "帮我", "给我", "现在", "基于", "根据", "把", "将", "用", "对", "关于", "围绕", "演示一下", "演示", "详细讲解一下", "详细讲解", "讲解一下", "讲一下", "介绍一下", "介绍", "我们正在学习", "正在学习", "我们正在讲", "正在讲", "我们刚刚讲了", "刚刚讲了", "讲了", "刚刚", "上一句", "上面", "当前", "本轮学习", "本节学习", "一下", "所有", "全部", "几种", "几类", "常见", "主流", "核心", "经典", "最经典"]
+    prefixes = ["请", "你", "帮我", "给我", "现在", "基于", "根据", "把", "将", "用", "对", "关于", "围绕", "演示一下", "演示", "详细讲解一下", "详细讲解", "讲解一下", "讲一下", "介绍一下", "介绍", "我们正在学习", "正在学习", "我们正在讲", "正在讲", "我们刚刚讲了", "刚刚讲了", "讲了", "刚刚", "上一句", "上面", "当前", "本轮学习", "本节学习", "一下", "所有", "全部", "几种", "几类", "常见"]
+    # 注意:不要把 "主流"/"核心"/"经典"/"最经典" 放进 prefixes —— 它们是主题的有机组成部分
+    # ("主流排序算法""核心数据结构"),剥掉会导致标题残缺(如 "主流的排序" → "的排序")。
     suffixes = ["生成", "制作", "做成", "整理", "总结", "输出", "列出", "打开", "放到", "画布", "canvas", "app", "图片", "图像", "信息图", "笔记", "资源包", "资料包", "演示", "动画", "互动演示", "可交互", "详细", "讲解", "介绍", "一下", "都", "给列出来", "学习笔记"]
     changed = True
     while changed:
@@ -249,27 +316,62 @@ def extract_learning_topic(text: str | None) -> str | None:
     return None
 
 
+# 明确的"交互动画/3D模型"信号词——不含单独的"模型"/"动画"(太宽泛),
+# 只含明确带"交互/3D/动态/仿真"语境的词。
+INTERACTIVE_MODEL_SIGNALS = [
+    "3d", "三维", "可交互", "交互动画", "交互模型", "互动模型",
+    "动态模型", "可视化模型", "仿真模型", "模拟器", "互动演示", "动态演示",
+]
+INTERACTIVE_CORRECTION = ["我要的是", "不是练习题", "不是题", "不要练习题", "别做练习题", "不是报告", "不是讲解"]
+PLAYABLE_INTENT = ["可以玩", "可玩的", "能玩", "能操作", "可操作"]
+
+
 def detect_capability(message: str) -> CapabilitySpec:
     lowered = message.lower()
     if _contains_any(lowered, PROFILE_MARKERS):
         return CapabilitySpec(name="profile_build", task_type="profile_build", keywords=PROFILE_MARKERS, requires_canvas=False)
-    # 详细分析标记优先于图片/信息图标记：当用户说"分析这道题（图片）"时，
-    # 应路由到 detailed_analysis 而非 image_explanation
-    if _contains_any(lowered, DETAILED_ANALYSIS_MARKERS):
-        return CAPABILITIES["detailed_analysis"]
+    has_generation = _contains_any(lowered, ["生成", "制作", "做成", "做一个", "创建", "转成", "输出", "放到画布", "画布", "canvas", "app"])
+    has_interactive_model = _contains_any(lowered, INTERACTIVE_MODEL_SIGNALS)
+    has_interactive_correction = _contains_any(lowered, INTERACTIVE_CORRECTION)
+
+    if is_direct_answer_request(lowered):
+        return CAPABILITIES["answer_only"]
+
+    # Explicit skill locks. These are authoritative for user-requested artifacts:
+    # PPT stays PPT, images stay image-generation, and interactive models stay custom.html demos.
+    if _contains_any(lowered, PPT_STRONG_MARKERS) or (
+        _contains_any(lowered, PPT_GENERATIVE_MARKERS) and has_generation
+    ):
+        return CAPABILITIES["ppt"]
+    if _contains_any(lowered, IMAGE_GENERATIVE_MARKERS):
+        return CAPABILITIES["image_explanation"]
     if _contains_any(lowered, INFOGRAPHIC_MARKERS):
         return CAPABILITIES["custom_infographic"]
+    if has_interactive_model and (has_generation or has_interactive_correction):
+        return CAPABILITIES["interactive_demo"]
+    has_playable = _contains_any(lowered, PLAYABLE_INTENT) or "我要的是" in lowered
+    has_spatial = _contains_any(lowered, ["三维", "3d", "模拟器"])
+    if has_playable and has_spatial:
+        return CAPABILITIES["interactive_demo"]
+
+    # Detailed analysis is for problem/assignment/image-analysis work, not ordinary
+    # direct questions such as "解释一下这个概念".
+    if _contains_any(lowered, DETAILED_ANALYSIS_MARKERS) and (
+        _contains_any(lowered, PROBLEM_ANALYSIS_CONTEXT_MARKERS)
+        or _contains_any(lowered, ["详细分析", "题目解析", "试题分析", "逐题讲解"])
+    ):
+        return CAPABILITIES["detailed_analysis"]
     if _contains_any(lowered, IMAGE_ASSET_MARKERS):
         return CAPABILITIES["image_explanation"]
-    # Specific artifact intents must win over broad bundle words such as "一套/全套/资源".
-    # Example: "生成一套大学物理的简单介绍ppt" is a PPT deck request, not a full resource pack.
+    # 特定产物意图(ppt/mindmap/quiz/video_script 等)。注意 video_script 排在
+    # interactive_demo 前面——"动画脚本"命中 video_script 而非 interactive_demo。
     ordered = [
         "mindmap",
         "quiz",
-        "interactive_demo",
         "code_lab",
-        "ppt",
+        "video_search",
         "video_script",
+        "interactive_demo",
         "notes",
         "learning_path",
         "dashboard",
@@ -307,4 +409,6 @@ def contract_payload(spec: CapabilitySpec, topic: str, context_source: str, sour
         "requires_canvas": spec.requires_canvas,
         "requires_image_url": spec.requires_image_url,
         "hermes_skills": spec.hermes_skills,
+        "capability_locked": True,
+        "route_source": "capability_contract",
     }

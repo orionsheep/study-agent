@@ -1,6 +1,6 @@
 import type { AgentStreamEvent, CanvasApp, DashboardSnapshot, ChatAppLink, LearningResource } from "@learnforge/app-protocol";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8011";
 const TOKEN_KEY = "learnforge.auth.token";
 
 export type SessionContext = {
@@ -9,7 +9,14 @@ export type SessionContext = {
   conversationId: string;
 };
 
-export type ModelProvider = "mimo" | "gemini";
+export type ModelProvider = "gemini";
+
+// #25: single source of truth for the model picker. UI surfaces (ChatHeader etc.)
+// import this instead of hardcoding their own copy, so labels stay in sync with the
+// ModelProvider union above.
+export const MODEL_OPTIONS: { provider: ModelProvider; label: string; caption: string }[] = [
+  { provider: "gemini", label: "Gemini 3.1 Pro", caption: "Google Gemini" },
+  ];
 
 export const DEFAULT_SESSION_CONTEXT: SessionContext = {
   studentId: "demo-student",
@@ -53,8 +60,17 @@ function sessionHeaders(context: SessionContext): Record<string, string> {
   };
 }
 
+export function apiUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+export function sessionRequestHeaders(context: SessionContext): Record<string, string> {
+  return sessionHeaders(context);
+}
+
 async function jsonFetch<T>(path: string, init?: RequestInit, context = DEFAULT_SESSION_CONTEXT): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -189,20 +205,78 @@ export async function sendChatMessage(message: string, context = DEFAULT_SESSION
   }, context);
 }
 
-export async function streamChatMessage(message: string, onEvent: (event: AgentStreamEvent) => void, context = DEFAULT_SESSION_CONTEXT, modelProvider: ModelProvider = "gemini", imageData?: string[]): Promise<void> {
+export async function streamChatMessage(message: string, onEvent: (event: AgentStreamEvent) => void, context = DEFAULT_SESSION_CONTEXT, modelProvider: ModelProvider = "gemini", imageData?: string[], signal?: AbortSignal): Promise<void> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE}/api/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...sessionHeaders(context) },
-      body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, conversation_id: context.conversationId, model_provider: modelProvider, message, image_data: imageData ?? null })
+      body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, conversation_id: context.conversationId, model_provider: modelProvider, message, image_data: imageData ?? null }),
+      signal,
     });
   } catch (error) {
+    // #5: AbortError means the caller intentionally cancelled (session switch / logout).
+    // Surface it as a rethrown AbortError so callers can distinguish it from real errors.
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
     const detail = error instanceof Error ? error.message : "network error";
     throw new Error(`无法连接 LearnForge API (${API_BASE}): ${detail}`);
   }
   if (!response.ok || !response.body) {
     throw new Error(`chat stream failed: ${response.status}`);
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split("\n\n");
+      buffer = blocks.pop() ?? "";
+      for (const block of blocks) {
+        const line = block.split("\n").find((item) => item.startsWith("data: "));
+        if (!line) continue;
+        // #6: a single malformed SSE line must not abort the whole stream.
+        try {
+          onEvent(JSON.parse(line.slice(6)) as AgentStreamEvent);
+        } catch (parseError) {
+          console.warn("[LearnForge] 跳过无法解析的 SSE 事件行", parseError);
+        }
+      }
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
+    throw error;
+  }
+}
+
+export async function approveAndGenerate(
+  approveAction: { capability: string; topic: string; original_message: string },
+  onEvent: (event: AgentStreamEvent) => void,
+  context = DEFAULT_SESSION_CONTEXT,
+  modelProvider: ModelProvider = "gemini",
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...sessionHeaders(context) },
+    body: JSON.stringify({
+      student_id: context.studentId,
+      course_id: context.courseId,
+      conversation_id: context.conversationId,
+      model_provider: modelProvider,
+      message: `确认生成: ${approveAction.topic}`,
+      approve_action: approveAction,
+    }),
+    signal,
+  });
+  if (!response.ok || !response.body) {
+    throw new Error(`approve stream failed: ${response.status}`);
   }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -216,9 +290,17 @@ export async function streamChatMessage(message: string, onEvent: (event: AgentS
     for (const block of blocks) {
       const line = block.split("\n").find((item) => item.startsWith("data: "));
       if (!line) continue;
-      onEvent(JSON.parse(line.slice(6)) as AgentStreamEvent);
+      try { onEvent(JSON.parse(line.slice(6)) as AgentStreamEvent); } catch { /* skip */ }
     }
   }
+}
+
+export async function cancelChatRun(runId: string, context = DEFAULT_SESSION_CONTEXT): Promise<{ status: string; run_id: string; active_process_terminated?: boolean }> {
+  return jsonFetch(
+    `/api/chat/runs/${encodeURIComponent(runId)}/cancel`,
+    { method: "POST", body: JSON.stringify({}) },
+    context,
+  );
 }
 
 export async function fetchSystemStatus() {
@@ -305,6 +387,7 @@ export type ChatMessageRecord = {
   role: string;
   text: string;
   metadata: Record<string, unknown>;
+  links?: ChatAppLink[];
   created_at: string;
 };
 

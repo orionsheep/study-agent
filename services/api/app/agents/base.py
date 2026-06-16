@@ -15,6 +15,10 @@ class TutorTurnContext(BaseModel):
     last_assistant_answer: str | None = None
     recent_apps: list[dict[str, Any]] = Field(default_factory=list)
     recent_resources: list[dict[str, Any]] = Field(default_factory=list)
+    # 学生画像与掌握度记忆 —— 让 Hermes 生成内容时能因人而异。
+    # 单次查询、多处消费(沿用 recent_messages 的模式)。
+    profile: dict[str, Any] = Field(default_factory=dict)
+    student_memories: list[dict[str, Any]] = Field(default_factory=list)
     current_topic: str | None = None
     current_objective: str | None = None
     image_data: list[str] | None = None

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import re
+from logging import getLogger
 from typing import Any, AsyncIterator
+from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -12,8 +16,9 @@ from app.auth import hash_password, issue_session, verify_password
 from app.agents.app_canvas_agent import AppCanvasAgent
 from app.agents.base import TutorTurnContext
 from app.agents.evaluator_agent import EvaluatorAgent, EvaluatorAgentInput
-from app.agents.orchestrator_agent import OrchestratorAgent, UnifiedOrchestrator
+from app.agents.orchestrator_agent import UnifiedOrchestrator
 from app.agents.profile_agent import ProfileAgent, ProfileAgentInput
+from app.canvas.materializer import CanvasMaterializer
 from app.core.config import get_settings
 from app.core.session import SessionContext, SessionHeaders, get_session_headers, resolve_session_from_request
 from app.database.schema import REQUIRED_TABLES
@@ -21,6 +26,7 @@ from app.database.store import get_store
 from app.edumem0.client import EduMem0Client
 from app.edumem0.preference_memory import preference_memory
 from app.hermes_runtime.runtime import HermesRuntime
+from app.hermes_runtime.task_executor import HermesTaskExecutor
 from app.image_gateway.router import ImageGatewayRouter
 from app.model_gateway.errors import ModelGatewayError, ProviderBlocked
 from app.model_gateway.router import ModelGatewayRouter
@@ -33,6 +39,7 @@ from app.schemas.app_protocol import AppEvent, CanvasApp, DashboardSnapshot, Edu
 from app.skills.base import SkillInput
 from app.skills.image_generation_skill import ImageGenerationSkill
 from app.skills.registry import SkillRegistry
+from app.storage.artifacts import ObjectStorage, artifact_object_key
 
 
 class ChatRequest(BaseModel):
@@ -42,6 +49,9 @@ class ChatRequest(BaseModel):
     model_provider: str | None = None
     message: str
     image_data: list[str] | None = None
+    # Consent flow: when user approves a pending heavy generation, frontend sends this.
+    # Example: {"capability": "ppt", "topic": "傅里叶变换", "original_message": "帮我做傅里叶变换PPT"}
+    approve_action: dict[str, Any] | None = None
 
 
 class CourseRequest(BaseModel):
@@ -79,6 +89,58 @@ class CanvasAppCreateRequest(BaseModel):
     title: str
     payload: dict[str, Any] = Field(default_factory=dict)
     source_refs: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ArtifactUploadUrlRequest(BaseModel):
+    student_id: str | None = None
+    course_id: str | None = None
+    conversation_id: str | None = None
+    kind: str = "upload"
+    filename: str = "artifact.bin"
+    content_type: str = "application/octet-stream"
+    title: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+# Whitelist of fields a client may patch on a canvas app. Crucially it excludes
+# student_id/course_id/owner fields — identity comes from the authenticated session,
+# never from the request body.
+class CanvasAppPatchRequest(BaseModel):
+    position: dict[str, Any] | None = None
+    size: dict[str, Any] | None = None
+    state: str | None = None
+    status: str | None = None
+    payload: dict[str, Any] | None = None
+    layout: dict[str, Any] | None = None
+    title: str | None = None
+    z_index: int | None = None
+    group_id: str | None = None
+
+    def to_patch(self) -> dict[str, Any]:
+        return {key: value for key, value in self.model_dump().items() if value is not None}
+
+
+def _is_status_assistant_message(text: str) -> bool:
+    value = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not value:
+        return True
+    status_markers = [
+        "✅ 正在",
+        "正在深度分析",
+        "后台继续",
+        "报告已生成并推送到画布",
+        "分析完成！报告已生成",
+        "HTML报告已生成，正在推送到画布",
+    ]
+    if any(marker in value for marker in status_markers):
+        return True
+    return value.startswith("✅") and len(value) <= 80
+
+
+class CanvasAppEventRequest(BaseModel):
+    conversation_id: str | None = None
+    event_type: str = "app.event"
+    payload: dict[str, Any] = Field(default_factory=dict)
 
 
 class ResourceFeedbackRequest(BaseModel):
@@ -142,6 +204,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+LOGGER = getLogger("learnforge.api")
+
+# Patterns scrubbed from exception text before it is surfaced to the client, since raw
+# errors may contain filesystem paths, API key fragments, or connection strings.
+_SENSITIVE_PATTERNS = [
+    re.compile(r"/[^\s'\"<>]+\.py"),                      # local filesystem paths
+    re.compile(r"(sk-[A-Za-z0-9_-]{6})[A-Za-z0-9_-]+"),   # API key fragments (sk-…)
+    re.compile(r"(?i)(password|token|api[_-]?key|secret)=?[^\s'\"]+"),
+    re.compile(r"postgresql?://[^\s'\"]+"),                # DB connection URLs
+]
+
+
+def _sanitize_exception_for_client(exc: BaseException) -> str:
+    """Return a short, scrubbed exception label safe to show in the chat / trace UI."""
+    text = f"{type(exc).__name__}: {exc}"
+    for pattern in _SENSITIVE_PATTERNS:
+        text = pattern.sub("[redacted]", text)
+    return text[:200]
+
 
 def resolve_session(
     explicit_student_id: str | None = None,
@@ -174,10 +255,19 @@ def build_tutor_context(
         student_id=session.student_id,
         course_id=session.course_id,
         conversation_id=conversation_id,
-        limit=10,
+        limit=20,
     )
+    semantic_recent_messages = [
+        item
+        for item in recent_messages
+        if not (item.get("role") == "assistant" and _is_status_assistant_message(str(item.get("text") or "")))
+    ]
     last_assistant_answer = next(
-        (item.get("text") for item in reversed(recent_messages) if item.get("role") == "assistant" and item.get("text")),
+        (
+            item.get("text")
+            for item in reversed(semantic_recent_messages)
+            if item.get("role") == "assistant" and item.get("text")
+        ),
         None,
     )
     recent_apps = [
@@ -199,16 +289,41 @@ def build_tutor_context(
         for item in resource_items[-8:]
     ]
     focus = store.get_learning_focus(session.student_id, session.course_id)
+    try:
+        profile = store.get_profile(session.student_id, course_id=session.course_id) or {}
+    except Exception:
+        profile = {}
+    try:
+        _raw_mem = store.search_memories(
+            session.student_id,
+            course_id=session.course_id,
+            memory_types=["profile", "mastery", "misconception", "resource_preference"],
+            limit=24,
+        )
+        student_memories = [
+            {
+                "type": m.memory_type,
+                "content": m.content,
+                "topic": m.knowledge_point_id,
+                "confidence": m.confidence,
+                "importance": m.importance,
+            }
+            for m in _raw_mem
+        ]
+    except Exception:
+        student_memories = []
     return TutorTurnContext(
         student_id=session.student_id,
         course_id=session.course_id,
         conversation_id=conversation_id,
         message=request.message,
         model_provider=request.model_provider,
-        recent_messages=recent_messages,
+        recent_messages=semantic_recent_messages,
         last_assistant_answer=last_assistant_answer,
         recent_apps=recent_apps,
         recent_resources=recent_resources,
+        profile=profile,
+        student_memories=student_memories,
         current_topic=focus.get("topic") or None,
         current_objective=focus.get("objective") or None,
         image_data=request.image_data,
@@ -219,23 +334,32 @@ async def system_status() -> dict[str, Any]:
     store = get_store()
     model_gateway = ModelGatewayRouter()
     model_provider_statuses = await model_gateway.statuses()
-    image_status = await ImageGatewayRouter().status()
+    image_statuses = await ImageGatewayRouter().statuses()
+    image2_status = image_statuses["image2"]
+    gemini_image_status = image_statuses["gemini_image"]
     hermes_status = HermesRuntime().status()
+    hermes_payload = hermes_status.model_dump()
+    if get_settings().app_env.lower() == "production" and hermes_payload.get("execution_mode") == "cli_oneshot":
+        hermes_payload["status"] = "blocked_cli_fallback_in_production"
+        hermes_payload["reason"] = "Production requires Hermes SDK embedded mode; CLI one-shot fallback is blocked."
+    object_storage_status = ObjectStorage().status()
     database_status = "ready" if store.schema_ready() else "blocked_schema_missing"
     text_model_ready = any(status.status == "ready" for status in model_provider_statuses.values())
-    external_statuses = ["ready" if text_model_ready else "blocked_provider_error", image_status.status, hermes_status.status]
-    overall = "ready" if database_status == "ready" and all(status == "ready" for status in external_statuses) else "blocked_external"
+    # Overall is gated on text model + at least one image provider + hermes.
+    image_ready = image2_status.status == "ready" or gemini_image_status.status == "ready"
+    external_ready = text_model_ready and image_ready and hermes_payload.get("status") == "ready" and object_storage_status.get("status") == "ready"
+    overall = "ready" if database_status == "ready" and external_ready else "blocked_external"
     dumped_model_statuses = {name: status.model_dump() for name, status in model_provider_statuses.items()}
     return {
         "overall": overall,
         "backend": {"status": "ready", "reason": "FastAPI app initialized."},
         "database": {"status": database_status, "required_tables": REQUIRED_TABLES, "path": str(store.path)},
-        "mimo": dumped_model_statuses.get("mimo", {"name": "mimo", "status": "blocked_provider_error"}),
         "gemini": dumped_model_statuses.get("gemini", {"name": "gemini", "status": "blocked_provider_error"}),
         "model_providers": dumped_model_statuses,
-        "hermes": hermes_status.model_dump(),
-        "image2": image_status.model_dump(),
-        "gemini_image": image_status.model_dump(),
+        "hermes": hermes_payload,
+        "object_storage": object_storage_status,
+        "image2": image2_status.model_dump(),
+        "gemini_image": gemini_image_status.model_dump(),
         "edumem0": {"status": "ready", "reason": "EduMem0 store and policies initialized."},
         "rag": {"status": "ready", "reason": "Seed course chunks and source_refs are available."},
     }
@@ -321,13 +445,135 @@ def onboarding_status_payload(student_id: str, course_id: str) -> dict[str, Any]
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
-    status = await system_status()
-    return {"status": status["overall"], "components": status}
+    store = get_store()
+    database_status = "ready" if store.schema_ready() else "blocked_schema_missing"
+    return {
+        "status": "ready" if database_status == "ready" else "blocked",
+        "components": {
+            "backend": {"status": "ready", "reason": "FastAPI app initialized."},
+            "database": {"status": database_status, "required_tables": REQUIRED_TABLES, "path": str(store.path)},
+        },
+    }
 
 
 @app.get("/api/system/status")
 async def api_system_status() -> dict[str, Any]:
     return await system_status()
+
+
+def _assert_artifact_visible(artifact: dict[str, Any], session: SessionContext) -> None:
+    owner = artifact.get("student_id")
+    course = artifact.get("course_id")
+    if owner and owner != session.student_id:
+        raise HTTPException(status_code=404, detail="artifact not found")
+    if course and course != session.course_id:
+        raise HTTPException(status_code=404, detail="artifact not found")
+
+
+@app.post("/api/artifacts/upload-url")
+async def create_artifact_upload_url(
+    request_body: ArtifactUploadUrlRequest,
+    headers: SessionHeaders = Depends(get_session_headers),
+) -> dict[str, Any]:
+    session = resolve_session(
+        explicit_student_id=request_body.student_id,
+        explicit_course_id=request_body.course_id,
+        explicit_conversation_id=request_body.conversation_id,
+        headers=headers,
+    )
+    artifact_id = f"artifact_{uuid4().hex[:12]}"
+    object_key = artifact_object_key(kind=request_body.kind, artifact_id=artifact_id, filename=request_body.filename)
+    artifact = get_store().save_artifact(
+        artifact_id=artifact_id,
+        kind=request_body.kind,
+        object_key=object_key,
+        content_type=request_body.content_type,
+        sha256="pending",
+        size_bytes=0,
+        title=request_body.title or request_body.filename,
+        source_run_id=None,
+        student_id=session.student_id,
+        course_id=session.course_id,
+        conversation_id=session.conversation_id,
+        metadata={**request_body.metadata, "upload_status": "pending", "filename": request_body.filename},
+    )
+    return {
+        "artifact": artifact,
+        "artifact_id": artifact_id,
+        "method": "PUT",
+        "upload_url": f"/api/artifacts/{artifact_id}/content",
+        "content_url": f"/api/artifacts/{artifact_id}/content",
+        "object_key": object_key,
+    }
+
+
+@app.get("/api/artifacts/{artifact_id}")
+async def get_artifact_metadata(
+    artifact_id: str,
+    headers: SessionHeaders = Depends(get_session_headers),
+) -> dict[str, Any]:
+    session = resolve_session(headers=headers)
+    artifact = get_store().get_artifact(artifact_id)
+    if not artifact:
+        raise HTTPException(status_code=404, detail="artifact not found")
+    _assert_artifact_visible(artifact, session)
+    return artifact
+
+
+@app.put("/api/artifacts/{artifact_id}/content")
+async def put_artifact_content(
+    artifact_id: str,
+    raw_request: Request,
+    headers: SessionHeaders = Depends(get_session_headers),
+) -> dict[str, Any]:
+    session = resolve_session(headers=headers)
+    artifact = get_store().get_artifact(artifact_id)
+    if not artifact:
+        raise HTTPException(status_code=404, detail="artifact not found")
+    _assert_artifact_visible(artifact, session)
+    body = await raw_request.body()
+    if not body:
+        raise HTTPException(status_code=400, detail="empty artifact upload")
+    content_type = raw_request.headers.get("content-type") or artifact.get("content_type") or "application/octet-stream"
+    stored = ObjectStorage().put_bytes(object_key=str(artifact["object_key"]), data=body, content_type=content_type)
+    saved = get_store().save_artifact(
+        artifact_id=artifact_id,
+        kind=str(artifact["kind"]),
+        object_key=stored.object_key,
+        content_type=stored.content_type,
+        sha256=stored.sha256,
+        size_bytes=stored.size_bytes,
+        title=artifact.get("title"),
+        source_run_id=artifact.get("source_run_id"),
+        student_id=session.student_id,
+        course_id=session.course_id,
+        conversation_id=session.conversation_id,
+        metadata={**(artifact.get("metadata") or {}), "upload_status": "ready"},
+    )
+    return saved
+
+
+@app.get("/api/artifacts/{artifact_id}/content")
+async def get_artifact_content(
+    artifact_id: str,
+    headers: SessionHeaders = Depends(get_session_headers),
+) -> Response:
+    session = resolve_session(headers=headers)
+    artifact = get_store().get_artifact(artifact_id)
+    if not artifact:
+        raise HTTPException(status_code=404, detail="artifact not found")
+    _assert_artifact_visible(artifact, session)
+    data, detected_content_type = ObjectStorage().get_bytes(str(artifact["object_key"]))
+    media_type = str(artifact.get("content_type") or detected_content_type or "application/octet-stream")
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={
+            "Cache-Control": "private, max-age=60",
+            "X-Artifact-Id": artifact_id,
+            "X-Artifact-Sha256": str(artifact.get("sha256") or ""),
+        },
+    )
 
 
 @app.post("/api/auth/register")
@@ -502,7 +748,7 @@ async def onboarding_message(request: OnboardingMessageRequest, headers: Session
         structured_payload={},
         parser_status="parsed",
     )
-    memories = EduMem0Client().extract_from_chat(session.student_id, request.message, course_id=session.course_id)
+    memories = await asyncio.to_thread(EduMem0Client().extract_from_chat, session.student_id, request.message, session.course_id)
     dimensions: dict[str, Any] = {}
     for memory in memories:
         dimensions = {**dimensions, **memory.structured_payload.get("dimensions", {})}
@@ -577,24 +823,139 @@ async def auth_logout(headers: SessionHeaders = Depends(get_session_headers)) ->
 
 @app.post("/api/chat/message")
 async def chat_message(request: ChatRequest, headers: SessionHeaders = Depends(get_session_headers)) -> dict[str, Any]:
+    # Non-streaming fallback. We materialize only the assistant text + run/message ids
+    # rather than the full SSE event list (which can be MB-sized for detailed_analysis /
+    # custom.html turns). Canvas apps are fetched separately by the client as needed.
     context = build_tutor_context(request, headers)
-    orchestrator = UnifiedOrchestrator() if get_settings().unified_orchestrator_enabled else OrchestratorAgent()
+    orchestrator = UnifiedOrchestrator()
     events = await orchestrator.run_turn(context)
     assistant_text = "".join(event.get("text", "") for event in events if event.get("type") == "assistant.delta")
-    return {"events": events, "assistant_text": assistant_text}
+    run_id = next((str(event.get("run_id") or "") for event in events if event.get("type") == "run.started"), "")
+    message_id = next((str(event.get("message_id") or "") for event in events if event.get("type") == "assistant.delta"), "")
+    return {"assistant_text": assistant_text, "run_id": run_id, "message_id": message_id}
 
 
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest, headers: SessionHeaders = Depends(get_session_headers)) -> StreamingResponse:
     context = build_tutor_context(request, headers)
-    orchestrator = UnifiedOrchestrator() if get_settings().unified_orchestrator_enabled else OrchestratorAgent()
+    orchestrator = UnifiedOrchestrator()
 
     async def generate() -> AsyncIterator[str]:
+        # ── Consent approval path: user clicked "生成" button ──
+        if request.approve_action and isinstance(request.approve_action, dict):
+            approve_capability = str(request.approve_action.get("capability") or "")
+            approve_topic = str(request.approve_action.get("topic") or request.message or "")
+            original_message = str(request.approve_action.get("original_message") or request.message or "")
+            if approve_capability and approve_topic:
+                context.message = original_message or approve_topic
+                plan = orchestrator.plan_turn(context)
+                # ── Pre-configure plan with the approved capability ──
+                # plan_turn() sets capability="hermes_decides" and empty expected types.
+                # The background task must know EXACTLY what to generate, otherwise Hermes
+                # re-decides and may choose answer_only instead of ppt/demo/report.
+                contracts = {
+                    "ppt": (["custom.html"], [], True),
+                    "interactive_demo": (["custom.html"], [], True),
+                    "detailed_analysis": (["custom.html"], [], True),
+                    "image_explanation": (["image.explanation"], [], True),
+                    "mindmap": (["mindmap.concept"], ["mindmap"], True),
+                    "quiz": (["quiz.practice"], ["quiz"], True),
+                    "code_lab": (["code.lab"], ["code_practice"], True),
+                    "video_script": (["video.script"], ["video_script"], True),
+                    "notes": (["notes.session"], ["notes"], True),
+                }
+                expected_apps, expected_resources, requires_canvas = contracts.get(
+                    approve_capability, (["custom.html"], [], True)
+                )
+                plan.payload.update({
+                    "capability": approve_capability,
+                    "topic": approve_topic,
+                    "source_material": original_message or approve_topic,
+                    "requires_canvas": requires_canvas,
+                    "expected_app_types": expected_apps,
+                    "expected_resource_types": expected_resources,
+                    "route_source": "user_approved",
+                })
+                run_id = orchestrator.store.create_run(
+                    context.student_id, plan.task_type,
+                    {"message": context.message, "plan": plan.model_dump(), "approved": True, "capability": approve_capability},
+                )
+                message_id = f"assistant-bg-{run_id}"
+                rag_context = orchestrator._rag_context_for_plan(plan, context)
+                source_refs = orchestrator.source_refs_for_plan(plan, context, rag_context.get("source_refs", []))
+                rag_context["source_refs"] = source_refs
+                # Spawn background Hermes sub-agent — returns immediately, doesn't block
+                orchestrator.spawn_background_generation(
+                    plan, context, rag_context, run_id, message_id, approve_capability,
+                )
+                # Send immediate acknowledgment
+                cap_labels = {
+                    "ppt": "PPT 正在后台生成中，完成后会自动推送到左侧 Canvas。你可以继续提问。",
+                    "interactive_demo": "交互演示正在后台生成中，完成后会自动推送到左侧 Canvas。你可以继续提问。",
+                    "detailed_analysis": "详细分析正在后台生成中，完成后会自动推送到左侧 Canvas。你可以继续提问。",
+                    "image_explanation": "图片正在后台生成中，完成后会自动推送到左侧 Canvas。你可以继续提问。",
+                }
+                ack_text = cap_labels.get(approve_capability, f"{approve_capability} 产物正在后台生成中，你可以继续提问。")
+                yield orchestrator.sse_line({"type": "run.started", "run_id": run_id})
+                yield orchestrator.sse_line({
+                    "type": "background.task_started",
+                    "run_id": run_id,
+                    "label": f"正在生成 {approve_capability}: {approve_topic}",
+                    "task_type": approve_capability,
+                })
+                yield orchestrator.sse_line({"type": "assistant.delta", "message_id": message_id, "text": f"✅ {ack_text}"})
+                yield orchestrator.sse_line({"type": "assistant.done", "message_id": message_id})
+                yield orchestrator.sse_line({"type": "run.done", "run_id": run_id, "status": "background"})
+                return
+
+        # ── Normal chat path ──
         plan = orchestrator.plan_turn(context)
-        async for event in orchestrator.execute_plan(plan, context):
-            yield orchestrator.sse_line(event)
+        run_id: str | None = None
+        message_id = f"assistant-error-{context.conversation_id or 'stream'}"
+        try:
+            async for event in orchestrator.execute_plan(plan, context):
+                if event.get("type") == "run.started":
+                    run_id = str(event.get("run_id") or "")
+                if event.get("type") == "assistant.delta":
+                    message_id = str(event.get("message_id") or message_id)
+                yield orchestrator.sse_line(event)
+        except Exception as exc:
+            # Log the full traceback server-side; never echo raw exception text to the
+            # client (it may include filesystem paths, API key fragments, or SQL).
+            LOGGER.exception("chat_stream execution failed (run_id=%s)", run_id)
+            safe_detail = _sanitize_exception_for_client(exc)
+            if run_id:
+                yield orchestrator.sse_line({
+                    "type": "run.step",
+                    "run_id": run_id,
+                    "step_name": "backend",
+                    "status": "failed",
+                    "detail": safe_detail,
+                })
+            yield orchestrator.sse_line({
+                "type": "assistant.delta",
+                "message_id": message_id,
+                "text": f"后端执行出错，请稍后重试（运行 ID: {run_id or 'unknown'}）。",
+            })
+            if run_id:
+                yield orchestrator.sse_line({"type": "run.done", "run_id": run_id, "status": "failed"})
+            yield orchestrator.sse_line({"type": "assistant.done", "message_id": message_id})
 
     return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@app.post("/api/chat/runs/{run_id}/cancel")
+async def cancel_chat_run(run_id: str) -> dict[str, Any]:
+    active = HermesTaskExecutor.request_cancel(run_id)
+    try:
+        get_store().finish_run(
+            run_id,
+            {"status": "cancelled", "reason": "user_requested"},
+            "cancelled",
+        )
+    except Exception:
+        LOGGER.warning("failed to mark run cancelled (run_id=%s)", run_id, exc_info=True)
+    return {"status": "cancelled", "run_id": run_id, "active_process_terminated": active}
 
 
 @app.get("/api/learning-focus")
@@ -705,7 +1066,7 @@ async def get_profile(student_id: str, headers: SessionHeaders = Depends(get_ses
 @app.post("/api/learning-path/generate")
 async def generate_learning_path(request: ChatRequest, headers: SessionHeaders = Depends(get_session_headers)) -> dict[str, Any]:
     context = build_tutor_context(request, headers)
-    orchestrator = UnifiedOrchestrator() if get_settings().unified_orchestrator_enabled else OrchestratorAgent()
+    orchestrator = UnifiedOrchestrator()
     events = await orchestrator.run_turn(
         TutorTurnContext(
             student_id=context.student_id,
@@ -831,6 +1192,10 @@ async def create_canvas_app(request: CanvasAppCreateRequest, headers: SessionHea
     request_payload = CanvasAppCreateRequest(**request.model_dump())
     request_payload.student_id = session.student_id
     request_payload.course_id = session.course_id
+    # Normalize client-supplied app_type onto the CanvasAppType Literal so an unknown
+    # value (e.g. "infographic"/"presentation") yields a graceful 422-ish fallback
+    # instead of a 500 from a downstream Pydantic ValidationError.
+    request_payload.app_type = CanvasMaterializer.normalize_app_type(request_payload.app_type)
     output = AppCanvasAgent().run(
         student_id=session.student_id,
         app_type=request_payload.app_type,
@@ -846,15 +1211,15 @@ async def create_canvas_app(request: CanvasAppCreateRequest, headers: SessionHea
 @app.patch("/api/canvas/apps/{app_id}")
 async def patch_canvas_app(
     app_id: str,
-    patch: dict[str, Any],
+    patch: CanvasAppPatchRequest,
     headers: SessionHeaders = Depends(get_session_headers),
 ) -> dict[str, Any]:
-    session = resolve_session(
-        explicit_student_id=patch.get("student_id"),
-        explicit_course_id=patch.get("course_id"),
-        headers=headers,
-    )
-    app_item = get_store().update_app(app_id, patch, student_id=session.student_id, course_id=session.course_id)
+    # Identity comes ONLY from the authenticated session / headers, never from the
+    # request body. The old `dict[str, Any]` let a caller spoof student_id/course_id
+    # and patch other students' apps. With a token present the session is auth-backed;
+    # without one we still fall back to X-Student-Id / demo defaults for legacy/demo use.
+    session = resolve_session_from_request(None, None, headers=headers)
+    app_item = get_store().update_app(app_id, patch.to_patch(), student_id=session.student_id, course_id=session.course_id)
     if not app_item:
         raise HTTPException(status_code=404, detail="app not found")
     return app_item.model_dump()
@@ -863,20 +1228,15 @@ async def patch_canvas_app(
 @app.post("/api/canvas/apps/{app_id}/events")
 async def canvas_app_event(
     app_id: str,
-    payload: dict[str, Any],
+    request_body: CanvasAppEventRequest,
     headers: SessionHeaders = Depends(get_session_headers),
 ) -> dict[str, Any]:
-    session = resolve_session(
-        explicit_student_id=payload.get("student_id"),
-        explicit_course_id=payload.get("course_id"),
-        explicit_conversation_id=payload.get("conversation_id"),
-        headers=headers,
-    )
+    session = resolve_session_from_request(None, None, explicit_conversation_id=request_body.conversation_id, headers=headers)
     app_item = get_store().get_app(app_id, student_id=session.student_id, course_id=session.course_id)
     if not app_item:
         raise HTTPException(status_code=404, detail="app not found for current session")
-    event_type = payload.get("event_type", "app.event")
-    event_payload = payload.get("payload", {})
+    event_type = request_body.event_type
+    event_payload = request_body.payload
     updated_app = None
     action_status = "recorded"
     action_reason = None
@@ -975,7 +1335,15 @@ async def canvas_app_event(
 async def open_applink(
     link_id: str, headers: SessionHeaders = Depends(get_session_headers)
 ) -> dict[str, Any]:
-    session = resolve_session(headers=headers)
+    session = resolve_session_from_request(None, None, headers=headers)
+    store = get_store()
+    # Ownership check: the link's target app must belong to the current student.
+    # Without this, knowing a link_id was enough to focus anyone's app (IDOR).
+    link = store.get_chat_link(link_id)
+    if not link:
+        raise HTTPException(status_code=404, detail="link not found")
+    if not store.get_app(link.app_id, student_id=session.student_id, course_id=session.course_id):
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN_APP_LINK", "message": "link does not belong to current student"})
     output = AppCanvasAgent().focus_link(link_id, student_id=session.student_id, course_id=session.course_id)
     return output.model_dump()
 
@@ -1041,7 +1409,7 @@ async def memory_extract_from_chat(request: ChatRequest, headers: SessionHeaders
         explicit_course_id=request.course_id,
         headers=headers,
     )
-    memories = EduMem0Client().extract_from_chat(session.student_id, request.message, course_id=session.course_id)
+    memories = await asyncio.to_thread(EduMem0Client().extract_from_chat, session.student_id, request.message, session.course_id)
     return {"memories": [item.model_dump() for item in memories]}
 
 
