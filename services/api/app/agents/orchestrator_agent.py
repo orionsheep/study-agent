@@ -1887,16 +1887,20 @@ class OrchestratorAgent:
             ):
                 hermes_result = self.complete_hermes_contract(plan, hermes_result, source_refs)
 
-            # (b) 交互模型质量门 + 重生（canvas/svg + script + 真控件，不合格就重新生成）。
+            # (b) 交互模型质量门 + 重生（最多两轮）。canvas/svg + script + 真控件。
+            # 关键：绝不把占位符/低质量 HTML 放进画布——都失败则走明示失败，让用户重试，
+            # 而不是交付一个假壳子。
             if capability == "interactive_demo":
                 quality_issue = self.interactive_demo_quality_issue(plan, hermes_result)
-                if quality_issue:
+                attempt = 0
+                while quality_issue and attempt < 2:
+                    attempt += 1
                     regenerated = await self.regenerate_interactive_demo_result(
-                        plan, context, rag_context, quality_issue,
+                        plan, context, rag_context, f"{quality_issue} (attempt {attempt})",
                     )
                     regen_issue = (
                         self.interactive_demo_quality_issue(plan, regenerated)
-                        if regenerated else "no_result"
+                        if regenerated and regenerated.apps else "no_apps_regenerated"
                     )
                     if regenerated and not regen_issue:
                         hermes_result = HermesTaskResult(
@@ -1904,8 +1908,24 @@ class OrchestratorAgent:
                             trace=[*hermes_result.trace, *regenerated.trace],
                             resources=[*hermes_result.resources, *regenerated.resources],
                             apps=list(regenerated.apps),
-                            raw_text=f"{hermes_result.raw_text}\n\n---INTERACTIVE_REGENERATION---\n\n{regenerated.raw_text}",
+                            raw_text=f"{hermes_result.raw_text}\n\n---INTERACTIVE_REGENERATION_{attempt}---\n\n{regenerated.raw_text}",
                         )
+                        quality_issue = None  # 通过，退出循环
+                        break
+                    quality_issue = regen_issue or quality_issue  # 继续，带上新 issue 再试一次
+                # 两轮重生都没通过质量门 → 清空占位符产物，走明示失败路径（Step 4 verify 会拦）
+                if quality_issue:
+                    hermes_result = HermesTaskResult(
+                        summary=f"交互模型质量未达标，已拒绝交付：{quality_issue}",
+                        trace=[*hermes_result.trace, f"interactive_quality_rejected:{quality_issue}"],
+                        resources=[],
+                        apps=[],
+                        capability=capability,
+                        text_response=(
+                            "抱歉，这次交互模型没能生成达标的内容（缺少真实的可交互画面/控件）。"
+                            "这是模型的偶发问题，请重新发送一次，我会再尝试生成。"
+                        ),
+                    )
 
             # (c) 缺失产物修复（重新问 Hermes）。交互模型用上面的重生路径，这里跳过。
             if plan.task_type != "detailed_analysis" and capability != "interactive_demo":
