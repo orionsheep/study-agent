@@ -795,7 +795,47 @@ class OrchestratorAgent:
             "tags": ["ppt", "html_deck", "guizang-web-ppt"],
         }
 
+    def _ensure_interactive_app_from_raw_html(self, hermes_result: HermesTaskResult, plan: AgentPlan) -> HermesTaskResult:
+        """Hermes 经常把交互模型 HTML 放在 raw_html 里而不是 apps 数组里。
+
+        质量门只检查 apps 里的 custom.html，导致 raw_html 交互模型被误判为
+        "missing_custom_html_app" 然后走重生→再失败→白交付。
+
+        这里把 raw_html 桥接到 apps，确保质量门能看到内容。
+        """
+        if not hermes_result.raw_html:
+            return hermes_result
+        has_custom_html_app = any(
+            isinstance(a, dict) and str(a.get("app_type") or a.get("type") or "") == "custom.html"
+            for a in (hermes_result.apps or [])
+        )
+        if has_custom_html_app:
+            return hermes_result
+        topic = str(plan.payload.get("topic") or "交互演示")[:80]
+        bridged_app = {
+            "app_id": f"app_{new_id('interactive')}",
+            "app_type": "custom.html",
+            "title": topic,
+            "payload": {"html": hermes_result.raw_html, "title": topic},
+            "x": 100, "y": 80, "width": 900, "height": 700,
+        }
+        return HermesTaskResult(
+            summary=hermes_result.summary or f"{topic} 交互模型",
+            trace=[*hermes_result.trace, "raw_html_bridged_to_custom_html_app"],
+            resources=list(hermes_result.resources),
+            apps=[bridged_app, *list(hermes_result.apps)],
+            raw_text=hermes_result.raw_text,
+            raw_html=hermes_result.raw_html,
+            capability=hermes_result.capability,
+            text_response=hermes_result.text_response,
+        )
+
     def interactive_demo_quality_issue(self, plan: AgentPlan, hermes_result: HermesTaskResult | None) -> str | None:
+        """检查交互模型是否可用。
+
+        核心原则：交互模型多样化 —— 抛物线动画、魔方3D、排序可视化各有不同结构。
+        质量门只拦截明显不可用的产物（空壳、占位符、无脚本无交互），不限制实现方式。
+        """
         if str(plan.payload.get("capability") or "") != "interactive_demo":
             return None
         if not hermes_result:
@@ -807,60 +847,75 @@ class OrchestratorAgent:
             if isinstance(app, dict) and str(app.get("app_type") or app.get("type") or "") == "custom.html"
         ]
         if not custom_apps:
+            # raw_html 有内容但没桥接成 app → 调用方应先用 _ensure_interactive_app_from_raw_html
+            if hermes_result.raw_html and str(hermes_result.raw_html).strip():
+                return "raw_html_not_bridged_to_app"
             return "missing_custom_html_app"
-        skill = CustomHtmlAppSkill()
         for app in custom_apps:
             payload = app.get("payload") if isinstance(app.get("payload"), dict) else {}
             html = str(payload.get("html") or "")
             if not html.strip():
                 continue
-            topic_context = "\n".join(
-                item for item in [topic, str(app.get("title") or ""), str(payload.get("topic") or ""), source_material] if item
+            lowered = html.lower()
+
+            # ── 一票否决：占位符 / 通用模板 / 空壳 ──
+            generic_placeholder = (
+                'data-learnforge-widget="concept-demo"' in html
+                or "输入 · 动作 · 输出" in html
+                or "降级路径下的高保真安全组件" in html
+                or "{{" in html  # 未填充的模板变量
+                or html.strip().startswith("<!-- placeholder")  # 占位注释
             )
-            checked = skill.run(SkillInput(topic=topic_context, payload={"html": html}))
-            checked_html = str(checked.payload.get("html") or "")
-            lowered = checked_html.lower()
-            generic_concept_fallback = (
-                'data-learnforge-widget="concept-demo"' in checked_html
-                or "输入 · 动作 · 输出" in checked_html
-                or "降级路径下的高保真安全组件" in checked_html
+            if generic_placeholder:
+                return "generic_placeholder_or_template"
+
+            # ── 必须：有脚本（起码有点 JS）──
+            if "<script" not in lowered:
+                # 纯静态 HTML 不是交互模型
+                return "no_script_tag"
+
+            # ── 必须有某种交互迹象 ──
+            has_interaction = (
+                bool(re.search(r"<\s*(button|input|select|textarea|slider|canvas|svg)\b", html, flags=re.IGNORECASE))
+                or "addeventlistener" in lowered
+                or "onclick" in lowered
+                or "oninput" in lowered
+                or "onchange" in lowered
+                or "onmousedown" in lowered
+                or "ontouchstart" in lowered
+                or "requestanimationframe" in lowered
+                or "setinterval" in lowered
+                or "draggable" in lowered
+                or "three.js" in lowered
+                or "webgl" in lowered
             )
-            has_scene = re.search(r"<\s*(canvas|svg)\b", checked_html, flags=re.IGNORECASE) is not None
-            has_css_3d_scene = "transform-style:preserve-3d" in lowered and (
-                "translate3d" in lowered or "rotatex" in lowered or "rotatey" in lowered
-            )
-            has_script = "<script" in lowered
-            has_animation = "requestanimationframe" in lowered or "setinterval" in lowered
-            has_controls = re.search(r"<\s*(button|input)\b", checked_html, flags=re.IGNORECASE) is not None
-            runtime_issue = self.interactive_runtime_contract_issue(topic_context, checked_html)
-            if (has_scene or has_css_3d_scene) and has_script and has_animation and has_controls and not generic_concept_fallback and not runtime_issue:
-                return None
-            if runtime_issue:
-                return runtime_issue
-        return "custom_html_not_real_interactive_runtime"
+            if not has_interaction:
+                return "no_interaction_evidence"
+
+            # ── topic 相关性：拒绝完全跑题的输出 ──
+            topic_keywords = re.sub(r"[^一-鿿\w]", " ", str(topic).lower())
+            topic_words = [w for w in topic_keywords.split() if len(w) >= 2]
+            if topic_words and len(html) > 200:
+                body_text = re.sub(r"<[^>]+>", " ", html[:3000]).lower()
+                if not any(w in body_text for w in topic_words[:5]):
+                    return "topic_drift_detected"
+
+            # 通过所有检查
+            return None
+
+        return "custom_html_empty_or_unusable"
 
     def interactive_runtime_contract_issue(self, topic_context: str, html: str) -> str | None:
+        """检查交互控件是否真的有功能绑定（有按钮但无 handler = 假按钮）。"""
         button_tags = re.findall(r"<\s*button\b[^>]*>", html, flags=re.IGNORECASE)
         if button_tags:
-            missing_data = [
-                tag for tag in button_tags
-                if re.search(r"\sdata-(?:action|move)\s*=", tag, flags=re.IGNORECASE) is None
-            ]
-            if missing_data:
-                return "button_missing_data_action_or_move"
-            click_handlers = re.findall(r"addEventListener\s*\(\s*['\"]click['\"][\s\S]{0,7000}", html, flags=re.IGNORECASE)
-            delegated_data_handler = any(
-                re.search(
-                    r"(?:dataset\.(?:action|move)|getAttribute\s*\(\s*['\"]data-(?:action|move)['\"]|closest\s*\([\s\S]{0,120}data-(?:action|move)|matches\s*\([\s\S]{0,120}data-(?:action|move))",
-                    handler,
-                    flags=re.IGNORECASE,
-                )
-                for handler in click_handlers
+            # 有按钮但没有 onclick / addEventListener → 死按钮
+            has_any_click_handler = (
+                "onclick" in html.lower()
+                or "addeventlistener" in html.lower()
             )
-            if not delegated_data_handler:
-                return "click_controls_not_delegated_to_data_attributes"
-        if re.search(r"魔方|rubik|rubik'?s cube", f"{topic_context}\n{html[:1200]}", flags=re.IGNORECASE):
-            return self.rubik_runtime_contract_issue(html)
+            if not has_any_click_handler:
+                return "buttons_without_any_click_handler"
         return None
 
     def rubik_runtime_contract_issue(self, html: str) -> str | None:
@@ -1887,9 +1942,12 @@ class OrchestratorAgent:
             ):
                 hermes_result = self.complete_hermes_contract(plan, hermes_result, source_refs)
 
-            # (b) 交互模型质量门 + 重生（最多两轮）。canvas/svg + script + 真控件。
+            # (b) 交互模型质量门 + 重生（最多两轮）。
             # 关键：绝不把占位符/低质量 HTML 放进画布——都失败则走明示失败，让用户重试，
             # 而不是交付一个假壳子。
+            # Hermes 常把交互 HTML 放 raw_html 而非 apps 数组，
+            # 先桥接到 custom.html app，质量门才能看到内容。
+            hermes_result = self._ensure_interactive_app_from_raw_html(hermes_result, plan)
             if capability == "interactive_demo":
                 quality_issue = self.interactive_demo_quality_issue(plan, hermes_result)
                 attempt = 0
@@ -2715,6 +2773,7 @@ class OrchestratorAgent:
                             )
                         )
                         regenerated_result = await self.regenerate_interactive_demo_result(plan, context, rag_context, "missing_required_artifacts")
+                        regenerated_result = self._ensure_interactive_app_from_raw_html(regenerated_result, plan)
                         regen_issue = self.interactive_demo_quality_issue(plan, regenerated_result)
                         if regenerated_result and not regen_issue:
                             hermes_result = self.merge_hermes_results(hermes_result, regenerated_result)
@@ -2767,6 +2826,7 @@ class OrchestratorAgent:
                         yield event_dict(RunDone(run_id=run_id, status="failed"))
                         yield event_dict(AssistantDone(message_id=message_id))
                         return
+                hermes_result = self._ensure_interactive_app_from_raw_html(hermes_result, plan)
                 if plan.payload.get("capability") == "interactive_demo":
                     quality_issue = self.interactive_demo_quality_issue(plan, hermes_result)
                     if quality_issue:
@@ -2779,6 +2839,7 @@ class OrchestratorAgent:
                             )
                         )
                         regenerated_result = await self.regenerate_interactive_demo_result(plan, context, rag_context, quality_issue)
+                        regenerated_result = self._ensure_interactive_app_from_raw_html(regenerated_result, plan)
                         regen_issue = self.interactive_demo_quality_issue(plan, regenerated_result)
                         if regenerated_result and not regen_issue:
                             hermes_result = HermesTaskResult(
