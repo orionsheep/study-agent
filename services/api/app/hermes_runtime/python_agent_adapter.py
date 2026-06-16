@@ -60,18 +60,6 @@ class HermesPythonAgentAdapter:
     def _ensure_environment(self) -> None:
         home = self.settings.project_root / self.settings.hermes_home
         os.environ["HERMES_HOME"] = str(home)
-        provider = getattr(self.settings, "hermes_provider", "gemini")
-        if provider == "mimo":
-            model = self.settings.mimo_text_model
-            os.environ["HERMES_PROVIDER"] = "mimo"
-            os.environ["HERMES_INFERENCE_PROVIDER"] = "mimo"
-            os.environ["HERMES_INFERENCE_MODEL"] = model
-            if not missing_secret(getattr(self.settings, "mimo_api_key", "")):
-                os.environ.setdefault("MIMO_API_KEY", self.settings.mimo_api_key)
-                os.environ.setdefault("XIAOMI_API_KEY", self.settings.mimo_api_key)
-            os.environ.setdefault("MIMO_BASE_URL", self.settings.mimo_base_url)
-            os.environ.setdefault("XIAOMI_BASE_URL", self.settings.mimo_base_url)
-            return
         os.environ["HERMES_PROVIDER"] = "gemini"
         os.environ["HERMES_INFERENCE_PROVIDER"] = "gemini"
         os.environ["HERMES_INFERENCE_MODEL"] = self.settings.gemini_text_model
@@ -79,25 +67,29 @@ class HermesPythonAgentAdapter:
             os.environ.setdefault("GEMINI_API_KEY", self.settings.gemini_api_key)
         os.environ.setdefault("GEMINI_TEXT_MODEL", self.settings.gemini_text_model)
 
-    def build_health_agent(self) -> Any:
-        provider = getattr(self.settings, "hermes_provider", "gemini")
-        if provider == "mimo":
-            if missing_secret(getattr(self.settings, "mimo_api_key", "")):
-                raise RuntimeError("MIMO_API_KEY is required before embedding Hermes AIAgent with the MiMo provider.")
-            base_url = self.settings.mimo_base_url
-            api_key = self.settings.mimo_api_key
-            model = self.settings.mimo_text_model
-        else:
-            if missing_secret(self.settings.gemini_api_key):
-                raise RuntimeError("GEMINI_API_KEY is required before embedding Hermes AIAgent with the Gemini provider.")
-            base_url = "https://generativelanguage.googleapis.com/v1beta"
-            api_key = self.settings.gemini_api_key
-            model = self.settings.gemini_text_model
+    def build_health_agent(
+        self,
+        *,
+        session_id: str = "learnforge-hermes-sdk-health",
+        max_iterations: int = 4,
+        quiet_mode: bool = True,
+        provider_override: str | None = None,
+        model_override: str | None = None,
+        user_id: str | None = None,
+        hermes_callbacks: dict[str, Any] | None = None,
+    ) -> Any:
+        if missing_secret(self.settings.gemini_api_key):
+            raise RuntimeError("GEMINI_API_KEY is required before embedding Hermes AIAgent with the Gemini provider.")
+        provider = provider_override or getattr(self.settings, "hermes_provider", "gemini")
+        base_url = "https://generativelanguage.googleapis.com/v1beta"
+        api_key = self.settings.gemini_api_key
+        model = model_override or self.settings.gemini_text_model
         self._ensure_environment()
         agent_class, _version, _sdk_path = self._load_sdk()
         toolsets = getattr(self.settings, "hermes_toolsets", "")
         stdout = io.StringIO()
         stderr = io.StringIO()
+        cb = hermes_callbacks or {}
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             return agent_class(
                 base_url=base_url,
@@ -105,11 +97,16 @@ class HermesPythonAgentAdapter:
                 provider=provider,
                 model=model,
                 enabled_toolsets=[item.strip() for item in toolsets.split(",") if item.strip()],
-                quiet_mode=True,
-                skip_memory=True,
-                skip_context_files=True,
-                max_iterations=4,
-                session_id="learnforge-hermes-sdk-health",
+                quiet_mode=quiet_mode,
+                skip_memory=False,
+                skip_context_files=False,
+                max_iterations=max_iterations,
+                session_id=session_id,
+                user_id=user_id,
+                thinking_callback=cb.get("thinking_callback"),
+                reasoning_callback=cb.get("reasoning_callback"),
+                step_callback=cb.get("step_callback"),
+                status_callback=cb.get("status_callback"),
             )
 
     def available(self) -> bool:
@@ -121,7 +118,7 @@ class HermesPythonAgentAdapter:
             _agent_class, version, sdk_path = self._load_sdk()
             provider = str(getattr(agent, "provider", "gemini") or "gemini")
             api_mode = str(getattr(agent, "api_mode", "unknown") or "unknown")
-            default_model = getattr(self.settings, "gemini_text_model", getattr(self.settings, "mimo_text_model", "unknown"))
+            default_model = getattr(self.settings, "gemini_text_model", "unknown")
             model = str(getattr(agent, "model", default_model) or default_model)
             return HermesSdkProbe(
                 status="ready",
@@ -138,7 +135,7 @@ class HermesPythonAgentAdapter:
                 sdk_module="run_agent",
             )
         except RuntimeError as exc:
-            status = "blocked_missing_credentials" if "GEMINI_API_KEY" in str(exc) or "MIMO_API_KEY" in str(exc) else "blocked_runtime_error"
+            status = "blocked_missing_credentials" if "GEMINI_API_KEY" in str(exc) else "blocked_runtime_error"
             return HermesSdkProbe(status=status, reason=str(exc), sdk_module="run_agent")
         except Exception as exc:
             return HermesSdkProbe(
