@@ -893,13 +893,20 @@ class OrchestratorAgent:
                 return "no_interaction_evidence"
 
             # ── topic 相关性：拒绝完全跑题的输出 ──
-            topic_keywords = re.sub(r"[^一-鿿\w]", " ", str(topic).lower())
-            topic_words = [w for w in topic_keywords.split() if len(w) >= 2]
-            if topic_words and len(html) > 200:
+            # 中文话题按单字切分，英文按词切分。过滤通用虚词。
+            _topic_stop_chars = set("的一是了在有不和与或及这个那个什么怎么如何给我帮请需要可以应该能不能让用把被制作创建做弄搞")
+            topic_str = re.sub(r"[^一-鿿\w]", " ", str(topic).lower())
+            # 中文单字 + 英文单词
+            topic_chars = [c for c in topic_str.replace(" ", "") if c not in _topic_stop_chars and len(c) == 1 and '一' <= c <= '鿿']
+            topic_eng_words = [w for w in topic_str.split() if len(w) >= 2 and w.isascii()]
+            topic_terms: list[str] = topic_eng_words + topic_chars
+            if topic_terms and len(html) > 200:
                 body_text = re.sub(r"<[^>]+>", " ", html[:3000]).lower()
-                if not any(w in body_text for w in topic_words[:5]):
+                # 需要至少 2 个 topic 词/字出现在 HTML 中（或全部 topic 词都匹配如果不足2个）
+                matches = [t for t in topic_terms if t in body_text]
+                min_match = min(2, len(topic_terms))
+                if len(matches) < min_match:
                     return "topic_drift_detected"
-
             # 通过所有检查
             return None
 

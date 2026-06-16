@@ -2154,20 +2154,54 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
             raise ModelGatewayError(last_error or "Hermes returned empty output.")
 
         # ── HTML sentinel 检测：marker/HTML 出现在任意位置都必须提取为 artifact ──
-        assistant_text, html_content = self._extract_html_output(output)
-        if html_content:
-            # Try to extract capability from JSON declared alongside/before the HTML.
-            # Hermes may output e.g. {"capability":"ppt","topic":"..."} then ---HERMES_HTML_OUTPUT---
+        assistant_text, html_content_sentinel = self._extract_html_output(output)
+        if html_content_sentinel:
+            # Hermes 经常在 sentinel 前输出 JSON（含 final_response → apps → payload.html），
+            # sentinel 后只留一个 <html><body></body></html> 占位壳。
+            # JSON 里的 HTML 才是真正的交互模型 / PPT 内容。
+            # 先尝试 JSON 解析 assistant_text，有 apps 就用 JSON 的，sentinel HTML 只作 fallback。
             declared_capability = self._extract_capability_from_text(assistant_text) or self._extract_capability_from_text(output)
             if not declared_capability:
-                # Last resort: infer from user message keywords (not Python routing —
-                # just a fallback when Hermes's own JSON declaration can't be parsed).
                 declared_capability = self._infer_capability_from_message(getattr(context, 'message', ''))
+
+            # 尝试从 JSON (assistant_text) 中提取 apps/resources/raw_html
+            json_result = None
+            try:
+                json_result = self.parse_json_result(assistant_text) if assistant_text else None
+            except Exception:
+                pass
+
+            has_json_apps = bool(json_result and json_result.apps)
+            has_json_html = bool(json_result and json_result.raw_html)
+            sentinel_html_is_stub = len(html_content_sentinel.strip()) < 500
+
+            if has_json_apps or (has_json_html and sentinel_html_is_stub):
+                # JSON 里有真内容 → 优先使用
+                merged = json_result or HermesTaskResult(
+                    capability=declared_capability or "detailed_analysis",
+                    summary=assistant_text or "详细分析完成",
+                    raw_text=output,
+                )
+                merged.capability = merged.capability or declared_capability or "detailed_analysis"
+                merged.raw_text = output
+                merged.trace = [*(merged.trace or []), "html_sentinel_json_merge"]
+                # 如果 JSON 有 raw_html 且比 sentinel 大，用 JSON 的
+                if has_json_html and len(str(merged.raw_html or "")) > len(html_content_sentinel):
+                    pass  # 保留 JSON 的 raw_html
+                elif sentinel_html_is_stub and not has_json_apps:
+                    merged.raw_html = str(merged.raw_html or "") or html_content_sentinel
+                if not merged.raw_html and sentinel_html_is_stub and not has_json_apps:
+                    merged.raw_html = html_content_sentinel
+                merged.text_response = merged.text_response or "✅ 分析完成！报告已生成并推送到画布。"
+                merged.summary = merged.summary or assistant_text or "详细分析完成"
+                return merged
+
+            # sentinel HTML 是真实内容（无 JSON 或 JSON 无 apps）→ 直接用
             return HermesTaskResult(
                 capability=declared_capability or "detailed_analysis",
                 mode="background",
                 summary=assistant_text or "详细分析完成",
-                raw_html=html_content,
+                raw_html=html_content_sentinel,
                 text_response="✅ 分析完成！报告已生成并推送到画布。",
                 raw_text=output,
                 trace=[f"{declared_capability or 'detailed_analysis'}_html_generated", "raw_html_extracted_from_chat"],
@@ -2239,7 +2273,18 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
         if marker in text:
             before, after = text.split(marker, 1)
             html = HermesTaskExecutor._normalize_html_artifact_text(after.strip())
-            return before.strip(), html if HermesTaskExecutor._looks_like_html(html) else ""
+            sentinel_html = html if HermesTaskExecutor._looks_like_html(html) else ""
+            # Hermes often puts real HTML in the JSON final_response before the marker,
+            # and only a stub (<html><body></body></html>) after it.
+            # When sentinel HTML is a tiny stub, search the full output for real HTML.
+            if sentinel_html and len(sentinel_html.strip()) < 500:
+                real_html = HermesTaskExecutor._find_html_in_text(output)
+                if real_html and len(real_html) > len(sentinel_html):
+                    return before.strip(), real_html
+            if sentinel_html:
+                return before.strip(), sentinel_html
+            return before.strip(), ""
+        # No marker — look for raw HTML directly
         lower = text.lower()
         starts = [idx for idx in (lower.find("<!doctype html"), lower.find("<html")) if idx >= 0]
         if not starts:
@@ -2249,6 +2294,35 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
         html = text[start:].strip()
         html = HermesTaskExecutor._normalize_html_artifact_text(html)
         return assistant_text, html if HermesTaskExecutor._looks_like_html(html) else ""
+
+    @staticmethod
+    def _find_html_in_text(text: str) -> str:
+        """Search the full text for actual HTML content, ignoring JSON wrappers.
+
+        Used as a fallback when the marker-extracted HTML is a stub
+        but real HTML is embedded elsewhere (e.g. inside final_response JSON).
+        """
+        if not text:
+            return ""
+        lower = text.lower()
+        # Look for <!doctype html> or <html> patterns
+        for pattern in ("<!doctype html>", "<html>", "<html "):
+            idx = lower.find(pattern)
+            if idx < 0:
+                continue
+            # Scan forward to find the matching closing tag
+            snippet = text[idx:]
+            # Simple heuristic: find </html> or end of text
+            end_idx = lower.find("</html>", idx)
+            if end_idx > idx:
+                html = text[idx:end_idx + len("</html>")]
+            else:
+                # No closing tag — take a generous chunk (up to 100KB)
+                html = snippet[:100000]
+            normalized = HermesTaskExecutor._normalize_html_artifact_text(html)
+            if HermesTaskExecutor._looks_like_html(normalized) and len(normalized) > 500:
+                return normalized
+        return ""
 
     @staticmethod
     def _infer_capability_from_message(message: str) -> str:
