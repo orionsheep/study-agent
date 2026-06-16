@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from app.auth import hash_password, issue_session, verify_password
 from app.agents.app_canvas_agent import AppCanvasAgent
 from app.agents.base import TutorTurnContext
+from app.agents.capability_contract import CAPABILITIES
 from app.agents.evaluator_agent import EvaluatorAgent, EvaluatorAgentInput
 from app.agents.orchestrator_agent import UnifiedOrchestrator
 from app.agents.profile_agent import ProfileAgent, ProfileAgentInput
@@ -874,6 +875,10 @@ async def chat_stream(request: ChatRequest, headers: SessionHeaders = Depends(ge
                     "requires_canvas": requires_canvas,
                     "expected_app_types": expected_apps,
                     "expected_resource_types": expected_resources,
+                    # 注入该 capability 对应的 Hermes skills（如 ppt -> guizang-ppt-skill），
+                    # 让后台任务自文档化；run_hermes 当前会加载全部 skill，但显式声明更稳。
+                    "hermes_skills": list(CAPABILITIES[approve_capability].hermes_skills)
+                    if approve_capability in CAPABILITIES else [],
                     "route_source": "user_approved",
                 })
                 run_id = orchestrator.store.create_run(

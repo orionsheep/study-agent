@@ -1874,6 +1874,49 @@ class OrchestratorAgent:
             capability = hermes_result.capability or hermes_capability
             source_refs = rag_context.get("source_refs", [])
 
+            # Step 2.5: Post-Hermes pipeline — 与同步 execute_plan 完全一致的质量保障。
+            # 之前后台路径跳过了这一段，导致：
+            #   - PPT：Hermes 返回 ppt.preview/slides，但 expected_app_types=["custom.html"]，
+            #     verify_artifacts 判失败，画布啥都没写。
+            #   - 交互模型：低质量/通用占位直接放行，没走质量门。
+            # 这里补回 contract 归一化 + 交互质量门 + 缺失产物修复。
+
+            # (a) Contract 归一化：ppt.preview/presentation/slides -> custom.html（PPT 的直接修复）。
+            if plan.task_type != "detailed_analysis" and (
+                not self._strict_canvas_generation(capability) or capability == "ppt"
+            ):
+                hermes_result = self.complete_hermes_contract(plan, hermes_result, source_refs)
+
+            # (b) 交互模型质量门 + 重生（canvas/svg + script + 真控件，不合格就重新生成）。
+            if capability == "interactive_demo":
+                quality_issue = self.interactive_demo_quality_issue(plan, hermes_result)
+                if quality_issue:
+                    regenerated = await self.regenerate_interactive_demo_result(
+                        plan, context, rag_context, quality_issue,
+                    )
+                    regen_issue = (
+                        self.interactive_demo_quality_issue(plan, regenerated)
+                        if regenerated else "no_result"
+                    )
+                    if regenerated and not regen_issue:
+                        hermes_result = HermesTaskResult(
+                            summary=regenerated.summary or hermes_result.summary,
+                            trace=[*hermes_result.trace, *regenerated.trace],
+                            resources=[*hermes_result.resources, *regenerated.resources],
+                            apps=list(regenerated.apps),
+                            raw_text=f"{hermes_result.raw_text}\n\n---INTERACTIVE_REGENERATION---\n\n{regenerated.raw_text}",
+                        )
+
+            # (c) 缺失产物修复（重新问 Hermes）。交互模型用上面的重生路径，这里跳过。
+            if plan.task_type != "detailed_analysis" and capability != "interactive_demo":
+                missing = self.missing_required_artifacts(plan, hermes_result)
+                if missing:
+                    repaired = await self.repair_hermes_result(plan, context, rag_context, missing)
+                    if repaired:
+                        merged = self.merge_hermes_results(hermes_result, repaired)
+                        if merged:
+                            hermes_result = merged
+
             # Step 3: Materialize to canvas
             materialized: MaterializedBundle | None = None
             materializer = CanvasMaterializer(self.store)
@@ -3635,6 +3678,9 @@ class UnifiedOrchestrator(OrchestratorAgent):
                 # ── 前置路由：三条路径，避免浪费 Hermes 时间 ──
                 has_images = self.hermes_executor._has_uploaded_images(context)
                 is_explicit_artifact = RuntimeHermesTaskExecutor.has_explicit_artifact_request(context.message)
+                # stderr_events 仅在 FULL 路径填充，但共享代码(下方)会引用它，
+                # 所以先初始化空列表，避免 FAST 路径触发 UnboundLocalError。
+                stderr_events: list[dict[str, Any]] = []
 
                 if not has_images and not is_explicit_artifact:
                     # ═══════════════════════════════════════════
@@ -3728,80 +3774,80 @@ class UnifiedOrchestrator(OrchestratorAgent):
                         "status": "running",
                         "detail": line.strip()[:200],
                     }
-                    stderr_events.append(evt)
-                    await progress_queue.put(evt)
-
-                async def _on_executor_trace(step_name: str, status: str, detail: str) -> None:
-                    evt = {
-                        "type": "run.step",
-                        "run_id": run_id,
-                        "step_name": step_name,
-                        "status": status,
-                        "detail": detail[:200],
-                    }
-                    executor_trace_events.append(evt)
-                    await progress_queue.put(evt)
-
-                hermes_task: asyncio.Task[HermesTaskResult] | None = None
-                try:
-                    async def _on_hermes_event(evt: dict[str, Any]) -> None:
-                        """Hermes callback 事件(reasoning/thinking/tool_call)转发到 SSE。"""
+                        stderr_events.append(evt)
                         await progress_queue.put(evt)
 
-                    hermes_task = asyncio.create_task(
-                        self.hermes_executor.run_hermes(
-                            plan, context, rag_context,
-                            on_stderr_line=_on_hermes_stderr,
-                            on_trace_step=_on_executor_trace,
-                            run_id=run_id,
-                            on_hermes_event=_on_hermes_event,
+                    async def _on_executor_trace(step_name: str, status: str, detail: str) -> None:
+                        evt = {
+                            "type": "run.step",
+                            "run_id": run_id,
+                            "step_name": step_name,
+                            "status": status,
+                            "detail": detail[:200],
+                        }
+                        executor_trace_events.append(evt)
+                        await progress_queue.put(evt)
+
+                    hermes_task: asyncio.Task[HermesTaskResult] | None = None
+                    try:
+                        async def _on_hermes_event(evt: dict[str, Any]) -> None:
+                            """Hermes callback 事件(reasoning/thinking/tool_call)转发到 SSE。"""
+                            await progress_queue.put(evt)
+
+                        hermes_task = asyncio.create_task(
+                            self.hermes_executor.run_hermes(
+                                plan, context, rag_context,
+                                on_stderr_line=_on_hermes_stderr,
+                                on_trace_step=_on_executor_trace,
+                                run_id=run_id,
+                                on_hermes_event=_on_hermes_event,
+                            )
                         )
-                    )
-                    loop = asyncio.get_running_loop()
-                    last_heartbeat = loop.time()
-                    while not hermes_task.done():
-                        try:
-                            yield await asyncio.wait_for(progress_queue.get(), timeout=1.0)
-                        except asyncio.TimeoutError:
-                            now = loop.time()
-                            if now - last_heartbeat >= 12:
-                                last_heartbeat = now
-                                yield event_dict(RunStepEvent(
-                                    run_id=run_id,
-                                    step_name="hermes_runtime",
-                                    status="running",
-                                    detail="Vision/Hermes 正在处理中，连接保持活跃",
-                                ))
-                    while not progress_queue.empty():
-                        yield await progress_queue.get()
-                    hermes_result = await hermes_task
-                except asyncio.CancelledError:
-                    if hermes_task and not hermes_task.done():
-                        hermes_task.cancel()
-                    output = {"status": "cancelled", "reason": "user_requested"}
-                    self.record_trace(run_id, step, step_order, output, status="cancelled")
-                    self.store.finish_run(run_id, output, "cancelled")
-                    yield event_dict(RunStepEvent(
-                        run_id=run_id,
-                        step_name="cancelled",
-                        status="cancelled",
-                        detail="用户已停止 Agent 任务",
-                    ))
-                    yield event_dict(RunDone(run_id=run_id, status="cancelled"))
-                    yield event_dict(AssistantDone(message_id=message_id))
-                    self.hermes_executor.clear_run(run_id)
-                    return
-                except (ProviderBlocked, ModelGatewayError) as exc:
-                    code = exc.code if isinstance(exc, ProviderBlocked) else "hermes_execution_failed"
-                    reason = exc.reason if isinstance(exc, ProviderBlocked) else str(exc)
-                    output = {"status": code, "reason": reason}
-                    self.record_trace(run_id, step, step_order, output, status="failed")
-                    self.store.finish_run(run_id, output, "failed")
-                    yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="failed", detail=reason))
-                    yield event_dict(AssistantDelta(message_id=message_id, text=self.model_failure_text(None, reason)))
-                    yield event_dict(RunDone(run_id=run_id, status="failed"))
-                    yield event_dict(AssistantDone(message_id=message_id))
-                    return
+                        loop = asyncio.get_running_loop()
+                        last_heartbeat = loop.time()
+                        while not hermes_task.done():
+                            try:
+                                yield await asyncio.wait_for(progress_queue.get(), timeout=1.0)
+                            except asyncio.TimeoutError:
+                                now = loop.time()
+                                if now - last_heartbeat >= 12:
+                                    last_heartbeat = now
+                                    yield event_dict(RunStepEvent(
+                                        run_id=run_id,
+                                        step_name="hermes_runtime",
+                                        status="running",
+                                        detail="Vision/Hermes 正在处理中，连接保持活跃",
+                                    ))
+                        while not progress_queue.empty():
+                            yield await progress_queue.get()
+                        hermes_result = await hermes_task
+                    except asyncio.CancelledError:
+                        if hermes_task and not hermes_task.done():
+                            hermes_task.cancel()
+                        output = {"status": "cancelled", "reason": "user_requested"}
+                        self.record_trace(run_id, step, step_order, output, status="cancelled")
+                        self.store.finish_run(run_id, output, "cancelled")
+                        yield event_dict(RunStepEvent(
+                            run_id=run_id,
+                            step_name="cancelled",
+                            status="cancelled",
+                            detail="用户已停止 Agent 任务",
+                        ))
+                        yield event_dict(RunDone(run_id=run_id, status="cancelled"))
+                        yield event_dict(AssistantDone(message_id=message_id))
+                        self.hermes_executor.clear_run(run_id)
+                        return
+                    except (ProviderBlocked, ModelGatewayError) as exc:
+                        code = exc.code if isinstance(exc, ProviderBlocked) else "hermes_execution_failed"
+                        reason = exc.reason if isinstance(exc, ProviderBlocked) else str(exc)
+                        output = {"status": code, "reason": reason}
+                        self.record_trace(run_id, step, step_order, output, status="failed")
+                        self.store.finish_run(run_id, output, "failed")
+                        yield event_dict(RunStepEvent(run_id=run_id, step_name=step, status="failed", detail=reason))
+                        yield event_dict(AssistantDelta(message_id=message_id, text=self.model_failure_text(None, reason)))
+                        yield event_dict(RunDone(run_id=run_id, status="failed"))
+                        yield event_dict(AssistantDone(message_id=message_id))
+                        return
 
                 if hermes_result.capability == "image_analysis_failed":
                     reason = hermes_result.text_response or hermes_result.summary or "图片无法可靠识别。"
