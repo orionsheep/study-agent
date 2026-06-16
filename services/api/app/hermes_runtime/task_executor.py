@@ -266,6 +266,7 @@ class HermesTaskExecutor:
         persist_user_message: str | None = None,
         student_id: str | None = None,
         on_hermes_event: "Callable[[dict], Awaitable[None]] | None" = None,
+        conversation_id: str | None = None,
     ) -> tuple[int, str, str]:
         if self.is_cancelled(run_id):
             raise asyncio.CancelledError()
@@ -294,7 +295,9 @@ class HermesTaskExecutor:
         }
         try:
             agent = adapter.build_health_agent(
-                session_id=run_id or f"run_{uuid4().hex}",
+                # Phase B：session_id 用稳定的 conversation_id（每会话不变），让 Hermes
+                # 像本地安装一样跨轮持有会话记忆。run_id 仍用于 _ACTIVE_SDK_AGENTS 追踪/取消。
+                session_id=conversation_id or run_id or f"conv_{uuid4().hex}",
                 max_iterations=16,
                 provider_override=provider,
                 model_override=model,
@@ -943,7 +946,7 @@ class HermesTaskExecutor:
                         model,
                         run_id=run_id,
                         persist_user_message=prompt,
-                        student_id=context.student_id,
+                        student_id=context.student_id, conversation_id=context.conversation_id,
                     )
                 else:
                     returncode, output, error = await self._invoke_hermes(
@@ -1398,10 +1401,15 @@ class HermesTaskExecutor:
         if context.student_memories:
             parts.append(f"\n### 历史记忆(弱点/掌握/偏好)\n{json.dumps(context.student_memories[-12:], ensure_ascii=False)}")
         parts.append(f"- 用户消息: {context.message}")
-        if context.last_assistant_answer and not priority_context:
-            parts.append(f"- 上轮回复（可能作为上下文参考）: {self._truncate_text(context.last_assistant_answer, 2000)}")
-        if context.recent_messages and not priority_context:
-            parts.append(f"- 近期对话: {json.dumps([self._compact_item(m, text_limit=1200) for m in context.recent_messages[-10:]], ensure_ascii=False)}")
+        if context.last_assistant_answer:
+            # Phase B：priority_context 轮（图片/artifact）保留压缩版历史，避免"一上图就失忆"。
+            # 图片仍是最高优先级（见下方图片段），但 Hermes 不应完全忘记刚才聊了什么。
+            answer_limit = 500 if priority_context else 2000
+            parts.append(f"- 上轮回复（可能作为上下文参考）: {self._truncate_text(context.last_assistant_answer, answer_limit)}")
+        if context.recent_messages:
+            msg_window = context.recent_messages[-4:] if priority_context else context.recent_messages[-10:]
+            text_lim = 400 if priority_context else 1200
+            parts.append(f"- 近期对话: {json.dumps([self._compact_item(m, text_limit=text_lim) for m in msg_window], ensure_ascii=False)}")
         if artifact_context:
             parts.append(
                 "\n## 🧷 当前绑定 Artifact 上下文（优先级高于课程 RAG/历史对话）\n"
@@ -1772,7 +1780,7 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
                     model,
                     run_id=run_id,
                     persist_user_message=prompt,
-                    student_id=context.student_id,
+                    student_id=context.student_id, conversation_id=context.conversation_id,
                 )
             else:
                 returncode, output, error = await self._invoke_hermes(
@@ -2028,7 +2036,7 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
                     model,
                     run_id=run_id,
                     persist_user_message=prompt,
-                    student_id=context.student_id,
+                    student_id=context.student_id, conversation_id=context.conversation_id,
                 )
             else:
                 returncode, output, error = await self._invoke_hermes(
@@ -2112,7 +2120,7 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
                     on_stderr_line=on_stderr_line,
                     run_id=run_id,
                     persist_user_message=prompt,
-                    student_id=context.student_id,
+                    student_id=context.student_id, conversation_id=context.conversation_id,
                     on_hermes_event=on_hermes_event,
                 )
             else:
