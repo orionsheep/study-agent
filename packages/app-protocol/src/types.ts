@@ -17,7 +17,9 @@ export type CanvasAppType =
   | 'video.player'
   | 'resource.center'
   | 'resource.folder'
-  | 'custom.html';
+  | 'custom.html'
+  | 'english.workspace'
+  | 'humanities.notebook';
 
 export interface CanvasViewport { x: number; y: number; scale: number; }
 export interface CanvasPosition { x: number; y: number; }

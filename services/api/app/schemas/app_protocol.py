@@ -26,6 +26,8 @@ CanvasAppType = Literal[
     "resource.center",
     "resource.folder",
     "custom.html",
+    "english.workspace",
+    "humanities.notebook",
 ]
 RenderMode = Literal["native_react", "sandbox_iframe", "svg", "react_flow", "pptx_preview"]
 ResourceType = Literal[
