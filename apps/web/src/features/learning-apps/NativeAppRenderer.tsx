@@ -1405,10 +1405,11 @@ function EnglishWorkspaceApp({ app, onEvent }: { app: CanvasApp; onEvent: Props[
           </div>
         )}
         {activeTab === "chat" && (
-          <div className="ew-placeholder">
-            <p>AI 英语助手</p>
-            <p style={{ color: "var(--text-3)", fontSize: 13 }}>对接 LearnForge Agent（EnglishAgent）</p>
-          </div>
+          <EnglishChatPanel
+            app={app}
+            selectedWord={selectedWord}
+            onEvent={onEvent}
+          />
         )}
       </div>
     </div>
@@ -1425,6 +1426,114 @@ function HumanitiesNotebookApp({ app }: { app: CanvasApp }) {
         NotebookLM 风格的文科文档分析系统
       </p>
       <p style={{ margin: 0, fontSize: 13, color: "var(--text-3)" }}>功能开发中，敬请期待</p>
+    </div>
+  );
+}
+
+// ── English Chat Panel (inside workspace) ─────────────────────────────────
+function EnglishChatPanel({ app, selectedWord, onEvent }: { app: CanvasApp; selectedWord: string; onEvent: Props["onEvent"] }) {
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
+    const text = input.trim();
+    setInput("");
+    setMessages((prev) => [...prev, { role: "user", text }]);
+    setIsLoading(true);
+
+    // Send to LearnForgeShell via app event
+    await onEvent(app.app_id, "english.chat", {
+      word: selectedWord,
+      message: text,
+    });
+
+    // For now, show a placeholder response until Agent integration is complete
+    // In the full implementation, the response will come back via SSE
+    setTimeout(() => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: selectedWord
+            ? `关于 "${selectedWord}": 这是一个很好的问题。作为你的英语助手，我可以帮你理解这个单词的用法、搭配和常见误区。`
+            : "你好！我是你的英语助手。你可以问我关于任何英语单词的问题，或者让我帮你练习语法、听力、口语。",
+        },
+      ]);
+      setIsLoading(false);
+    }, 800);
+  };
+
+  return (
+    <div className="ew-chat" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Messages */}
+      <div style={{ flex: 1, overflow: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+        {messages.length === 0 && (
+          <div style={{ textAlign: "center", color: "var(--text-3)", padding: "40px 20px" }}>
+            <Sparkles size={32} style={{ marginBottom: 12, opacity: 0.5 }} />
+            <p style={{ margin: 0, fontSize: 14 }}>
+              {selectedWord ? `正在学习 "${selectedWord}"` : "AI 英语助手"}
+            </p>
+            <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.7 }}>
+              问我任何英语问题
+            </p>
+          </div>
+        )}
+        {messages.map((msg, i) => (
+          <div
+            key={i}
+            style={{
+              alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
+              maxWidth: "80%",
+              padding: "10px 14px",
+              borderRadius: 12,
+              background: msg.role === "user" ? "var(--accent-grad)" : "var(--glass-2)",
+              color: msg.role === "user" ? "#fff" : "var(--text-1)",
+              fontSize: 13,
+              lineHeight: 1.5,
+            }}
+          >
+            {msg.text}
+          </div>
+        ))}
+        {isLoading && (
+          <div style={{ alignSelf: "flex-start", padding: "10px 14px", borderRadius: 12, background: "var(--glass-2)", fontSize: 13, color: "var(--text-3)" }}>
+            思考中...
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input */}
+      <div style={{ display: "flex", gap: 8, padding: "10px 12px", borderTop: "1px solid var(--border-1)" }}>
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSend()}
+          placeholder={selectedWord ? `问关于 "${selectedWord}" 的问题...` : "输入英语问题..."}
+          style={{
+            flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border-1)",
+            background: "var(--glass-1)", color: "var(--text-1)", fontSize: 13,
+          }}
+        />
+        <button
+          onClick={handleSend}
+          disabled={isLoading || !input.trim()}
+          style={{
+            padding: "8px 16px", borderRadius: 8, border: "none",
+            background: "var(--accent-grad)", color: "#fff", cursor: "pointer", fontSize: 13,
+            opacity: isLoading || !input.trim() ? 0.5 : 1,
+          }}
+        >
+          发送
+        </button>
+      </div>
     </div>
   );
 }
