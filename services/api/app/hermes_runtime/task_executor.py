@@ -1520,7 +1520,7 @@ class HermesTaskExecutor:
 
         # ── 场景 A: 详细分析/题目讲解 ──
         parts.append("""
-## 🔬 场景 A: 题目讲解/详细分析
+## 🔬 场景 A: 生成详细讲解 / HTML 讲解报告
 
 使用 **detailed-analysis-skill**。遵循五步法：
 1. **读题** — 完整呈现题目原文，提取已知条件、未知量
