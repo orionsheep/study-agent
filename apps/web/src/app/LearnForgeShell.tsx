@@ -5,8 +5,8 @@ import { useAppLinkFlight } from "../features/applink-flight/useAppLinkFlight";
 import { SpatialCanvas } from "../features/app-canvas/SpatialCanvas";
 import { TopBar } from "../features/app-canvas/TopBar";
 import { TutorChat } from "../features/tutor-chat/TutorChat";
+import { SelectionToolbar } from "../components/selection-toolbar/SelectionToolbar";
 import {
-  approveAndGenerate,
   cancelChatRun,
   createCanvasApp,
   fetchApps,
@@ -57,7 +57,6 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [backgroundTasks, setBackgroundTasks] = useState<Array<{run_id: string; label: string; progress: number; detail: string; status: 'running'|'completed'}>>([]);
-  const [pendingConsent, setPendingConsent] = useState<{run_id: string; capability: string; topic: string; original_message: string} | null>(null);
   const [modelProvider, setModelProvider] = useState<ModelProvider>(() => {
     const stored = loadJson<ModelProvider>("learnforge.settings.modelProvider", "gemini");
     return stored === "gemini" ? "gemini" : "gemini";
@@ -119,7 +118,7 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
     fetchChatMessages(sessionContext)
       .then((rows) => {
         if (rows.length) {
-          setShellMessages(rows.map((r) => ({ id: r.id, role: r.role as ChatMessage["role"], text: r.text, links: r.links ?? [], resources: [] })));
+          setShellMessages(rows.map((r) => ({ id: r.id, role: r.role as ChatMessage["role"], text: r.text, links: r.links ?? [], resources: r.resources ?? [] })));
         }
       })
       .catch(() => undefined);
@@ -221,6 +220,34 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
     setFullscreenId((fs) => (fs === appId ? null : fs));
   }, []);
 
+  // Global word lookup: open or focus English workspace
+  const handleEnglishLookup = useCallback((word: string) => {
+    const existingApp = apps.find((a) => a.app_type === "english.workspace");
+    if (existingApp) {
+      // Update payload and focus
+      setApps((current) => current.map((a) =>
+        a.app_id === existingApp.app_id
+          ? { ...a, payload: { ...a.payload, incoming_word: word } }
+          : a
+      ));
+      openWindow(existingApp.app_id);
+      focusWindow(existingApp.app_id);
+    } else {
+      // Create new English workspace app
+      createCanvasApp({
+        app_type: "english.workspace",
+        title: "英语工作区",
+        payload: { incoming_word: word },
+      }, sessionContext).then((newApp) => {
+        if (newApp) {
+          setApps((current) => [...current, newApp]);
+          setOpenWindowIds((ids) => [...ids, newApp.app_id]);
+          focusWindow(newApp.app_id);
+        }
+      }).catch(() => undefined);
+    }
+  }, [apps, openWindow, focusWindow, sessionContext]);
+
   const focusAppById = useCallback((appId: string, nextState?: CanvasApp["state"]) => {
     openWindow(appId);
     if (nextState === "fullscreen") setFullscreenId(appId);
@@ -280,16 +307,6 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
         objective: ctx.learning_objective || "",
       });
     }
-    // Handle consent_required — show confirmation UI for heavy tasks
-    if (event.type === "consent_required") {
-      setPendingConsent({
-        run_id: event.run_id,
-        capability: event.capability,
-        topic: event.topic,
-        original_message: event.original_message,
-      });
-      setIsStreaming(false); // unblock input
-    }
     // Handle background task events — unblock the chat input
     if (event.type === "background.task_started") {
       setIsStreaming(false); // unblock input so user can continue chatting
@@ -327,7 +344,7 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
     );
   }, [setActiveRun]);
 
-  const send = async (text: string, attachments?: Array<{ name: string; preview?: string }>) => {
+  const send = async (text: string, attachments?: Array<{ name: string; preview?: string }>, skillLabel?: { key?: string; label: string; color: string; bgColor: string; borderColor: string }) => {
     const now = Date.now();
     const userMessage: ChatMessage = {
       id: `user-${now}`,
@@ -336,6 +353,7 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
       links: [],
       resources: [],
       attachments: attachments?.length ? attachments : undefined,
+      skillLabel: skillLabel ? skillLabel : undefined,
     };
     const initialTrace: TraceItem[] = [
       { id: `backend-send-${now}`, name: "backend", status: "running", detail: "请求已发送", raw: "backend:running:请求已发送" }
@@ -351,15 +369,13 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
     setCurrentThinking("");
     // Extract image data URLs for multimodal understanding by the AI model.
     const imageData = attachments?.filter((item) => item.preview?.startsWith("data:image/")).map((item) => item.preview!) ?? undefined;
-    const names = attachments?.map((item) => item.name).join("、");
-    const backendText = names ? `${text}\n（用户上传了附件：${names}）`.trim() : text;
     let controller: AbortController | null = null;
     try {
       // #5: create a fresh AbortController for this turn; cancel any prior one first.
       streamAbortRef.current?.abort();
       controller = new AbortController();
       streamAbortRef.current = controller;
-      await streamChatMessage(backendText, applyEvent, sessionContext, modelProvider, imageData, controller.signal);
+      await streamChatMessage(text, applyEvent, sessionContext, modelProvider, imageData, controller.signal, attachments, skillLabel?.key);
       const fresh = await fetchDashboard(sessionContext);
       setDashboard(fresh);
     } catch (error) {
@@ -406,44 +422,6 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
       ));
     }
   };
-
-  // ── Consent flow: approve heavy generation ──
-  const approveGeneration = useCallback(async () => {
-    if (!pendingConsent) return;
-    const consent = pendingConsent;
-    setPendingConsent(null); // dismiss banner immediately
-    const text = `确认生成: ${consent.topic}`;
-    const userMessage: ChatMessage = {
-      id: `user-approve-${Date.now()}`,
-      role: "user",
-      text,
-      links: [],
-      resources: [],
-    };
-    setShellMessages((items) => [...items, userMessage]);
-    setIsStreaming(true);
-    const controller = new AbortController();
-    streamAbortRef.current?.abort();
-    streamAbortRef.current = controller;
-    try {
-      await approveAndGenerate(
-        { capability: consent.capability, topic: consent.topic, original_message: consent.original_message },
-        applyEvent,
-        sessionContext,
-        modelProvider,
-        controller.signal,
-      );
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-    } finally {
-      if (streamAbortRef.current === controller) streamAbortRef.current = null;
-      setIsStreaming(false);
-    }
-  }, [pendingConsent, sessionContext, modelProvider, applyEvent]);
-
-  const dismissConsent = useCallback(() => {
-    setPendingConsent(null);
-  }, []);
 
   const stopAgentRun = useCallback(async () => {
     const runId = activeRunIdRef.current;
@@ -603,50 +581,6 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
         </div>
         </>
       ) : null}
-      {pendingConsent ? (
-        <div className="lf-consent-banner" style={{
-          position: "fixed", bottom: "120px", left: "50%", transform: "translateX(-50%)",
-          zIndex: 1000, background: "linear-gradient(135deg, #1e293b, #0f172a)",
-          border: "1px solid rgba(100,216,255,.35)", borderRadius: "16px",
-          padding: "20px 28px", maxWidth: "520px", width: "calc(100% - 40px)",
-          boxShadow: "0 24px 80px rgba(0,0,0,.55)", color: "#e2e8f0",
-          display: "flex", flexDirection: "column", gap: "14px",
-        }}>
-          <div style={{ fontSize: "15px", lineHeight: "1.55" }}>
-            <strong style={{ color: "#64d8ff" }}>
-              {pendingConsent.capability === "ppt" ? "📊 生成 PPT" :
-               pendingConsent.capability === "interactive_demo" ? "🎮 生成交互演示" :
-               pendingConsent.capability === "detailed_analysis" ? "📝 生成分析报告" :
-               pendingConsent.capability === "image_explanation" ? "🎨 生成示意图" :
-               pendingConsent.capability === "mindmap" ? "🧠 生成思维导图" :
-               pendingConsent.capability === "quiz" ? "📋 生成练习题" :
-               `⚡ 生成 ${pendingConsent.capability}`}
-            </strong>
-            <div style={{ marginTop: "6px", color: "#94a3b8", fontSize: "14px" }}>
-              主题：{pendingConsent.topic}
-            </div>
-            <div style={{ marginTop: "4px", color: "#64748b", fontSize: "12px" }}>
-              ⚡️ 这是一个比较耗时的任务，确认后会在后台生成，不影响你继续提问。
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-            <button onClick={dismissConsent} style={{
-              padding: "10px 22px", borderRadius: "10px", border: "1px solid rgba(255,255,255,.18)",
-              background: "transparent", color: "#94a3b8", cursor: "pointer",
-              fontSize: "14px", fontWeight: 600,
-            }}>
-              取消
-            </button>
-            <button onClick={approveGeneration} style={{
-              padding: "10px 22px", borderRadius: "10px", border: "none",
-              background: "linear-gradient(135deg, #22d3ee, #3b82f6)", color: "#fff",
-              cursor: "pointer", fontSize: "14px", fontWeight: 700,
-            }}>
-              开始生成
-            </button>
-          </div>
-        </div>
-      ) : null}
       <TutorChat
         messages={shellMessages}
         generatedLinks={generatedLinks}
@@ -666,6 +600,7 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
       />
       <AppLinkFlightLayer flight={flight} />
       </main>
+      <SelectionToolbar onLookup={handleEnglishLookup} />
     </div>
   );
 }
