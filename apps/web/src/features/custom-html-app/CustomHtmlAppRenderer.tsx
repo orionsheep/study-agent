@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fingerprint, getCachedHeight, setCachedHeight } from "./widgetParser";
+import { DEFAULT_SESSION_CONTEXT, apiUrl, sessionRequestHeaders, type SessionContext } from "../../lib/api/client";
 
 type Props = {
   code: string;
+  codeUrl?: string;
   theme: "light" | "dark";
   mode?: "canvas" | "inline";
   forceDeckBridge?: boolean;
+  sessionContext?: SessionContext;
 };
 
 const MIN_WIDGET_HEIGHT = 220;
@@ -18,15 +21,24 @@ function clampWidgetHeight(height: number) {
 function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
   const encodedWidgetId = JSON.stringify(widgetId);
   const encodedDeckBridge = JSON.stringify(enableDeckBridge);
+  // Inject the parent origin so the iframe can target it precisely instead of "*".
+  // srcDoc iframes have an opaque ("null") origin, but they can still read the host
+  // page's location via parent.location when same-origin — fall back to "*" only if
+  // that throws (cross-origin embed), in which case the receiver's origin check keeps
+  // us safe.
+  const parentOriginSnippet = `
+  const PARENT_ORIGIN = (() => { try { return parent.location.origin; } catch (e) { return "*"; } })();
+  `;
   return `
 <script>
 (() => {
   const WIDGET_ID = ${encodedWidgetId};
   const ENABLE_DECK_BRIDGE = ${encodedDeckBridge};
+  ${parentOriginSnippet}
   const qs = (selector, root = document) => root.querySelector(selector);
   const qsa = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   function send(message) {
-    parent.postMessage({ ...message, widgetId: WIDGET_ID }, '*');
+    parent.postMessage({ ...message, widgetId: WIDGET_ID }, PARENT_ORIGIN);
   }
   function reportHeight() {
     const height = Math.max(
@@ -330,17 +342,86 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
 }
 
 function learnForgeFullDocumentRescueStyle() {
-  return `<style data-learnforge-rescue>
+  return `<style data-lf-runtime="rescue">
 html,body{width:100%;height:100%;min-height:100%;margin:0}
 body{min-height:100vh}
 canvas,svg{max-width:100%}
 :where(.layout-container,.stage-panel,.canvas-wrapper,[class*="stage"],[id*="canvas"]){min-width:0;min-height:0}
 :where(.canvas-wrapper,[id*="canvas"]){overflow:hidden}
+[data-lf-runtime]{display:none!important;visibility:hidden!important}
+</style>`;
+}
+
+export function normalizeLatexForHtml(html: string) {
+  let next = String(html || "");
+  next = next.replace(/\\\\(frac|sqrt|sum|int|left|right|cdot|times|div|Delta|alpha|beta|gamma|theta|lambda|mu|rho|omega|Omega|vec|overline|hat|dot|sin|cos|tan|ln|log|lim|begin|end)\b/g, "\\$1");
+  next = next.replace(/\\_([A-Za-z0-9{}])/g, "_$1");
+  next = next.replace(/\$\\\s*([A-Za-z])/g, "$\\$1");
+  return next;
+}
+
+function learnForgeMathRuntimeScript() {
+  return `
+<link data-lf-runtime="math-css" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script data-lf-runtime="math-katex" defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script data-lf-runtime="math-auto-render" defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<script data-lf-runtime="math-renderer">
+(() => {
+  function normalizeTextMath(root) {
+    const walker = document.createTreeWalker(root || document.body, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach((node) => {
+      if (!node.nodeValue || !/(\\\\\\\\(?:frac|sqrt|sum|int|Delta|rho|theta)|\\\\_)/.test(node.nodeValue)) return;
+      node.nodeValue = node.nodeValue
+        .replace(/\\\\\\\\(frac|sqrt|sum|int|left|right|cdot|times|div|Delta|alpha|beta|gamma|theta|lambda|mu|rho|omega|Omega|vec|overline|hat|dot|sin|cos|tan|ln|log|lim|begin|end)\\b/g, '\\\\$1')
+        .replace(/\\\\_([A-Za-z0-9{}])/g, '_$1');
+    });
+  }
+  function renderMathNow() {
+    try { normalizeTextMath(document.body); } catch (_) {}
+    if (window.renderMathInElement) {
+      try {
+        window.renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\\\[', right: '\\\\]', display: true },
+            { left: '\\\\(', right: '\\\\)', display: false },
+            { left: '$', right: '$', display: false }
+          ],
+          throwOnError: false,
+          ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        });
+      } catch (_) {}
+    }
+  }
+  window.LFRenderMath = renderMathNow;
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', renderMathNow, { once: true });
+  setTimeout(renderMathNow, 80);
+  setTimeout(renderMathNow, 400);
+  setTimeout(renderMathNow, 1200);
+})();
+</script>`;
+}
+
+function learnForgeRuntimeHideStyle() {
+  return `<style data-lf-runtime="hide-runtime">
+script[data-lf-runtime],
+style[data-lf-runtime],
+link[data-lf-runtime],
+[data-lf-runtime] {
+  display: none !important;
+  visibility: hidden !important;
+}
 </style>`;
 }
 
 function sourceLooksLikeDeck(html: string) {
   return /deck_kind|guizang|web\s*ppt|horizontal[- ]swipe|slide deck|data-layout=|class=["'][^"']*\bdeck\b|class=["'][^"']*\bslide\b|<section\b[^>]*\bslide\b/i.test(html);
+}
+
+export function sourceLooksLikeNativeDeckNavigation(html: string) {
+  return /addEventListener\(\s*["'](?:keydown|wheel|touchstart|touchend)["']|on(?:keydown|wheel|touchstart|touchend)\s*=|(?:ArrowRight|ArrowLeft|PageDown|PageUp|Spacebar)|(?:nextSlide|prevSlide|goToSlide|scrollIntoView|scrollTo|scrollBy)\s*\(/i.test(html);
 }
 
 function sourceLooksLikeFullDocument(html: string) {
@@ -350,21 +431,24 @@ function sourceLooksLikeFullDocument(html: string) {
 function injectBridgeIntoDocument(html: string, widgetId: string, enableDeckBridge: boolean) {
   const bridge = learnForgeBridgeScript(widgetId, enableDeckBridge);
   const rescueStyle = learnForgeFullDocumentRescueStyle();
+  const mathRuntime = learnForgeMathRuntimeScript();
+  const hideRuntime = learnForgeRuntimeHideStyle();
   if (/<\/head\s*>/i.test(html)) {
-    return html.replace(/<\/head\s*>/i, `${rescueStyle}${bridge}</head>`);
+    html = html.replace(/<\/head\s*>/i, `${rescueStyle}${mathRuntime}${bridge}</head>`);
+  } else if (/<\/html\s*>/i.test(html)) {
+    html = html.replace(/<\/html\s*>/i, `${rescueStyle}${mathRuntime}${bridge}</html>`);
+  } else {
+    html = `${html}${rescueStyle}${mathRuntime}${bridge}`;
   }
   if (/<\/body\s*>/i.test(html)) {
-    return html.replace(/<\/body\s*>/i, `${rescueStyle}${bridge}</body>`);
+    return html.replace(/<\/body\s*>/i, `${hideRuntime}</body>`);
   }
-  if (/<\/html\s*>/i.test(html)) {
-    return html.replace(/<\/html\s*>/i, `${rescueStyle}${bridge}</html>`);
-  }
-  return `${html}${rescueStyle}${bridge}`;
+  return `${html}${hideRuntime}`;
 }
 
 function receiverPage(theme: "light" | "dark", widgetId: string, html: string, forceDeckBridge = false) {
-  const source = String(html || "");
-  const enableDeckBridge = forceDeckBridge || sourceLooksLikeDeck(source);
+  const source = normalizeLatexForHtml(String(html || ""));
+  const enableDeckBridge = (forceDeckBridge || sourceLooksLikeDeck(source)) && !sourceLooksLikeNativeDeckNavigation(source);
   if (sourceLooksLikeFullDocument(source)) {
     return injectBridgeIntoDocument(source, widgetId, enableDeckBridge);
   }
@@ -399,12 +483,54 @@ function receiverPage(theme: "light" | "dark", widgetId: string, html: string, f
   [data-lf-answer].is-correct{background:linear-gradient(135deg,var(--green),var(--cyan));color:#06111c}[data-lf-answer].is-wrong{background:linear-gradient(135deg,var(--rose),#ffb86b);color:#17070f}
   @keyframes lfxIn{from{opacity:.4;transform:translateY(8px)}to{opacity:1;transform:none}}
   @media(max-width:760px){.lfx-hero,.lfx-grid{grid-template-columns:1fr}.lfx-span-4,.lfx-span-5,.lfx-span-6,.lfx-span-7,.lfx-span-8,.lfx-span-12{grid-column:auto}.lfx-lab,.lf-concept-demo,.lf-sort-demo,.lf-hash-demo,.lf-pigeon-demo,.lf-card{padding:16px!important}}
-  </style>${learnForgeBridgeScript(widgetId, enableDeckBridge)}</head><body><div id="widget-root">${source}</div></body></html>`;
+  </style>${learnForgeMathRuntimeScript()}${learnForgeBridgeScript(widgetId, enableDeckBridge)}</head><body><div id="widget-root">${source}</div>${learnForgeRuntimeHideStyle()}</body></html>`;
 }
 
-export function CustomHtmlAppRenderer({ code, theme, mode = "inline", forceDeckBridge = false }: Props) {
+export function CustomHtmlAppRenderer({ code, codeUrl, theme, mode = "inline", forceDeckBridge = false, sessionContext = DEFAULT_SESSION_CONTEXT }: Props) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const renderedCode = useMemo(() => String(code || ""), [code]);
+  const [remoteCode, setRemoteCode] = useState<string | null>(null);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!codeUrl) {
+      setRemoteCode(null);
+      setRemoteError(null);
+      return;
+    }
+    let cancelled = false;
+    setRemoteCode(null);
+    setRemoteError(null);
+    fetch(apiUrl(codeUrl), { headers: sessionRequestHeaders(sessionContext) })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+        return response.text();
+      })
+      .then((html) => {
+        if (!cancelled) setRemoteCode(html);
+      })
+      .catch((error) => {
+        if (!cancelled) setRemoteError(error instanceof Error ? error.message : "artifact fetch failed");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [codeUrl, sessionContext]);
+
+  // Preserve model-authored HTML exactly as generated. The iframe sandbox is the safety
+  // boundary; the product layer must not replace failed artifacts with a different demo.
+  const renderedCode = useMemo(() => {
+    const raw = String(
+      remoteError
+        ? `<section><h2>HTML artifact 加载失败</h2><p>${remoteError}</p></section>`
+        : remoteCode ?? (codeUrl ? "<section><h2>正在加载 HTML artifact...</h2></section>" : code)
+    ).trim();
+    if (!raw) {
+      return "<section><h2>HTML artifact 无法渲染</h2><p>服务端返回的 HTML 为空。</p></section>";
+    }
+    const looksStructured = /<[a-z!][\s\S]*>/i.test(raw);
+    return looksStructured
+      ? raw
+      : `<section><h2>HTML artifact 无法渲染</h2><p>服务端返回的内容不是有效 HTML 结构。</p></section>`;
+  }, [code, codeUrl, remoteCode, remoteError]);
   const key = useMemo(() => fingerprint(renderedCode), [renderedCode]);
   const widgetId = useMemo(() => `lf-${key}`, [key]);
   const [height, setHeight] = useState(getCachedHeight(key));
@@ -413,6 +539,9 @@ export function CustomHtmlAppRenderer({ code, theme, mode = "inline", forceDeckB
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const message = event.data || {};
+      // #4: verify origin in addition to source. srcDoc iframes have an opaque origin
+      // ("null"), so accept that plus our own origin; ignore messages from anywhere else.
+      if (event.origin !== "null" && event.origin !== window.location.origin) return;
       if (event.source !== iframeRef.current?.contentWindow || message.widgetId !== widgetId) return;
       if (message.type === "widget:height" && typeof message.height === "number") {
         const nextHeight = clampWidgetHeight(message.height);

@@ -24,6 +24,7 @@ python scripts/verify_project_structure.py | tee -a "$REPORT"
 python scripts/generate_source_truth_manifest.py | tee -a "$REPORT"
 python scripts/check_external_readiness.py | tee -a "$REPORT"
 python scripts/check_hermes_sdk_embedding.py | tee -a "$REPORT"
+python3 scripts/validate_artifact_boundaries.py | tee -a "$REPORT"
 python -m compileall -q services/api/app
 pytest services/api/tests -q | tee -a "$REPORT"
 npm run web:lint | tee -a "$REPORT"

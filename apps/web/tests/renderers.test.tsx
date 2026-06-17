@@ -1,5 +1,5 @@
 import React from "react";
-import { act } from "react";
+import { act } from "react-dom/test-utils";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import type { CanvasApp, CanvasViewport, ChatAppLink, DashboardSnapshot, LearningResource } from "@learnforge/app-protocol";
@@ -9,15 +9,70 @@ import { AppLinkChip } from "../src/features/applink-flight/AppLinkChip";
 import { RichMessageContent } from "../src/features/tutor-chat/RichMessageContent";
 import { TutorChat } from "../src/features/tutor-chat/TutorChat";
 import { buildResourceCanvasAppRequest } from "../src/app/LearnForgeApp";
-import { DEFAULT_SESSION_CONTEXT } from "../src/lib/api/client";
+import { DEFAULT_SESSION_CONTEXT, patchApp } from "../src/lib/api/client";
 import type { ChatMessage, TraceItem } from "../src/lib/events/agentEvents";
+
+vi.mock("../src/lib/api/client", async () => {
+  const actual = await vi.importActual<typeof import("../src/lib/api/client")>("../src/lib/api/client");
+  return {
+    ...actual,
+    patchApp: vi.fn(async (_appId: string, patch: Record<string, unknown>) => ({
+      app_id: _appId,
+      app_type: "dashboard.learning",
+      title: "updated",
+      status: "ready",
+      render_mode: "native_react",
+      state: "window",
+      position: patch.position ?? { x: 0, y: 0 },
+      size: patch.size ?? { width: 360, height: 280 },
+      z_index: 1,
+      payload: {},
+      source: {},
+      source_refs: [],
+      actions: [],
+      created_at: "now",
+      updated_at: "now",
+    })),
+  };
+});
 
 function render(node: React.ReactNode) {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
   act(() => root.render(node));
-  return { host, cleanup: () => act(() => root.unmount()) };
+  return {
+    host,
+    rerender: (next: React.ReactNode) => act(() => root.render(next)),
+    cleanup: () => act(() => root.unmount()),
+  };
+}
+
+function pointerEvent(type: string, init: { clientX: number; clientY: number; pointerId?: number }) {
+  const event = new MouseEvent(type, { bubbles: true, clientX: init.clientX, clientY: init.clientY }) as MouseEvent & { pointerId: number };
+  Object.defineProperty(event, "pointerId", { value: init.pointerId ?? 1 });
+  return event;
+}
+
+function installPointerRuntime() {
+  const previousRaf = window.requestAnimationFrame;
+  const previousCancel = window.cancelAnimationFrame;
+  const previousCapture = HTMLElement.prototype.setPointerCapture;
+  window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+    callback(0);
+    return 1;
+  }) as typeof window.requestAnimationFrame;
+  window.cancelAnimationFrame = vi.fn() as typeof window.cancelAnimationFrame;
+  Object.defineProperty(HTMLElement.prototype, "setPointerCapture", { configurable: true, value: vi.fn() });
+  return () => {
+    window.requestAnimationFrame = previousRaf;
+    window.cancelAnimationFrame = previousCancel;
+    if (previousCapture) {
+      Object.defineProperty(HTMLElement.prototype, "setPointerCapture", { configurable: true, value: previousCapture });
+    } else {
+      delete (HTMLElement.prototype as Partial<HTMLElement>).setPointerCapture;
+    }
+  };
 }
 
 const dashboard: DashboardSnapshot = {
@@ -65,6 +120,137 @@ const app: CanvasApp = {
 };
 
 describe("component behavior", () => {
+  it("drags app windows with an imperative preview and commits layout once on pointerup", () => {
+    const restorePointerRuntime = installPointerRuntime();
+    const floatingApp: CanvasApp = {
+      ...app,
+      app_id: "app-free",
+      app_type: "notes.session",
+      title: "自由窗口",
+      position: { x: 100, y: 120 },
+      size: { width: 360, height: 280 },
+    };
+    const setApps = vi.fn();
+    const focusWindow = vi.fn();
+    const onAppEvent = vi.fn();
+    const patchAppMock = vi.mocked(patchApp);
+    patchAppMock.mockClear();
+    const viewport: CanvasViewport = { x: 0, y: 0, scale: 1 };
+    const canvas = (
+      <SpatialCanvas
+        apps={[floatingApp]}
+        dashboard={dashboard}
+        viewport={viewport}
+        setViewport={() => undefined}
+        setApps={setApps}
+        openWindowIds={["app-free"]}
+        focusedId="app-free"
+        fullscreenId={null}
+        zOrder={["app-free"]}
+        openWindow={() => undefined}
+        closeWindow={() => undefined}
+        focusWindow={focusWindow}
+        toggleFullscreen={() => undefined}
+        deleteApp={() => undefined}
+        onAppEvent={onAppEvent}
+        sessionContext={DEFAULT_SESSION_CONTEXT}
+      />
+    );
+    const { host, rerender, cleanup } = render(canvas);
+    const titlebar = host.querySelector(".app-titlebar") as HTMLElement;
+    const frame = host.querySelector('[data-window-frame="app-free"]') as HTMLElement;
+
+    act(() => titlebar.dispatchEvent(pointerEvent("pointerdown", { clientX: 10, clientY: 20, pointerId: 7 })));
+    act(() => window.dispatchEvent(pointerEvent("pointermove", { clientX: 25, clientY: 32, pointerId: 7 })));
+
+    expect(frame.style.transform).toBe("translate3d(15px, 12px, 0)");
+    expect(setApps).not.toHaveBeenCalled();
+    rerender(canvas);
+    expect(frame.style.transform).toBe("translate3d(15px, 12px, 0)");
+
+    act(() => window.dispatchEvent(pointerEvent("pointerup", { clientX: 25, clientY: 32, pointerId: 7 })));
+
+    expect(setApps).toHaveBeenCalledTimes(1);
+    const committed = setApps.mock.calls[0][0] as CanvasApp[];
+    expect(committed[0].position).toEqual({ x: 115, y: 132 });
+    expect(patchAppMock).toHaveBeenCalledWith(
+      "app-free",
+      expect.objectContaining({ position: { x: 115, y: 132 } }),
+      DEFAULT_SESSION_CONTEXT
+    );
+    expect(onAppEvent).toHaveBeenCalledWith(
+      "app-free",
+      "layout.drag",
+      expect.objectContaining({ position: { x: 115, y: 132 } })
+    );
+    cleanup();
+    restorePointerRuntime();
+  });
+
+  it("resizes app windows with an imperative preview and commits final size once", () => {
+    const restorePointerRuntime = installPointerRuntime();
+    const floatingApp: CanvasApp = {
+      ...app,
+      app_id: "app-resize",
+      app_type: "notes.session",
+      title: "可缩放窗口",
+      position: { x: 80, y: 90 },
+      size: { width: 360, height: 280 },
+    };
+    const setApps = vi.fn();
+    const onAppEvent = vi.fn();
+    const patchAppMock = vi.mocked(patchApp);
+    patchAppMock.mockClear();
+    const viewport: CanvasViewport = { x: 0, y: 0, scale: 1 };
+    const { host, cleanup } = render(
+      <SpatialCanvas
+        apps={[floatingApp]}
+        dashboard={dashboard}
+        viewport={viewport}
+        setViewport={() => undefined}
+        setApps={setApps}
+        openWindowIds={["app-resize"]}
+        focusedId="app-resize"
+        fullscreenId={null}
+        zOrder={["app-resize"]}
+        openWindow={() => undefined}
+        closeWindow={() => undefined}
+        focusWindow={() => undefined}
+        toggleFullscreen={() => undefined}
+        deleteApp={() => undefined}
+        onAppEvent={onAppEvent}
+        sessionContext={DEFAULT_SESSION_CONTEXT}
+      />
+    );
+    const handle = host.querySelector(".resize-handle") as HTMLElement;
+    const frame = host.querySelector('[data-window-frame="app-resize"]') as HTMLElement;
+
+    act(() => handle.dispatchEvent(pointerEvent("pointerdown", { clientX: 100, clientY: 100, pointerId: 8 })));
+    act(() => window.dispatchEvent(pointerEvent("pointermove", { clientX: 145, clientY: 130, pointerId: 8 })));
+
+    expect(frame.style.width).toBe("405px");
+    expect(frame.style.height).toBe("310px");
+    expect(setApps).not.toHaveBeenCalled();
+
+    act(() => window.dispatchEvent(pointerEvent("pointerup", { clientX: 145, clientY: 130, pointerId: 8 })));
+
+    expect(setApps).toHaveBeenCalledTimes(1);
+    const committed = setApps.mock.calls[0][0] as CanvasApp[];
+    expect(committed[0].size).toEqual({ width: 405, height: 310 });
+    expect(patchAppMock).toHaveBeenCalledWith(
+      "app-resize",
+      expect.objectContaining({ size: { width: 405, height: 310 } }),
+      DEFAULT_SESSION_CONTEXT
+    );
+    expect(onAppEvent).toHaveBeenCalledWith(
+      "app-resize",
+      "layout.resize",
+      expect.objectContaining({ size: { width: 405, height: 310 } })
+    );
+    cleanup();
+    restorePointerRuntime();
+  });
+
   it("renders dashboard memory evidence", () => {
     const { host, cleanup } = render(<NativeAppRenderer app={app} dashboard={dashboard} onEvent={() => undefined} onFocusApp={() => undefined} sessionContext={DEFAULT_SESSION_CONTEXT} />);
     expect(host.textContent).toContain("偏好图解和代码");
@@ -150,6 +336,54 @@ describe("component behavior", () => {
     cleanup();
   });
 
+  it("injects math rendering runtime and normalizes escaped LaTeX in custom HTML", () => {
+    const htmlApp: CanvasApp = {
+      ...app,
+      app_id: "app-html-math",
+      app_type: "custom.html",
+      title: "公式报告",
+      payload: {
+        html: "<section><h1>动量守恒</h1><p>$\\\\frac{1}{2}mv_0^2$ 和 $E\\_k$</p></section>",
+      },
+    };
+    const { host, cleanup } = render(
+      <NativeAppRenderer
+        app={htmlApp}
+        isFullscreen
+        onEvent={() => undefined}
+        onFocusApp={() => undefined}
+        sessionContext={DEFAULT_SESSION_CONTEXT}
+      />
+    );
+    const iframe = host.querySelector("[data-testid='custom-html-renderer']") as HTMLIFrameElement | null;
+
+    expect(iframe?.srcdoc).toContain("renderMathInElement");
+    expect(iframe?.srcdoc).toContain("katex.min.js");
+    expect(iframe?.srcdoc).toContain("$\\frac{1}{2}mv_0^2$");
+    expect(iframe?.srcdoc).toContain("$E_k$");
+    cleanup();
+  });
+
+  it("suggestion buttons pass a structured requested skill", () => {
+    const onGenerate = vi.fn();
+    const { host, cleanup } = render(
+      <RichMessageContent
+        text={"讲解完成。\n\n[[generate:interactive_demo:动量守恒:demo]]生成动量守恒可交互模型[[/generate]]"}
+        onGenerate={onGenerate}
+      />
+    );
+    const button = host.querySelector("[data-testid='generate-suggestions'] button") as HTMLButtonElement | null;
+    expect(button).toBeTruthy();
+    act(() => button?.click());
+
+    expect(onGenerate).toHaveBeenCalledWith(
+      expect.stringContaining("动量守恒"),
+      undefined,
+      expect.objectContaining({ key: "demo", label: "生成动量守恒可交互模型" }),
+    );
+    cleanup();
+  });
+
   it("injects LearnForge deck navigation bridge for custom HTML PPT decks", () => {
     const html = `<!doctype html>
 <html>
@@ -175,6 +409,7 @@ describe("component behavior", () => {
     const iframe = host.querySelector("[data-testid='custom-html-renderer']") as HTMLIFrameElement | null;
 
     expect(iframe).toBeTruthy();
+    expect(iframe?.srcdoc).toContain("const ENABLE_DECK_BRIDGE = true;");
     expect(iframe?.srcdoc).toContain("window.LFDeck");
     expect(iframe?.srcdoc).toContain("deck:navigate");
     expect(iframe?.srcdoc).toContain("ArrowRight");
@@ -205,6 +440,43 @@ describe("component behavior", () => {
     const iframe = host.querySelector("[data-testid='custom-html-renderer']") as HTMLIFrameElement | null;
 
     expect(iframe?.srcdoc).toContain("window.LFDeck");
+    expect(iframe?.srcdoc).toContain("const ENABLE_DECK_BRIDGE = true;");
+    cleanup();
+  });
+
+  it("does not add a second deck controller when the generated PPT already handles navigation", () => {
+    const html = `<!doctype html>
+<html>
+  <head><title>Deck</title></head>
+  <body>
+    <main class="deck"><section class="slide">第一页</section><section class="slide">第二页</section></main>
+    <script>
+      window.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowRight') document.querySelectorAll('.slide')[1].scrollIntoView({ behavior: 'smooth' });
+      });
+    </script>
+  </body>
+</html>`;
+    const htmlApp: CanvasApp = {
+      ...app,
+      app_id: "app-html-ppt-native-nav",
+      app_type: "custom.html",
+      title: "网页 PPT",
+      payload: { html, deck_kind: "guizang-web-ppt" },
+    };
+    const { host, cleanup } = render(
+      <NativeAppRenderer
+        app={htmlApp}
+        isFullscreen
+        onEvent={() => undefined}
+        onFocusApp={() => undefined}
+        sessionContext={DEFAULT_SESSION_CONTEXT}
+      />
+    );
+    const iframe = host.querySelector("[data-testid='custom-html-renderer']") as HTMLIFrameElement | null;
+
+    expect(iframe?.srcdoc).toContain("const ENABLE_DECK_BRIDGE = false;");
+    expect(iframe?.srcdoc).toContain("window.addEventListener('keydown'");
     cleanup();
   });
 
@@ -326,10 +598,8 @@ describe("component behavior", () => {
     );
 
     expect(host.querySelector("[aria-label='AI 学习导师工作过程']")).toBeTruthy();
-    expect(host.textContent).toContain("已完成");
-    expect(host.textContent).toContain("Hermes 反馈");
-    expect(host.textContent).toContain("写入学习画布");
-    expect(host.textContent).toContain("模型通道已自动处理");
+    expect(host.textContent).toContain("Hermes 工作");
+    expect(host.textContent).toContain("2/3 步骤");
     expect(host.textContent).not.toContain("hermes_provider_fallback:xiaomi->gemini");
     const userMessage = host.querySelector(".message.user");
     const activityMessage = host.querySelector("[data-testid='agent-activity-turn']");

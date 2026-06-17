@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.database.store import get_store
+from app.hermes_runtime.task_executor import HermesTaskResult
 from app.schemas.app_protocol import LearningResource
 
 
@@ -27,13 +28,13 @@ def test_chat_stream_emits_agent_stream_variants():
     assert "run.step" in types
     assert "app.create" in types
     assert "app.link.create" in types
-    assert "resource.create" in types
     assert "assistant.delta" in types
     assert "dashboard.update" in types
     assert "run.done" in types
-    assert any(event["type"] == "run.step" and event["step_name"] == "model_gateway" for event in events)
+    # Unified orchestrator: Hermes generates directly, no separate model_gateway step
     assert any(event["type"] == "run.step" and event["step_name"] == "hermes_runtime" for event in events)
-    assert "MiMo 测试回复" in "".join(event.get("text", "") for event in events if event["type"] == "assistant.delta")
+    assert any(event["type"] == "run.step" and event["step_name"] == "capability_contract" for event in events)
+    assert any(event.get("text", "") for event in events if event["type"] == "assistant.delta")
 
 
 def test_chat_stream_emits_video_cards_and_canvas_app(monkeypatch):
@@ -88,14 +89,40 @@ def test_chat_stream_emits_video_cards_and_canvas_app(monkeypatch):
     assert video_apps[0]["payload"]["selected_bvid"].startswith("BV")
     assert "player.bilibili.com/player.html" in video_apps[0]["payload"]["embed_url"]
     assert not any(event["app"]["app_type"] == "resource.center" and event["app"]["payload"].get("resource_kind") == "video" for event in app_events)
-    assert any(event["type"] == "run.step" and event["step_name"] == "video_retriever" for event in events)
+    assert any(event["type"] == "run.step" and event["step_name"] == "bilibili_live_search" for event in events)
 
 
-def test_chat_stream_emits_ppt_generation_progress_steps():
+def test_chat_stream_emits_ppt_generation_progress_steps(monkeypatch):
+    async def mock_ppt_hermes(self, plan, context, rag_context, **kwargs):
+        return HermesTaskResult(
+            capability="ppt",
+            topic="大学物理",
+            summary="大学物理 PPT 已生成。",
+            apps=[
+                {
+                    "app_type": "custom.html",
+                    "title": "大学物理简单介绍 PPT",
+                    "payload": {
+                        "html": (
+                            "<!DOCTYPE html><html><body><main class='deck' data-deck='physics'>"
+                            "<section class='slide' data-slide='1'><h1>大学物理简单介绍</h1><p>本页介绍力学、电磁学和热学的课程结构。</p></section>"
+                            "<section class='slide' data-slide='2'><h2>学习主线</h2><p>围绕模型、公式、实验和误差分析，建立定量推理能力。</p></section>"
+                            "<script>document.addEventListener('keydown',(event)=>{if(event.key==='ArrowRight'){};});</script>"
+                            "</main></body></html>"
+                        )
+                    },
+                }
+            ],
+            trace=["mock_ppt_generated"],
+        )
+
+    monkeypatch.setattr("app.hermes_runtime.task_executor.HermesTaskExecutor.run_hermes", mock_ppt_hermes)
+    monkeypatch.setattr("app.agents.orchestrator_agent.HermesTaskExecutor.run_hermes", mock_ppt_hermes)
+
     with client.stream(
         "POST",
         "/api/chat/stream",
-        json={"student_id": "demo-student", "course_id": "ai-course", "conversation_id": "demo-ppt", "message": "生成一套大学物理的简单介绍ppt"},
+            json={"student_id": "demo-student", "course_id": "ai-course", "conversation_id": "demo-ppt-stream-mock", "message": "生成一套大学物理的简单介绍ppt"},
     ) as response:
         assert response.status_code == 200
         body = "".join(response.iter_text())
@@ -105,9 +132,9 @@ def test_chat_stream_emits_ppt_generation_progress_steps():
             events.append(json.loads(block[6:]))
 
     step_names = [event["step_name"] for event in events if event["type"] == "run.step"]
-    assert "ppt_style" in step_names
-    assert "ppt_outline" in step_names
-    assert "ppt_slide_html" in step_names
-    assert "ppt_deck_verify" in step_names
+    # Unified orchestrator: Hermes handles PPT generation internally (skill_call events)
+    assert "hermes_runtime" in step_names
     assert "canvas_materializer" in step_names
     assert any(event["type"] == "app.create" and event["app"]["app_type"] == "custom.html" for event in events)
+    assert any(event["type"] == "resource.create" and event["resource"]["type"] == "ppt" for event in events)
+    assert not any(event["type"] == "consent_required" for event in events)

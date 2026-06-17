@@ -7,7 +7,7 @@ import { parseShowWidget } from "../custom-html-app/widgetParser";
 
 type Props = {
   text: string;
-  onGenerate?: (prompt: string) => void | Promise<void>;
+  onGenerate?: (prompt: string, attachments?: Array<{ name: string; preview?: string }>, skillLabel?: { key?: string; label: string; color: string; bgColor: string; borderColor: string }) => void | Promise<void>;
 };
 
 type Segment =
@@ -17,6 +17,7 @@ type Segment =
 type GenerateAction = {
   capability: string;
   topic: string;
+  skillKey: string;
   label: string;
   prompt: string;
 };
@@ -30,14 +31,24 @@ function promptForGenerate(capability: string, topic: string) {
   return `请基于${topic}生成一张教学图片`;
 }
 
+function skillKeyForCapability(capability: string) {
+  if (capability === "interactive_demo") return "demo";
+  if (capability === "ppt") return "ppt";
+  if (capability === "image_explanation" || capability === "custom_infographic") return "image";
+  if (capability === "video_search") return "video";
+  return capability;
+}
+
 function extractGenerateActions(text: string): { cleanText: string; actions: GenerateAction[] } {
   const actions: GenerateAction[] = [];
-  const cleanText = text.replace(/\[\[generate:([^:\]]+):([^\]]+)\]\]([\s\S]*?)\[\[\/generate\]\]/g, (_all, capability, topic, label) => {
+  const cleanText = text.replace(/\[\[generate:([^:\]]+):([^:\]]+)(?::([^\]]+))?\]\]([\s\S]*?)\[\[\/generate\]\]/g, (_all, capability, topic, skillKey, label) => {
     const safeCapability = String(capability || "image_explanation").trim();
     const safeTopic = String(topic || "当前主题").trim();
+    const safeSkillKey = String(skillKey || skillKeyForCapability(safeCapability)).trim();
     actions.push({
       capability: safeCapability,
       topic: safeTopic,
+      skillKey: safeSkillKey,
       label: String(label || `生成 ${safeTopic}`).trim(),
       prompt: promptForGenerate(safeCapability, safeTopic)
     });
@@ -115,7 +126,17 @@ export function RichMessageContent({ text, onGenerate }: Props) {
       {actions.length ? (
         <div className="generate-suggestions" data-testid="generate-suggestions">
           {actions.map((action) => (
-            <button key={`${action.capability}-${action.topic}`} type="button" onClick={() => onGenerate?.(action.prompt)}>
+            <button
+              key={`${action.capability}-${action.topic}`}
+              type="button"
+              onClick={() => onGenerate?.(action.prompt, undefined, {
+                key: action.skillKey,
+                label: action.label,
+                color: "#64d8ff",
+                bgColor: "rgba(100, 216, 255, 0.12)",
+                borderColor: "rgba(100, 216, 255, 0.35)",
+              })}
+            >
               <span>生成到左侧画布</span>
               <strong>{action.label}</strong>
             </button>

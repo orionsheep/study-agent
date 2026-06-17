@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type PointerEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { CanvasApp, CanvasViewport, DashboardSnapshot, LearningResource } from "@learnforge/app-protocol";
-import { ArrowDownAZ, Crosshair, Fullscreen, Grip, LocateFixed, Maximize2, Minus, Plus, Save, Search, Shrink, Sparkles, Trash2, Undo2, X } from "lucide-react";
+import { Fullscreen, Grip, LocateFixed, Maximize2, Minus, Plus, Search, Shrink, Sparkles, Trash2, X } from "lucide-react";
 import { NativeAppRenderer } from "../learning-apps/NativeAppRenderer";
 import { isPinnedApp } from "./pinned";
 import { patchApp, type SessionContext } from "../../lib/api/client";
@@ -33,6 +33,24 @@ type DragState =
   | { kind: "canvas"; startX: number; startY: number; viewport: CanvasViewport }
   | { kind: "app"; appId: string; startX: number; startY: number; x: number; y: number }
   | { kind: "resize"; appId: string; startX: number; startY: number; width: number; height: number };
+
+type WindowInteraction = {
+  kind: "app" | "resize";
+  appId: string;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  scale: number;
+  baseX: number;
+  baseY: number;
+  baseWidth: number;
+  baseHeight: number;
+  nextX: number;
+  nextY: number;
+  nextWidth: number;
+  nextHeight: number;
+  raf?: number;
+};
 
 function appStatusClass(app: CanvasApp) {
   if (app.status === "ready") return "st-done";
@@ -297,7 +315,6 @@ function byUpdatedDesc(a: CanvasApp, b: CanvasApp) {
 }
 
 export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps, openWindowIds, focusedId, fullscreenId, zOrder, openWindow, closeWindow, focusWindow, toggleFullscreen, deleteApp, onAppEvent, onDashboardUpdate, onResourceDrop, sessionContext }: Props) {
-  const [query, setQuery] = useState("");
   const [drag, setDrag] = useState<DragState | null>(null);
   const [activeFolderApp, setActiveFolderApp] = useState<CanvasApp | null>(null);
   const [resourceDragOver, setResourceDragOver] = useState(false);
@@ -306,13 +323,30 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
   // transition, so panning/zooming feels 1:1 instead of lagging 0.9s behind the cursor.
   const [directManip, setDirectManip] = useState(false);
   const directManipTimer = useRef<number | undefined>(undefined);
+  const autoArrangeTimer = useRef<number | undefined>(undefined);
+  const windowInteractionRef = useRef<WindowInteraction | null>(null);
+  const appsRef = useRef(apps);
+  appsRef.current = apps;
   const flagDirectManip = () => {
     setDirectManip(true);
     window.clearTimeout(directManipTimer.current);
     directManipTimer.current = window.setTimeout(() => setDirectManip(false), 220);
   };
   const shellRef = useRef<HTMLDivElement | null>(null);
+  // #10: ref mirror of the viewport so the wheel listener can read the latest value
+  // without being rebound on every pan/zoom (which thrashed the listener registration).
+  const viewportRef = useRef(viewport);
+  viewportRef.current = viewport;
   const openedSet = useMemo(() => new Set(openWindowIds), [openWindowIds]);
+
+  // #16: clear any pending timers on unmount so they don't fire setState on a dead node.
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(directManipTimer.current);
+      window.clearTimeout(autoArrangeTimer.current);
+      if (windowInteractionRef.current?.raf) window.cancelAnimationFrame(windowInteractionRef.current.raf);
+    };
+  }, []);
   // z-index from zOrder (most-recently-focused on top); fall back to insertion order
   const zIndexFor = (appId: string) => {
     const idx = zOrder.indexOf(appId);
@@ -342,17 +376,20 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
       return [{
         app_id: `folder-${folder.key}`,
         title: `${folder.title}文件夹`,
-        app_type: "resource.folder" as CanvasApp["app_type"],
-        status: "ready" as CanvasApp["status"],
-        state: "window" as CanvasApp["state"],
+        // #7: use protocol-valid literals. Previously these were "native" / "agent" cast
+        // through `as CanvasApp[...]`, which lied to the type checker — both values are
+        // outside their declared unions (RenderMode / the source object shape).
+        app_type: "resource.folder",
+        status: "ready",
+        state: "window",
         position: pos,
         size: { width: 120, height: 110 },
         z_index: 200 + index,  // above all app windows
         group_id: "resource-folders",
         payload,
         source_refs: [],
-        render_mode: "native" as CanvasApp["render_mode"],
-        source: "agent" as CanvasApp["source"],
+        render_mode: "native_react",
+        source: {},
         actions: [{ label: "打开列表", action: "folder.open" }],
         created_at: items[items.length - 1]?.created_at ?? new Date().toISOString(),
         updated_at: items[0]?.updated_at ?? new Date().toISOString(),
@@ -372,7 +409,6 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
   const fullscreenApp = useMemo(() => apps.find((app) => app.app_id === (pageFullscreenId ?? fullscreenId)), [apps, fullscreenId, pageFullscreenId]);
   const fullscreenMode = pageFullscreenId ? "page" : fullscreenId ? "canvas" : null;
   const focusedApp = visibleApps.find((app) => !isFolderApp(app) && app.app_id === focusedId);
-  const hasFloatingWindow = visibleApps.some((app) => !isFolderApp(app) && !isPinnedApp(app));
 
   const clampScale = (scale: number) => Math.min(1.8, Math.max(0.42, scale));
 
@@ -397,49 +433,129 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
     zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, viewport.scale * factor);
   };
 
-  const updateAppLocal = (appId: string, patch: Partial<CanvasApp>) => {
-    setApps(apps.map((app) => (app.app_id === appId ? { ...app, ...patch, updated_at: new Date().toISOString() } : app)));
-  };
-
   const onPointerMove = (event: PointerEvent) => {
     if (!drag) return;
+    event.preventDefault();
     if (drag.kind === "canvas") {
       setViewport({ ...drag.viewport, x: drag.viewport.x + event.clientX - drag.startX, y: drag.viewport.y + event.clientY - drag.startY });
     }
-    if (drag.kind === "app") {
-      const dx = (event.clientX - drag.startX) / viewport.scale;
-      const dy = (event.clientY - drag.startY) / viewport.scale;
-      updateAppLocal(drag.appId, { position: { x: drag.x + dx, y: drag.y + dy } });
-    }
-    if (drag.kind === "resize") {
-      const dx = (event.clientX - drag.startX) / viewport.scale;
-      const dy = (event.clientY - drag.startY) / viewport.scale;
-      const app = apps.find((item) => item.app_id === drag.appId);
-      const min = app ? minResizeSizeForApp(app) : { width: 260, height: 190 };
-      updateAppLocal(drag.appId, { size: { width: Math.max(min.width, drag.width + dx), height: Math.max(min.height, drag.height + dy) } });
-    }
   };
 
-  const onPointerUp = async () => {
-    if (drag?.kind === "app" || drag?.kind === "resize") {
-      const app = apps.find((item) => item.app_id === drag.appId);
-      if (app) {
-        await patchApp(app.app_id, { position: app.position, size: app.size, group_id: app.group_id }, sessionContext);
-        onAppEvent(app.app_id, drag.kind === "resize" ? "layout.resize" : "layout.drag", { position: app.position, size: app.size });
+  const onPointerUp = () => {
+    setDrag(null);
+  };
+
+  const frameElementFor = (appId: string) => shellRef.current?.querySelector<HTMLElement>(`[data-window-frame="${appId}"]`) ?? null;
+
+  const applyWindowInteractionPreview = (interaction: WindowInteraction) => {
+    if (interaction.raf) return;
+    interaction.raf = window.requestAnimationFrame(() => {
+      interaction.raf = undefined;
+      if (windowInteractionRef.current !== interaction) return;
+      const frame = frameElementFor(interaction.appId);
+      if (!frame) return;
+      if (interaction.kind === "app") {
+        frame.style.transform = `translate3d(${interaction.nextX - interaction.baseX}px, ${interaction.nextY - interaction.baseY}px, 0)`;
+      } else {
+        frame.style.width = `${interaction.nextWidth}px`;
+        frame.style.height = `${interaction.nextHeight}px`;
       }
+    });
+  };
+
+  const finishWindowInteraction = async () => {
+    const interaction = windowInteractionRef.current;
+    if (!interaction) return;
+    windowInteractionRef.current = null;
+    if (interaction.raf) window.cancelAnimationFrame(interaction.raf);
+    window.removeEventListener("pointermove", onWindowInteractionMove);
+    window.removeEventListener("pointerup", finishWindowInteraction);
+    window.removeEventListener("pointercancel", finishWindowInteraction);
+    const app = appsRef.current.find((item) => item.app_id === interaction.appId);
+    const frame = frameElementFor(interaction.appId);
+    const nextPosition = interaction.kind === "app"
+      ? { x: interaction.nextX, y: interaction.nextY }
+      : app?.position ?? { x: interaction.baseX, y: interaction.baseY };
+    const nextSize = interaction.kind === "resize"
+      ? { width: interaction.nextWidth, height: interaction.nextHeight }
+      : app?.size ?? { width: interaction.baseWidth, height: interaction.baseHeight };
+    if (frame) {
+      frame.style.left = `${nextPosition.x}px`;
+      frame.style.top = `${nextPosition.y}px`;
+      frame.style.width = `${nextSize.width}px`;
+      frame.style.height = `${nextSize.height}px`;
+      frame.style.transform = "";
     }
     setDrag(null);
+    if (!app) return;
+    const nextApp = { ...app, position: nextPosition, size: nextSize, updated_at: new Date().toISOString() };
+    setApps(appsRef.current.map((item) => (item.app_id === app.app_id ? nextApp : item)));
+    void patchApp(app.app_id, { position: nextPosition, size: nextSize, group_id: app.group_id }, sessionContext);
+    void onAppEvent(app.app_id, interaction.kind === "resize" ? "layout.resize" : "layout.drag", { position: nextPosition, size: nextSize });
+  };
+
+  const onWindowInteractionMove = (event: globalThis.PointerEvent) => {
+    const interaction = windowInteractionRef.current;
+    if (!interaction || event.pointerId !== interaction.pointerId) return;
+    event.preventDefault();
+    const dx = (event.clientX - interaction.startX) / interaction.scale;
+    const dy = (event.clientY - interaction.startY) / interaction.scale;
+    if (interaction.kind === "app") {
+      interaction.nextX = interaction.baseX + dx;
+      interaction.nextY = interaction.baseY + dy;
+    } else {
+      const app = appsRef.current.find((item) => item.app_id === interaction.appId);
+      const min = app ? minResizeSizeForApp(app) : { width: 260, height: 190 };
+      interaction.nextWidth = Math.max(min.width, interaction.baseWidth + dx);
+      interaction.nextHeight = Math.max(min.height, interaction.baseHeight + dy);
+    }
+    applyWindowInteractionPreview(interaction);
+  };
+
+  const startWindowInteraction = (event: ReactPointerEvent<HTMLElement>, app: CanvasApp, kind: "app" | "resize") => {
+    if (isPinnedApp(app)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    const size = displaySizeForApp(app);
+    const interaction: WindowInteraction = {
+      kind,
+      appId: app.app_id,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      scale: viewport.scale,
+      baseX: app.position.x,
+      baseY: app.position.y,
+      baseWidth: size.width,
+      baseHeight: size.height,
+      nextX: app.position.x,
+      nextY: app.position.y,
+      nextWidth: size.width,
+      nextHeight: size.height,
+    };
+    windowInteractionRef.current = interaction;
+    setDrag(kind === "app"
+      ? { kind: "app", appId: app.app_id, startX: event.clientX, startY: event.clientY, x: app.position.x, y: app.position.y }
+      : { kind: "resize", appId: app.app_id, startX: event.clientX, startY: event.clientY, width: size.width, height: size.height }
+    );
+    focusWindow(app.app_id);
+    window.addEventListener("pointermove", onWindowInteractionMove, { passive: false });
+    window.addEventListener("pointerup", finishWindowInteraction);
+    window.addEventListener("pointercancel", finishWindowInteraction);
   };
 
   const onViewportPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
-    if (target.closest(".canvas-app, .folder-card, .canvas-toolbar, .app-dock, .minimap, .undo-chip")) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (target.closest(".canvas-app, .folder-card, .app-dock")) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
     setDrag({ kind: "canvas", startX: event.clientX, startY: event.clientY, viewport });
   };
 
   // Register wheel listener as non-passive so we can call preventDefault for canvas zoom.
   // We skip zoom when the pointer is over an app card's scrollable body.
+  // #10: bind once; read viewport from a ref so panning/zooming doesn't re-register the
+  // listener (which previously happened on every viewport change).
   useEffect(() => {
     const el = shellRef.current;
     if (!el) return;
@@ -452,13 +568,23 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
       event.preventDefault();
       flagDirectManip();
       const factor = event.deltaY < 0 ? 1.1 : 0.9;
-      zoomAt(event.clientX, event.clientY, viewport.scale * factor);
+      const current = viewportRef.current;
+      const rect = el.getBoundingClientRect();
+      const screenX = event.clientX - rect.left;
+      const screenY = event.clientY - rect.top;
+      const worldX = (screenX - current.x) / current.scale;
+      const worldY = (screenY - current.y) / current.scale;
+      const scale = clampScale(current.scale * factor);
+      setViewport({
+        scale,
+        x: screenX - worldX * scale,
+        y: screenY - worldY * scale,
+      });
     };
     el.addEventListener("wheel", handleWheel, { passive: false });
     return () => el.removeEventListener("wheel", handleWheel);
-  // viewport.scale needs to be current in the closure — include it
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewport.scale, viewport.x, viewport.y]);
+  }, []);
 
   useEffect(() => {
     const el = shellRef.current;
@@ -533,12 +659,20 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
     });
 
     setApps(arranged);
-    arranged.forEach((app) =>
-      patchApp(app.app_id, { position: app.position, size: app.size, z_index: app.z_index, group_id: app.group_id }, sessionContext)
-    );
+    // #11: persist all positions in parallel; a single failure shouldn't abort the rest.
+    void Promise.allSettled(
+      arranged.map((app) =>
+        patchApp(app.app_id, { position: app.position, size: app.size, z_index: app.z_index, group_id: app.group_id }, sessionContext)
+      )
+    ).then((results) => {
+      const rejected = results.filter((r) => r.status === "rejected");
+      if (rejected.length) console.warn("[LearnForge] autoArrange: 部分位置保存失败", rejected.length);
+    });
 
-    // After layout, zoom to show Zone A + B together
-    setTimeout(() => {
+    // After layout, zoom to show Zone A + B together.
+    // #16: track this timer so it's cleared on unmount (the unmount effect clears autoArrangeTimer).
+    window.clearTimeout(autoArrangeTimer.current);
+    autoArrangeTimer.current = window.setTimeout(() => {
       setViewport({ x: -10, y: -8, scale: 0.62 });
     }, 80);
   };
@@ -549,10 +683,6 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
   };
 
   const resetView = () => setViewport({ x: 0, y: 0, scale: 1 });
-  const focusSearch = () => {
-    const found = apps.find((app) => app.title.includes(query) || app.app_type.includes(query));
-    if (found) openWindow(found.app_id);
-  };
 
   const worldPositionFromClient = (clientX: number, clientY: number) => {
     const rect = shellRef.current?.getBoundingClientRect();
@@ -579,27 +709,9 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
 
   return (
     <section className="canvas-shell" data-testid="spatial-canvas">
-      <header className="canvas-toolbar">
-        <div className="brand-block">
-          <span>LearnForge V2</span>
-          <strong>学习画布</strong>
-        </div>
-        <div className="tool-group">
-          <button onClick={() => zoomAtCenter(1.12)} title="放大"><Plus size={16} /></button>
-          <button onClick={() => zoomAtCenter(0.88)} title="缩小"><Minus size={16} /></button>
-          <button onClick={resetView} title="重置视角"><LocateFixed size={16} /></button>
-          <button onClick={autoArrange} title="自动整理"><ArrowDownAZ size={16} /></button>
-          <button onClick={saveLayout} title="保存布局"><Save size={16} /></button>
-        </div>
-        <label className="canvas-search">
-          <Search size={15} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && focusSearch()} placeholder="搜索内容" />
-          <button onClick={focusSearch} title="定位"><Crosshair size={14} /></button>
-        </label>
-      </header>
       <div
         ref={shellRef}
-        className={`canvas-viewport ${drag?.kind === "canvas" ? "panning" : ""} ${resourceDragOver ? "resource-drop-active" : ""}`}
+        className={`canvas-viewport ${drag?.kind === "canvas" ? "panning" : ""} ${drag?.kind === "app" ? "window-dragging" : ""} ${drag?.kind === "resize" ? "window-resizing" : ""} ${resourceDragOver ? "resource-drop-active" : ""}`}
         onScroll={(event) => {
           event.currentTarget.scrollLeft = 0;
           event.currentTarget.scrollTop = 0;
@@ -628,33 +740,11 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
             transition: drag?.kind === "canvas" || directManip ? "none" : undefined,
           }}
         >
-          <svg className="connector-layer" viewBox="0 0 2200 1100">
-            <defs>
-              <linearGradient id="connGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#5b8cff" stopOpacity="0.7" />
-                <stop offset="100%" stopColor="#9d7bff" stopOpacity="0.7" />
-              </linearGradient>
-            </defs>
-            {/* Profile → Path (vertical in col-1) */}
-            <path d="M230 350 C230 360 230 370 230 380" />
-            {/* Profile → EnergyDemo (col-1 → col-2) */}
-            <path d="M420 195 C460 195 480 195 500 195" />
-            {/* Path → GradientDemo */}
-            <path d="M420 535 C460 535 480 535 500 535" />
-            {/* EnergyDemo → Quiz */}
-            <path d="M940 195 C955 195 965 195 970 195" />
-            {/* GradientDemo → Notes */}
-            <path d="M940 535 C955 535 965 535 970 535" />
-            {/* Quiz → Dashboard */}
-            <path d="M1360 190 C1400 190 1420 190 1440 210" />
-            {/* Notes → Knowledge */}
-            <path d="M1360 520 C1400 520 1420 510 1440 510" />
-          </svg>
           {/* Zone B — 3 monitoring apps, top row */}
           <div className="canvas-frame-b" style={{ position: "absolute", left: 25, top: 25, width: 1295, height: 360 }}>
             <span className="canvas-frame-label">监控总览</span>
           </div>
-          {focusedApp ? (
+          {focusedApp && !(drag?.kind === "app" || drag?.kind === "resize") ? (
             <div
               className="focus-halo on"
               style={{
@@ -683,13 +773,12 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
             const slot = pinned ? pinnedSlot(app) : null;
             const pos = slot ? { x: slot.x, y: slot.y } : app.position;
             const size = slot ? { width: slot.width, height: slot.height } : displaySizeForApp(app);
+            const isActiveFrame = (drag?.kind === "app" || drag?.kind === "resize") && drag.appId === app.app_id;
             return (
-            <motion.div
+            <div
               key={app.app_id}
-              initial={{ scale: 0.88, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.88, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 360, damping: 30 }}
+              data-window-frame={app.app_id}
+              className={isActiveFrame ? "window-frame is-direct-manipulating" : "window-frame"}
               style={{ position: "absolute", left: pos.x, top: pos.y, width: size.width, height: size.height, zIndex: pinned ? 12 : zIndexFor(app.app_id) }}
             >
             <AppWindow
@@ -699,16 +788,8 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
               fixed={pinned}
               dashboard={dashboard}
               onFocus={() => focusWindow(app.app_id)}
-              onDragStart={(event) => {
-                if (pinned) return;
-                setDrag({ kind: "app", appId: app.app_id, startX: event.clientX, startY: event.clientY, x: app.position.x, y: app.position.y });
-                focusWindow(app.app_id);
-              }}
-              onResizeStart={(event) => {
-                if (pinned) return;
-                const size = displaySizeForApp(app);
-                setDrag({ kind: "resize", appId: app.app_id, startX: event.clientX, startY: event.clientY, width: size.width, height: size.height });
-              }}
+              onDragStart={(event) => startWindowInteraction(event, app, "app")}
+              onResizeStart={(event) => startWindowInteraction(event, app, "resize")}
               onToggleFullscreen={() => toggleFullscreen(app.app_id)}
               onTogglePageFullscreen={() => setPageFullscreenId((current) => (current === app.app_id ? null : app.app_id))}
               onClose={!pinned ? () => closeWindow(app.app_id) : undefined}
@@ -718,10 +799,15 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
               onDashboardUpdate={onDashboardUpdate}
               sessionContext={sessionContext}
             />
-            </motion.div>
+            </div>
             );
           })())}
           </AnimatePresence>
+        </div>
+        <div className="canvas-minimap" data-testid="minimap" onPointerDown={(event) => event.stopPropagation()}>
+          <button type="button" onClick={resetView} title="在小地图中复位视角" aria-label="在小地图中复位视角">
+            <span className="minimap-viewport" />
+          </button>
         </div>
       </div>
       <footer className="app-dock dock glass glass-hi" data-testid="app-dock">
@@ -758,19 +844,6 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
           );
         })()}
       </footer>
-      {!hasFloatingWindow && (
-        <aside className="minimap glass glass-hi" data-testid="minimap">
-          <span className="mm-label">空间地图</span>
-          <button className="minimap-inner" onClick={() => setViewport({ x: -80, y: -40, scale: 0.78 })} title="跳转到学习链路">
-            {visibleApps.slice(0, 12).map((app) => (
-              <i key={app.app_id} className={app.app_id === focusedId ? "focused" : ""} style={{ left: `${Math.max(5, Math.min(88, app.position.x / 20))}%`, top: `${Math.max(12, Math.min(86, app.position.y / 12))}%`, width: `${Math.max(5, Math.min(18, app.size.width / 32))}%`, height: `${Math.max(4, Math.min(18, app.size.height / 28))}%` }} />
-            ))}
-            <span className="mm-view" />
-          </button>
-        </aside>
-      )}
-      <button className="undo-chip" onClick={resetView} title="撤销视角变化"><Undo2 size={14} />视角复位</button>
-
       {/* Folder modal — macOS spring popup */}
       <AnimatePresence>
         {activeFolderApp && (
@@ -848,6 +921,13 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
         );
       })() : null}
       </AnimatePresence>
+
+      {/* Floating zoom controls — bottom-right corner */}
+      <div className="canvas-zoom-controls">
+        <button onClick={() => zoomAtCenter(1.12)} title="放大"><Plus size={16} /></button>
+        <button onClick={() => zoomAtCenter(0.88)} title="缩小"><Minus size={16} /></button>
+        <button onClick={resetView} title="复位"><LocateFixed size={16} /></button>
+      </div>
     </section>
   );
 }
