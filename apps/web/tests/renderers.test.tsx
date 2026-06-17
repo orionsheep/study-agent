@@ -479,6 +479,26 @@ describe("component behavior", () => {
     cleanup();
   });
 
+  it("detailed explanation suggestion passes the explain requested skill", () => {
+    const onGenerate = vi.fn();
+    const { host, cleanup } = render(
+      <RichMessageContent
+        text={"可以继续展开。\n\n[[generate:detailed_analysis:动量守恒:explain]]生成详细讲解[[/generate]]"}
+        onGenerate={onGenerate}
+      />
+    );
+    const button = host.querySelector("[data-testid='generate-suggestions'] button") as HTMLButtonElement | null;
+    expect(button?.textContent).toContain("生成详细讲解");
+    act(() => button?.click());
+
+    expect(onGenerate).toHaveBeenCalledWith(
+      "请基于动量守恒生成详细讲解",
+      undefined,
+      expect.objectContaining({ key: "explain", label: "生成详细讲解" }),
+    );
+    cleanup();
+  });
+
   it("injects LearnForge deck navigation bridge for custom HTML PPT decks", () => {
     const html = `<!doctype html>
 <html>

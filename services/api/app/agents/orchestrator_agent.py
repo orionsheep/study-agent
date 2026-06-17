@@ -515,6 +515,9 @@ class OrchestratorAgent:
             "ppt": "请生成一份教学PPT，包含关键知识点和讲解大纲",
             "video": "请搜索与当前主题相关的B站教学视频",
             "image": "请生成一张教学图解，包含关键概念和公式",
+            "explain": "请生成详细讲解，做成可在画布打开的 HTML 讲解报告",
+            "detailed_explanation": "请生成详细讲解，做成可在画布打开的 HTML 讲解报告",
+            "html_explanation": "请生成详细讲解，做成可在画布打开的 HTML 讲解报告",
         }
         requested_skill = str(context.requested_skill or "").strip().lower()
         intent_message = context.message
@@ -2866,6 +2869,8 @@ class OrchestratorAgent:
             return ""
         lower = f"{topic} {context.message}".lower()
         markers: list[str] = []
+        if any(term in lower for term in ["题", "公式", "函数", "定理", "物理", "数学", "力学", "模型", "概念"]):
+            markers.append(f"[[generate:detailed_analysis:{topic}:explain]]生成详细讲解[[/generate]]")
         if any(term in lower for term in ["定理", "公式", "函数", "算法", "物理", "力学", "梯度", "排序", "模型"]):
             markers.append(f"[[generate:interactive_demo:{topic}:demo]]生成「{topic}」可交互模型[[/generate]]")
         if any(term in lower for term in ["结构", "流程", "概念", "知识点", "对比"]):
@@ -4067,6 +4072,9 @@ class UnifiedOrchestrator(OrchestratorAgent):
             "ppt": "请生成一份教学PPT，包含关键知识点和讲解大纲",
             "video": "请搜索与当前主题相关的B站教学视频",
             "image": "请生成一张教学图解，包含关键概念和公式",
+            "explain": "请生成详细讲解，做成可在画布打开的 HTML 讲解报告",
+            "detailed_explanation": "请生成详细讲解，做成可在画布打开的 HTML 讲解报告",
+            "html_explanation": "请生成详细讲解，做成可在画布打开的 HTML 讲解报告",
         }
         requested_skill = str(context.requested_skill or "").strip().lower()
         intent_message = context.message

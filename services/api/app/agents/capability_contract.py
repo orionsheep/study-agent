@@ -203,6 +203,14 @@ DETAILED_ANALYSIS_MARKERS = [
     "作业视频", "拍题", "批改", "改一下",
     "analyse", "analyze this", "solve this problem", "explain this question",
 ]
+DETAILED_EXPLANATION_GENERATIVE_MARKERS = [
+    "生成详细讲解", "生成一个详细讲解", "生成一份详细讲解", "生成详细解析",
+    "生成详细分析", "详细html讲解", "详细 html 讲解", "html讲解", "html 讲解",
+    "html解析", "html 解析", "html分析", "html 分析",
+    "详细讲解报告", "详细解析报告", "详细分析报告",
+    "生成讲解报告", "生成解析报告", "生成分析报告",
+    "做成详细讲解", "做一个详细讲解", "做一份详细讲解",
+]
 INFOGRAPHIC_IMAGE_MARKERS = ["一张图", "图片版", "海报", "精美", "视觉冲击", "成品图", "出图", "封面", "插画风", "nano banana", "nanobanana", "香蕉"]
 INFOGRAPHIC_HTML_MARKERS = ["html版", "html 版", "网页", "可编辑", "可复制", "可交互", "表格", "流程卡片", "左侧打开", "代码渲染", "html"]
 GENERIC_TOPIC_TERMS = {
@@ -224,6 +232,8 @@ def _contains_any(message: str, terms: list[str]) -> bool:
 def has_explicit_artifact_intent(message: str) -> bool:
     lowered = message.lower()
     has_generation = _contains_any(lowered, GENERATION_MARKERS)
+    if _contains_any(lowered, DETAILED_EXPLANATION_GENERATIVE_MARKERS):
+        return True
     if _contains_any(lowered, PPT_STRONG_MARKERS):
         return True
     if _contains_any(lowered, PPT_GENERATIVE_MARKERS) and has_generation:
@@ -374,14 +384,16 @@ def detect_capability(message: str) -> CapabilitySpec:
 
     # Explicit skill locks. These are authoritative for user-requested artifacts:
     # PPT stays PPT, images stay image-generation, and interactive models stay custom.html demos.
+    # "生成详细讲解" is a named HTML-explanation skill; negative correction words
+    # like "不是PPT/不是交互模型" must not steal it into another artifact type.
+    if _contains_any(lowered, DETAILED_EXPLANATION_GENERATIVE_MARKERS) or _contains_any(lowered, ["html报告", "html 报告"]):
+        return CAPABILITIES["detailed_analysis"]
     if has_interactive_correction and not has_ppt_correction:
         return CAPABILITIES["interactive_demo"]
     if has_ppt_correction:
         return CAPABILITIES["ppt"]
-    # Detailed analysis report requests must beat the generic PPT "报告" marker.
-    if _contains_any(lowered, ["html报告", "html 报告"]) or (
-        has_generation and _contains_any(lowered, ["分析报告", "解析报告", "详细分析报告", "详细解析报告"])
-    ):
+    # Detailed analysis / HTML explanation requests must beat the generic PPT "报告" marker.
+    if has_generation and _contains_any(lowered, ["分析报告", "解析报告", "详细分析报告", "详细解析报告"]):
         return CAPABILITIES["detailed_analysis"]
     if _contains_any(lowered, PPT_STRONG_MARKERS) or (
         _contains_any(lowered, PPT_GENERATIVE_MARKERS) and has_generation

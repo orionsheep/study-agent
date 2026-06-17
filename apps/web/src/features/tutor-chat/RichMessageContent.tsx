@@ -23,6 +23,7 @@ type GenerateAction = {
 };
 
 function promptForGenerate(capability: string, topic: string) {
+  if (capability === "detailed_analysis") return `请基于${topic}生成详细讲解`;
   if (capability === "interactive_demo") return `请基于${topic}生成一个可以在左侧画布打开的互动演示 App`;
   if (capability === "custom_infographic") return `请基于${topic}生成一张教学信息图`;
   if (capability === "mindmap") return `请基于${topic}生成一张思维导图`;
@@ -32,6 +33,7 @@ function promptForGenerate(capability: string, topic: string) {
 }
 
 function skillKeyForCapability(capability: string) {
+  if (capability === "detailed_analysis") return "explain";
   if (capability === "interactive_demo") return "demo";
   if (capability === "ppt") return "ppt";
   if (capability === "image_explanation" || capability === "custom_infographic") return "image";

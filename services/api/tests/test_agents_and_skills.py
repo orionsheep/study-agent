@@ -108,6 +108,46 @@ def test_requested_skill_button_locks_interactive_generation():
     assert plan.payload["expected_artifact_kind"] == "interactive_model"
 
 
+def test_requested_skill_button_locks_detailed_explanation_generation():
+    agent = UnifiedOrchestrator()
+    plan = agent.plan_turn(TutorTurnContext(message="2.1.7", requested_skill="explain"))
+
+    assert plan.task_type == "unified_hermes"
+    assert plan.payload["capability"] == "detailed_analysis"
+    assert plan.payload["requested_skill"] == "explain"
+    assert plan.payload["expected_app_types"] == ["custom.html"]
+    assert plan.payload["expected_artifact_kind"] == "html_report"
+
+
+def test_explicit_detailed_explanation_request_generates_html_report():
+    agent = UnifiedOrchestrator()
+    plan = agent.plan_turn(TutorTurnContext(message="基于动量守恒生成详细讲解"))
+
+    assert plan.task_type == "unified_hermes"
+    assert plan.payload["capability"] == "detailed_analysis"
+    assert plan.payload["requires_canvas"] is True
+    assert plan.payload["route_source"] == "capability_contract_lock"
+    assert plan.payload["expected_artifact_kind"] == "html_report"
+
+
+def test_plain_explanation_stays_answer_only_not_detailed_html():
+    agent = UnifiedOrchestrator()
+    plan = agent.plan_turn(TutorTurnContext(message="讲一下动量守恒怎么理解"))
+
+    assert plan.task_type == "unified_hermes"
+    assert plan.payload["capability"] == "answer_only"
+    assert plan.payload["requires_canvas"] is False
+
+
+def test_detailed_explanation_request_does_not_route_to_ppt_or_interactive():
+    agent = UnifiedOrchestrator()
+    plan = agent.plan_turn(TutorTurnContext(message="生成详细讲解，不是PPT，也不是交互模型"))
+
+    assert plan.task_type == "unified_hermes"
+    assert plan.payload["capability"] == "detailed_analysis"
+    assert plan.payload["expected_artifact_kind"] == "html_report"
+
+
 def test_explicit_interactive_request_still_generates_directly():
     agent = UnifiedOrchestrator()
     plan = agent.plan_turn(TutorTurnContext(message="生成一下 2.1.7 的可交互模型"))
