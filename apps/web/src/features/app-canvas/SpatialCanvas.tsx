@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { CanvasApp, CanvasViewport, DashboardSnapshot, LearningResource } from "@learnforge/app-protocol";
 import { Fullscreen, Grip, LocateFixed, Maximize2, Minus, Plus, Search, Shrink, Sparkles, Trash2, X } from "lucide-react";
 import { NativeAppRenderer } from "../learning-apps/NativeAppRenderer";
-import { isPinnedApp } from "./pinned";
+import { isPinnedApp, isSystemModule, isRealTimeResource } from "./pinned";
 import { patchApp, type SessionContext } from "../../lib/api/client";
 import { saveJson } from "../../lib/state/localStorage";
 
@@ -82,7 +82,9 @@ function appTypeLabel(appType: string) {
     "video.player": "教学视频",
     "resource.center": "学习资源",
     "resource.folder": "资源文件夹",
-    "custom.html": "互动演示"
+    "custom.html": "互动演示",
+    "english.workspace": "英语工作区",
+    "humanities.notebook": "文科笔记本"
   }[appType] ?? "学习应用";
 }
 
@@ -102,7 +104,9 @@ function appAccent(app: CanvasApp) {
     "image.explanation": "linear-gradient(135deg,#9d7bff,#7aa2ff)",
     "video.script": "linear-gradient(135deg,#f87a7a,#9d7bff)",
     "resource.center": "linear-gradient(135deg,#4ade80,#7aa2ff)",
-    "custom.html": "linear-gradient(135deg,#5b8cff,#f9a23c)"
+    "custom.html": "linear-gradient(135deg,#5b8cff,#f9a23c)",
+    "english.workspace": "linear-gradient(135deg,#f59e0b,#ef4444)",
+    "humanities.notebook": "linear-gradient(135deg,#8b5cf6,#ec4899)"
   } as Record<string, string>;
   return palette[app.app_type] ?? "var(--accent-grad)";
 }
@@ -126,6 +130,8 @@ const APP_ICON_MAP: Record<string, string> = {
   "video.script": "/icons/folder_video_app.png",
   "custom.html": "/icons/folder_infographic_app.png",
   "resource.folder": "/icons/folder_other_app.png",
+  "english.workspace": "/icons/folder_notes_app.png",
+  "humanities.notebook": "/icons/folder_mindmap_app.png",
 };
 
 const FOLDER_ICON_MAP: Record<FolderKey, string> = {
@@ -812,9 +818,11 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
       </div>
       <footer className="app-dock dock glass glass-hi" data-testid="app-dock">
         {(() => {
-          // macOS-style dock: left = 3 pinned monitoring apps | separator | right = folders
+          // 4-zone dock: pinned | system modules | real-time resources | folders
           const pinnedApps = apps.filter(isPinnedApp).slice(0, 3);
-            const contentApps = [...folderApps];
+          const systemModules = apps.filter(isSystemModule);
+          const realTimeApps = apps.filter(a => isRealTimeResource(a) && !isPinnedApp(a) && !isSystemModule(a));
+          const contentApps = [...folderApps];
           const renderDockBtn = (app: CanvasApp) => {
             const isOpen = openedSet.has(app.app_id) || isPinnedApp(app);
             const iconSrc = isFolderApp(app) ? folderIconSrc(app) : undefined;
@@ -835,8 +843,23 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
           };
           return (
             <>
+              {/* 左区：系统应用（pinned） */}
               {pinnedApps.map(renderDockBtn)}
-              {pinnedApps.length > 0 && contentApps.length > 0 && (
+              
+              {/* 左中区：系统自带模块 */}
+              {systemModules.length > 0 && pinnedApps.length > 0 && (
+                <div className="dock-sep" aria-hidden="true" />
+              )}
+              {systemModules.map(renderDockBtn)}
+              
+              {/* 右中区：实时生成资源 */}
+              {realTimeApps.length > 0 && (pinnedApps.length > 0 || systemModules.length > 0) && (
+                <div className="dock-sep" aria-hidden="true" />
+              )}
+              {realTimeApps.map(renderDockBtn)}
+              
+              {/* 右区：Folder Apps */}
+              {contentApps.length > 0 && (pinnedApps.length > 0 || systemModules.length > 0 || realTimeApps.length > 0) && (
                 <div className="dock-sep" aria-hidden="true" />
               )}
               {contentApps.map(renderDockBtn)}
