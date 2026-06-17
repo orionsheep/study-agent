@@ -820,16 +820,57 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
         {(() => {
           // 4-zone dock: pinned | system modules | real-time resources | folders
           const pinnedApps = apps.filter(isPinnedApp).slice(0, 3);
-          const systemModules = apps.filter(isSystemModule);
-          const realTimeApps = apps.filter(a => isRealTimeResource(a) && !isPinnedApp(a) && !isSystemModule(a));
+          // 系统模块固定显示（英语工作区、文科笔记本），即使 apps 中不存在
+          const SYSTEM_MODULE_DEFS: Array<{ app_id: string; app_type: string; title: string }> = [
+            { app_id: "app-english", app_type: "english.workspace", title: "英语工作区" },
+            { app_id: "app-humanities", app_type: "humanities.notebook", title: "文科笔记本" },
+          ];
+          const makeSystemModuleApp = (def: (typeof SYSTEM_MODULE_DEFS)[0]): CanvasApp => ({
+            app_id: def.app_id,
+            title: def.title,
+            app_type: def.app_type as CanvasApp["app_type"],
+            status: "ready",
+            state: "window",
+            position: { x: 0, y: 0 },
+            size: { width: 800, height: 600 },
+            z_index: 10,
+            group_id: "system-modules",
+            payload: {},
+            source_refs: [],
+            render_mode: "native_react",
+            source: {},
+            actions: [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          const systemModules = SYSTEM_MODULE_DEFS.map(def => {
+            const existing = apps.find(a => a.app_type === def.app_type);
+            return existing || makeSystemModuleApp(def);
+          });
+          // 实时资源区：限制为最近使用的3个，避免Dock过长
+          const realTimeApps = apps
+            .filter(a => isRealTimeResource(a) && !isPinnedApp(a) && !isSystemModule(a))
+            .sort(byUpdatedDesc)
+            .slice(0, 3);
           const contentApps = [...folderApps];
           const renderDockBtn = (app: CanvasApp) => {
             const isOpen = openedSet.has(app.app_id) || isPinnedApp(app);
             const iconSrc = isFolderApp(app) ? folderIconSrc(app) : undefined;
+            const isVirtualSystemModule = app.app_id === "app-english" || app.app_id === "app-humanities";
             return (
             <button
               key={app.app_id}
-              onClick={() => isFolderApp(app) ? setActiveFolderApp(activeFolderApp?.app_id === app.app_id ? null : app) : isPinnedApp(app) ? focusWindow(app.app_id) : openWindow(app.app_id)}
+              onClick={() => {
+                if (isFolderApp(app)) {
+                  setActiveFolderApp(activeFolderApp?.app_id === app.app_id ? null : app);
+                } else if (isPinnedApp(app)) {
+                  focusWindow(app.app_id);
+                } else if (isVirtualSystemModule) {
+                  onAppEvent(app.app_id, "system_module.create", { app_type: app.app_type });
+                } else {
+                  openWindow(app.app_id);
+                }
+              }}
               title={app.title}
               className="dock-app"
               style={{ background: iconSrc || APP_ICON_MAP[app.app_type] ? "transparent" : appAccent(app) }}

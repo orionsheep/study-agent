@@ -455,6 +455,34 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
       ...items.slice(-14),
       { id: `${appId}-${eventType}-${Date.now()}`, name: "app_event", status: "running", detail: `${appId}:${eventType}`, raw: `app_event:running:${appId}:${eventType}` }
     ]);
+
+    // Handle system module creation from Dock clicks (English workspace / Humanities notebook)
+    if (eventType === "system_module.create") {
+      const moduleType = payload.app_type as string;
+      const existingApp = appsRef.current.find((a) => a.app_type === moduleType);
+      if (existingApp) {
+        openWindow(existingApp.app_id);
+        focusWindow(existingApp.app_id);
+      } else {
+        const title = moduleType === "english.workspace" ? "英语工作区" : "文科笔记本";
+        try {
+          const newApp = await createCanvasApp({
+            app_type: moduleType,
+            title,
+            payload: {},
+          }, sessionContext);
+          if (newApp) {
+            setApps((current) => [...current, newApp]);
+            setOpenWindowIds((ids) => (ids.includes(newApp.app_id) ? ids : [...ids, newApp.app_id]));
+            focusWindow(newApp.app_id);
+          }
+        } catch (error) {
+          console.warn("[LearnForge] 创建系统模块失败", error);
+        }
+      }
+      return;
+    }
+
     const response = await postAppEvent(appId, eventType, payload, sessionContext);
     const typed = response as { dashboard?: DashboardSnapshot; app?: CanvasApp | null; action_status?: string; reason?: string | null };
     if (typed.app && eventType !== "layout.drag" && eventType !== "layout.resize") {
