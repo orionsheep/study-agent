@@ -91,10 +91,39 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
     children.forEach((node) => root.appendChild(node));
     return root;
   }
+  function removeDuplicateArtifactSections() {
+    try {
+      const root = ensureFitRoot();
+      if (!root || root.dataset.lfDedupeDone === '1') return;
+      const seen = new Map();
+      const headings = qsa('h1,h2', root);
+      headings.forEach((heading) => {
+        const title = String(heading.textContent || '').replace(/\\s+/g, '');
+        if (title.length < 8) return;
+        let block = heading.closest('section,article,main,[class*="lab"],[class*="Lab"],[class*="sim"],[class*="Sim"],[class*="experiment"],[class*="Experiment"],[id*="lab"],[id*="sim"]');
+        if (!block) {
+          block = heading;
+          while (block.parentElement && block.parentElement !== root) block = block.parentElement;
+        }
+        if (!block || block === root || block.getAttribute('data-lf-runtime')) return;
+        const hasInteractiveSurface = !!block.querySelector('canvas,svg,input,button,select');
+        const textSize = String(block.textContent || '').replace(/\\s+/g, '').length;
+        if (!hasInteractiveSurface && textSize < 180) return;
+        const first = seen.get(title);
+        if (first && first !== block && !first.contains(block)) {
+          block.remove();
+          return;
+        }
+        if (!first) seen.set(title, block);
+      });
+      root.dataset.lfDedupeDone = '1';
+    } catch (_) {}
+  }
   function fitWideContent() {
     try {
       const root = ensureFitRoot();
       if (!root) return;
+      removeDuplicateArtifactSections();
       root.style.transform = 'none';
       root.style.width = '100%';
       document.documentElement.style.overflowX = 'hidden';
@@ -371,6 +400,7 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
   function nudgeVisuals() {
     try {
       nudgeCount += 1;
+      removeDuplicateArtifactSections();
       fitWideContent();
       qsa('canvas').forEach((canvas) => {
         const parent = canvas.parentElement;
@@ -411,6 +441,9 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
   setTimeout(removeLeakedRuntimeText, 20);
   setTimeout(removeLeakedRuntimeText, 120);
   setTimeout(removeLeakedRuntimeText, 600);
+  setTimeout(removeDuplicateArtifactSections, 25);
+  setTimeout(removeDuplicateArtifactSections, 160);
+  setTimeout(removeDuplicateArtifactSections, 650);
   setTimeout(fitWideContent, 30);
   setTimeout(fitWideContent, 180);
   setTimeout(fitWideContent, 700);
