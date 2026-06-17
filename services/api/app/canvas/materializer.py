@@ -88,9 +88,50 @@ def normalize_latex_for_html(value: str) -> str:
         r"\\\1",
         text,
     )
+    text = repair_damaged_latex_tokens(text)
     text = re.sub(r"\\_([A-Za-z0-9{}])", r"_\1", text)
     text = re.sub(r"\$\\\s*([A-Za-z])", r"$\\\1", text)
     return text
+
+
+def repair_damaged_latex_tokens(value: str) -> str:
+    text = str(value or "")
+    if not text:
+        return ""
+
+    def repair_segment(match: re.Match[str]) -> str:
+        segment = match.group(0)
+        repairs = [
+            (r"\frac\s*12\b", r"\\frac{1}{2}"),
+            (r"(?<!\\)\bfrac\s*12\b", r"\\frac{1}{2}"),
+            (r"\frac\b", r"\\frac"),
+            (r"(?<!\\)\bfrac(?=\s*\{)", r"\\frac"),
+            (r"(?<!\\)\bsqrt\b", r"\\sqrt"),
+            (r"(?<!\\)\bquad\b", r"\\quad"),
+            (r"(?<!\\)\bleft(?=\s*[\(\[\{])", r"\\left"),
+            (r"(?<!\\)\bright(?=\s*[\)\]\}])", r"\\right"),
+            (r"(?<!\\)\btheta\b", r"\\theta"),
+            (r"(?<!\\)\barccos\b", r"\\arccos"),
+            (r"(?<!\\)\bcos\b", r"\\cos"),
+            (r"(?<!\\)\bsin\b", r"\\sin"),
+            (r"(?<!\\)\btan\b", r"\\tan"),
+            (r"(?<!\\)\bln\b", r"\\ln"),
+            (r"(?<!\\)\blog\b", r"\\log"),
+            (r"(?<!\\)\btext(?=\s*\{)", r"\\text"),
+            ("\frac\\s*rac", r"\\frac"),
+            ("\t\\s*heta", r"\\theta"),
+            ("\t\\s*ext", r"\\text"),
+            ("\r\\s*ight", r"\\right"),
+        ]
+        for pattern, replacement in repairs:
+            segment = re.sub(pattern, replacement, segment)
+        return segment
+
+    text = re.sub("\frac\\s*rac", r"\\frac", text)
+    text = re.sub("\t\\s*heta", r"\\theta", text)
+    text = re.sub("\t\\s*ext", r"\\text", text)
+    text = re.sub("\r\\s*ight", r"\\right", text)
+    return re.sub(r"(\$\$[\s\S]*?\$\$|\$[^$\n]*\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))", repair_segment, text)
 
 
 def _extract_html_body(html: str) -> str:

@@ -7,6 +7,7 @@ import { NativeAppRenderer } from "../src/features/learning-apps/NativeAppRender
 import { SpatialCanvas } from "../src/features/app-canvas/SpatialCanvas";
 import { AppLinkChip } from "../src/features/applink-flight/AppLinkChip";
 import { RichMessageContent } from "../src/features/tutor-chat/RichMessageContent";
+import { normalizeLatexForHtml } from "../src/features/custom-html-app/CustomHtmlAppRenderer";
 import { TutorChat } from "../src/features/tutor-chat/TutorChat";
 import { buildResourceCanvasAppRequest } from "../src/app/LearnForgeApp";
 import { DEFAULT_SESSION_CONTEXT, patchApp } from "../src/lib/api/client";
@@ -414,6 +415,16 @@ describe("component behavior", () => {
     expect(iframe?.srcdoc).toContain("$\\frac{1}{2}mv_0^2$");
     expect(iframe?.srcdoc).toContain("$E_k$");
     cleanup();
+  });
+
+  it("repairs LaTeX commands damaged by JSON escape decoding", () => {
+    const damaged = "<section><p>$$h = frac12(m+M)v^2$$ $$\theta = arccos left(1 - frac{h}{l} right)$$ $$\text{式1}$$</p></section>";
+    const normalized = normalizeLatexForHtml(damaged);
+
+    expect(normalized).toContain("$$h = \\frac{1}{2}(m+M)v^2$$");
+    expect(normalized).toContain("$$\\theta = \\arccos \\left(1 - \\frac{h}{l} \\right)$$");
+    expect(normalized).toContain("$$\\text{式1}$$");
+    expect(normalized).not.toContain("frac12");
   });
 
   it("does not inject math runtime into non-math interactive HTML", () => {

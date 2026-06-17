@@ -475,8 +475,42 @@ export function normalizeLatexForHtml(html: string) {
   next = next.replace(/(?:if\s*\(window\.renderMathInElement\)|window\.renderMathInElement|throwOnError:\s*false|ignoredTags:\s*\['script')[\s\S]{0,1800}?setTimeout\(renderMathNow,\s*1200\);\s*\}\)\(\);?/g, "");
   next = next.replace(/\{\s*left:\s*'\$'[\s\S]{0,1200}?setTimeout\(renderMathNow,\s*1200\);\s*\}\)\(\);?/g, "");
   next = next.replace(/\\\\(frac|sqrt|sum|int|left|right|cdot|times|div|Delta|alpha|beta|gamma|theta|lambda|mu|rho|omega|Omega|vec|overline|hat|dot|sin|cos|tan|ln|log|lim|begin|end)\b/g, "\\$1");
+  next = repairDamagedLatexTokens(next);
   next = next.replace(/\\_([A-Za-z0-9{}])/g, "_$1");
   next = next.replace(/\$\\\s*([A-Za-z])/g, "$\\$1");
+  return next;
+}
+
+function repairDamagedLatexTokens(html: string) {
+  const repairSegment = (segment: string) => segment
+    .replace(/\frac\s*12\b/g, "\\frac{1}{2}")
+    .replace(/(?<!\\)\bfrac\s*12\b/g, "\\frac{1}{2}")
+    .replace(/\frac\b/g, "\\frac")
+    .replace(/(?<!\\)\bfrac(?=\s*\{)/g, "\\frac")
+    .replace(/(?<!\\)\bsqrt\b/g, "\\sqrt")
+    .replace(/(?<!\\)\bquad\b/g, "\\quad")
+    .replace(/(?<!\\)\bleft(?=\s*[\(\[\{])/g, "\\left")
+    .replace(/(?<!\\)\bright(?=\s*[\)\]\}])/g, "\\right")
+    .replace(/(?<!\\)\btheta\b/g, "\\theta")
+    .replace(/(?<!\\)\barccos\b/g, "\\arccos")
+    .replace(/(?<!\\)\bcos\b/g, "\\cos")
+    .replace(/(?<!\\)\bsin\b/g, "\\sin")
+    .replace(/(?<!\\)\btan\b/g, "\\tan")
+    .replace(/(?<!\\)\bln\b/g, "\\ln")
+    .replace(/(?<!\\)\blog\b/g, "\\log")
+    .replace(/(?<!\\)\btext(?=\s*\{)/g, "\\text")
+    .replace(/\f\s*rac/g, "\\frac")
+    .replace(/\t\s*heta/g, "\\theta")
+    .replace(/\t\s*ext/g, "\\text")
+    .replace(/\r\s*ight/g, "\\right");
+
+  let next = String(html || "")
+    .replace(/\f\s*rac/g, "\\frac")
+    .replace(/\t\s*heta/g, "\\theta")
+    .replace(/\t\s*ext/g, "\\text")
+    .replace(/\r\s*ight/g, "\\right");
+
+  next = next.replace(/(\$\$[\s\S]*?\$\$|\$[^$\n]*\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g, (segment) => repairSegment(segment));
   return next;
 }
 
@@ -495,6 +529,10 @@ function learnForgeMathRuntimeScript() {
       if (!node.nodeValue || !/(\\\\\\\\(?:frac|sqrt|sum|int|Delta|rho|theta)|\\\\_)/.test(node.nodeValue)) return;
       node.nodeValue = node.nodeValue
         .replace(/\\\\\\\\(frac|sqrt|sum|int|left|right|cdot|times|div|Delta|alpha|beta|gamma|theta|lambda|mu|rho|omega|Omega|vec|overline|hat|dot|sin|cos|tan|ln|log|lim|begin|end)\\b/g, '\\\\$1')
+        .replace(/\\f\\s*rac/g, '\\\\frac')
+        .replace(/\\t\\s*heta/g, '\\\\theta')
+        .replace(/\\t\\s*ext/g, '\\\\text')
+        .replace(/\\r\\s*ight/g, '\\\\right')
         .replace(/\\\\_([A-Za-z0-9{}])/g, '_$1');
     });
   }

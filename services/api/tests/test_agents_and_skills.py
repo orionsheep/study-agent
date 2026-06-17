@@ -404,6 +404,17 @@ def test_html_normalizer_decodes_double_escaped_document_and_trims_json_tail():
     assert "魔方" in html
 
 
+def test_html_normalizer_repairs_json_damaged_latex_tokens():
+    raw = "<section><p>$$h = frac12(m+M)v^2$$ $$\theta = arccos left(1 - frac{h}{l} right)$$ $$\text{式1}$$</p></section>"
+
+    html = normalize_html_artifact_text(raw)
+
+    assert r"$$h = \frac{1}{2}(m+M)v^2$$" in html
+    assert r"$$\theta = \arccos \left(1 - \frac{h}{l} \right)$$" in html
+    assert r"$$\text{式1}$$" in html
+    assert "frac12" not in html
+
+
 def test_hermes_interactive_prompt_blocks_quadratic_context_bleed():
     plan = AgentPlan(
         task_type="hermes_interactive_demo",
