@@ -15,7 +15,6 @@ from pydantic import BaseModel, Field
 from app.auth import hash_password, issue_session, verify_password
 from app.agents.app_canvas_agent import AppCanvasAgent
 from app.agents.base import TutorTurnContext
-from app.agents.capability_contract import CAPABILITIES
 from app.agents.evaluator_agent import EvaluatorAgent, EvaluatorAgentInput
 from app.agents.orchestrator_agent import UnifiedOrchestrator
 from app.agents.profile_agent import ProfileAgent, ProfileAgentInput
@@ -49,10 +48,9 @@ class ChatRequest(BaseModel):
     conversation_id: str | None = None
     model_provider: str | None = None
     message: str
+    requested_skill: str | None = None
+    attachments: list[dict[str, Any]] | None = None
     image_data: list[str] | None = None
-    # Consent flow: when user approves a pending heavy generation, frontend sends this.
-    # Example: {"capability": "ppt", "topic": "傅里叶变换", "original_message": "帮我做傅里叶变换PPT"}
-    approve_action: dict[str, Any] | None = None
 
 
 class CourseRequest(BaseModel):
@@ -132,10 +130,52 @@ def _is_status_assistant_message(text: str) -> bool:
         "报告已生成并推送到画布",
         "分析完成！报告已生成",
         "HTML报告已生成，正在推送到画布",
+        "是否确认开始生成",
+        "这是一个比较耗时的任务",
+        "不会影响你继续提问",
+        "请查看左侧 Canvas",
+        "已推送到画布",
+        "产物校验没有通过",
+        "需要重新触发 Hermes",
+        "这次不会创建画布产物",
+        "没能生成达标的内容",
     ]
     if any(marker in value for marker in status_markers):
         return True
     return value.startswith("✅") and len(value) <= 80
+
+
+CHAT_CONTEXT_FETCH_LIMIT = 60
+SEMANTIC_CHAT_WINDOW_LIMIT = 24
+
+
+def _assistant_message_is_operational(item: dict[str, Any]) -> bool:
+    if str(item.get("role") or "") != "assistant":
+        return False
+    text = str(item.get("text") or "")
+    if _is_status_assistant_message(text):
+        return True
+    metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    if metadata.get("consent_required") or metadata.get("verification_failed") or metadata.get("artifact_verifier"):
+        return True
+    if metadata.get("background_generated") and any(
+        marker in text
+        for marker in [
+            "已生成并推送到画布",
+            "请查看左侧 Canvas",
+            "已推送到画布",
+            "没能生成达标的内容",
+        ]
+    ):
+        return True
+    return False
+
+
+def _semantic_chat_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    semantic = [item for item in messages if not _assistant_message_is_operational(item)]
+    if len(semantic) <= SEMANTIC_CHAT_WINDOW_LIMIT:
+        return semantic
+    return semantic[-SEMANTIC_CHAT_WINDOW_LIMIT:]
 
 
 class CanvasAppEventRequest(BaseModel):
@@ -205,6 +245,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Register english learning routes
+from app.routes.english_routes import router as english_router
+app.include_router(english_router)
+
 LOGGER = getLogger("learnforge.api")
 
 # Patterns scrubbed from exception text before it is surfaced to the client, since raw
@@ -256,13 +300,9 @@ def build_tutor_context(
         student_id=session.student_id,
         course_id=session.course_id,
         conversation_id=conversation_id,
-        limit=20,
+        limit=CHAT_CONTEXT_FETCH_LIMIT,
     )
-    semantic_recent_messages = [
-        item
-        for item in recent_messages
-        if not (item.get("role") == "assistant" and _is_status_assistant_message(str(item.get("text") or "")))
-    ]
+    semantic_recent_messages = _semantic_chat_messages(recent_messages)
     last_assistant_answer = next(
         (
             item.get("text")
@@ -318,6 +358,8 @@ def build_tutor_context(
         course_id=session.course_id,
         conversation_id=conversation_id,
         message=request.message,
+        requested_skill=request.requested_skill,
+        attachments=request.attachments or [],
         model_provider=request.model_provider,
         recent_messages=semantic_recent_messages,
         last_assistant_answer=last_assistant_answer,
@@ -833,6 +875,8 @@ async def chat_message(request: ChatRequest, headers: SessionHeaders = Depends(g
     assistant_text = "".join(event.get("text", "") for event in events if event.get("type") == "assistant.delta")
     run_id = next((str(event.get("run_id") or "") for event in events if event.get("type") == "run.started"), "")
     message_id = next((str(event.get("message_id") or "") for event in events if event.get("type") == "assistant.delta"), "")
+    if not assistant_text.strip():
+        assistant_text = f"这次没有收到 Hermes 的有效输出，任务已结束但未生成可交付内容（运行 ID: {run_id or 'unknown'}）。"
     return {"assistant_text": assistant_text, "run_id": run_id, "message_id": message_id}
 
 
@@ -842,88 +886,32 @@ async def chat_stream(request: ChatRequest, headers: SessionHeaders = Depends(ge
     orchestrator = UnifiedOrchestrator()
 
     async def generate() -> AsyncIterator[str]:
-        # ── Consent approval path: user clicked "生成" button ──
-        if request.approve_action and isinstance(request.approve_action, dict):
-            approve_capability = str(request.approve_action.get("capability") or "")
-            approve_topic = str(request.approve_action.get("topic") or request.message or "")
-            original_message = str(request.approve_action.get("original_message") or request.message or "")
-            if approve_capability and approve_topic:
-                context.message = original_message or approve_topic
-                plan = orchestrator.plan_turn(context)
-                # ── Pre-configure plan with the approved capability ──
-                # plan_turn() sets capability="hermes_decides" and empty expected types.
-                # The background task must know EXACTLY what to generate, otherwise Hermes
-                # re-decides and may choose answer_only instead of ppt/demo/report.
-                contracts = {
-                    "ppt": (["custom.html"], [], True),
-                    "interactive_demo": (["custom.html"], [], True),
-                    "detailed_analysis": (["custom.html"], [], True),
-                    "image_explanation": (["image.explanation"], [], True),
-                    "mindmap": (["mindmap.concept"], ["mindmap"], True),
-                    "quiz": (["quiz.practice"], ["quiz"], True),
-                    "code_lab": (["code.lab"], ["code_practice"], True),
-                    "video_script": (["video.script"], ["video_script"], True),
-                    "notes": (["notes.session"], ["notes"], True),
-                }
-                expected_apps, expected_resources, requires_canvas = contracts.get(
-                    approve_capability, (["custom.html"], [], True)
-                )
-                plan.payload.update({
-                    "capability": approve_capability,
-                    "topic": approve_topic,
-                    "source_material": original_message or approve_topic,
-                    "requires_canvas": requires_canvas,
-                    "expected_app_types": expected_apps,
-                    "expected_resource_types": expected_resources,
-                    # 注入该 capability 对应的 Hermes skills（如 ppt -> guizang-ppt-skill），
-                    # 让后台任务自文档化；run_hermes 当前会加载全部 skill，但显式声明更稳。
-                    "hermes_skills": list(CAPABILITIES[approve_capability].hermes_skills)
-                    if approve_capability in CAPABILITIES else [],
-                    "route_source": "user_approved",
-                })
-                run_id = orchestrator.store.create_run(
-                    context.student_id, plan.task_type,
-                    {"message": context.message, "plan": plan.model_dump(), "approved": True, "capability": approve_capability},
-                )
-                message_id = f"assistant-bg-{run_id}"
-                rag_context = orchestrator._rag_context_for_plan(plan, context)
-                source_refs = orchestrator.source_refs_for_plan(plan, context, rag_context.get("source_refs", []))
-                rag_context["source_refs"] = source_refs
-                # Spawn background Hermes sub-agent — returns immediately, doesn't block
-                orchestrator.spawn_background_generation(
-                    plan, context, rag_context, run_id, message_id, approve_capability,
-                )
-                # Send immediate acknowledgment
-                cap_labels = {
-                    "ppt": "PPT 正在后台生成中，完成后会自动推送到左侧 Canvas。你可以继续提问。",
-                    "interactive_demo": "交互演示正在后台生成中，完成后会自动推送到左侧 Canvas。你可以继续提问。",
-                    "detailed_analysis": "详细分析正在后台生成中，完成后会自动推送到左侧 Canvas。你可以继续提问。",
-                    "image_explanation": "图片正在后台生成中，完成后会自动推送到左侧 Canvas。你可以继续提问。",
-                }
-                ack_text = cap_labels.get(approve_capability, f"{approve_capability} 产物正在后台生成中，你可以继续提问。")
-                yield orchestrator.sse_line({"type": "run.started", "run_id": run_id})
-                yield orchestrator.sse_line({
-                    "type": "background.task_started",
-                    "run_id": run_id,
-                    "label": f"正在生成 {approve_capability}: {approve_topic}",
-                    "task_type": approve_capability,
-                })
-                yield orchestrator.sse_line({"type": "assistant.delta", "message_id": message_id, "text": f"✅ {ack_text}"})
-                yield orchestrator.sse_line({"type": "assistant.done", "message_id": message_id})
-                yield orchestrator.sse_line({"type": "run.done", "run_id": run_id, "status": "background"})
-                return
-
-        # ── Normal chat path ──
         plan = orchestrator.plan_turn(context)
         run_id: str | None = None
         message_id = f"assistant-error-{context.conversation_id or 'stream'}"
+        emitted_assistant_text = False
         try:
             async for event in orchestrator.execute_plan(plan, context):
                 if event.get("type") == "run.started":
                     run_id = str(event.get("run_id") or "")
                 if event.get("type") == "assistant.delta":
                     message_id = str(event.get("message_id") or message_id)
+                    emitted_assistant_text = emitted_assistant_text or bool(str(event.get("text") or "").strip())
+                if event.get("type") == "assistant.done" and not emitted_assistant_text:
+                    yield orchestrator.sse_line({
+                        "type": "assistant.delta",
+                        "message_id": message_id,
+                        "text": f"这次没有收到 Hermes 的有效输出，任务已结束但未生成可交付内容（运行 ID: {run_id or 'unknown'}）。",
+                    })
+                    emitted_assistant_text = True
                 yield orchestrator.sse_line(event)
+            if not emitted_assistant_text:
+                yield orchestrator.sse_line({
+                    "type": "assistant.delta",
+                    "message_id": message_id,
+                    "text": f"这次没有收到 Hermes 的有效输出，任务已结束但未生成可交付内容（运行 ID: {run_id or 'unknown'}）。",
+                })
+                yield orchestrator.sse_line({"type": "assistant.done", "message_id": message_id})
         except Exception as exc:
             # Log the full traceback server-side; never echo raw exception text to the
             # client (it may include filesystem paths, API key fragments, or SQL).
