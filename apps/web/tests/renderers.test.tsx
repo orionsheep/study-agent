@@ -315,7 +315,7 @@ describe("component behavior", () => {
       app_type: "custom.html",
       title: "可交互3D演示",
       size: { width: 900, height: 620 },
-      payload: { html },
+      payload: { html, artifact_kind: "interactive_model" },
     };
     const { host, cleanup } = render(
       <NativeAppRenderer
@@ -332,7 +332,58 @@ describe("component behavior", () => {
     expect(iframe?.srcdoc).toContain('id="main-content"');
     expect(iframe?.srcdoc).toContain('id="canvas-container"');
     expect(iframe?.srcdoc).toContain('<body>');
+    expect(iframe?.srcdoc).not.toContain("MutationObserver");
+    expect(iframe?.srcdoc).not.toContain("ResizeObserver");
+    expect(iframe?.srcdoc).not.toContain("nudgeVisuals");
+    expect(iframe?.srcdoc).not.toContain("window.dispatchEvent(new Event('resize'))");
+    expect(iframe?.srcdoc).not.toContain('data-lf-runtime="math-renderer"');
     expect(iframe?.srcdoc).not.toContain("lf-generated-document");
+    cleanup();
+  });
+
+  it("preserves legacy full-document interactive artifacts without front-end runtime resize", () => {
+    const html = `<!doctype html>
+<html>
+  <head><title>气体扩散</title></head>
+  <body>
+    <main class="container">
+      <h1>气体扩散物理模型动态实验室</h1>
+      <canvas id="simCanvas" width="600" height="400"></canvas>
+      <script>
+        const p_red_left = 0.5;
+        const canvas = document.getElementById('simCanvas');
+        window.addEventListener('resize', () => { canvas.dataset.ownResize = String(p_red_left); });
+      </script>
+    </main>
+  </body>
+</html>`;
+    const htmlApp: CanvasApp = {
+      ...app,
+      app_id: "app-html-gas-legacy",
+      app_type: "custom.html",
+      title: "气体扩散动态模拟物理实验室",
+      payload: { html, layout: "model_generated_interactive_demo" },
+    };
+    const { host, cleanup } = render(
+      <NativeAppRenderer
+        app={htmlApp}
+        isFullscreen
+        onEvent={() => undefined}
+        onFocusApp={() => undefined}
+        sessionContext={DEFAULT_SESSION_CONTEXT}
+      />
+    );
+    const iframe = host.querySelector("[data-testid='custom-html-renderer']") as HTMLIFrameElement | null;
+
+    expect(iframe?.srcdoc.match(/气体扩散物理模型动态实验室/g) ?? []).toHaveLength(1);
+    expect(iframe?.srcdoc.match(/<canvas\b/g) ?? []).toHaveLength(1);
+    expect(iframe?.srcdoc).toContain("window.addEventListener('resize'");
+    expect(iframe?.srcdoc).not.toContain("window.dispatchEvent(new Event('resize'))");
+    expect(iframe?.srcdoc).not.toContain("MutationObserver");
+    expect(iframe?.srcdoc).not.toContain("ResizeObserver");
+    expect(iframe?.srcdoc).not.toContain("nudgeVisuals");
+    expect(iframe?.srcdoc).not.toContain('data-lf-runtime="math-renderer"');
+    expect(iframe?.srcdoc).not.toContain("katex.min.js");
     cleanup();
   });
 
@@ -390,6 +441,10 @@ describe("component behavior", () => {
     expect(iframe?.srcdoc).not.toContain("katex.min.js");
     expect(iframe?.srcdoc).not.toContain("lf-fit-root");
     expect(iframe?.srcdoc).not.toContain("lfFitScale");
+    expect(iframe?.srcdoc).not.toContain("MutationObserver");
+    expect(iframe?.srcdoc).not.toContain("ResizeObserver");
+    expect(iframe?.srcdoc).not.toContain("nudgeVisuals");
+    expect(iframe?.srcdoc).not.toContain("window.dispatchEvent(new Event('resize'))");
     cleanup();
   });
 

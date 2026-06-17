@@ -59,13 +59,34 @@ const appTypeLabels: Partial<Record<CanvasApp["app_type"], string>> = {
 function customHtmlIsPptDeck(app: CanvasApp): boolean {
   if (app.app_type !== "custom.html") return false;
   const cap = String((app.source as Record<string, unknown>)?.capability ?? app.group_id ?? "").toLowerCase();
+  const artifactKind = String(app.payload?.artifact_kind ?? (app.source as Record<string, unknown>)?.artifact_kind ?? "").toLowerCase();
   const deckKind = String(app.payload?.deck_kind ?? app.payload?.deckKind ?? app.payload?.layout ?? "").toLowerCase();
   const html = String(app.payload?.html ?? "");
-  return cap.includes("ppt") || deckKind.includes("ppt") || deckKind.includes("deck") || /guizang|web ppt|horizontal[- ]swipe|slide deck/i.test(html);
+  return artifactKind === "ppt_deck" || cap.includes("ppt") || deckKind.includes("ppt") || deckKind.includes("deck") || /guizang|web ppt|horizontal[- ]swipe|slide deck/i.test(html);
+}
+
+function customHtmlArtifactKind(app: CanvasApp, isPptDeck: boolean): string | undefined {
+  if (app.app_type !== "custom.html") return undefined;
+  const explicit = app.payload?.artifact_kind ?? (app.source as Record<string, unknown>)?.artifact_kind;
+  if (typeof explicit === "string" && explicit.trim()) return explicit.trim();
+  if (isPptDeck) return "ppt_deck";
+  const cap = String((app.source as Record<string, unknown>)?.capability ?? app.group_id ?? "").toLowerCase();
+  const layout = String(app.payload?.layout ?? app.payload?.render_layout ?? "").toLowerCase();
+  const title = String(app.title ?? app.payload?.title ?? "").toLowerCase();
+  if (
+    cap.includes("interactive_demo")
+    || layout.includes("interactive_demo")
+    || layout.includes("interactive")
+    || /可交互|互动演示|动态模拟|模拟器|模型/.test(title)
+  ) {
+    return "interactive_model";
+  }
+  return undefined;
 }
 
 export function NativeAppRenderer({ app, dashboard, isFullscreen, onEvent, onFocusApp, onDashboardUpdate, sessionContext }: Props) {
   const isPptDeck = customHtmlIsPptDeck(app);
+  const artifactKind = customHtmlArtifactKind(app, isPptDeck);
   const Icon = isPptDeck ? Presentation : iconMap[app.app_type] ?? Boxes;
   const appTypeLabel = isPptDeck ? "网页 PPT" : appTypeLabels[app.app_type] ?? "学习应用";
   const bodyClassName = [
@@ -93,7 +114,17 @@ export function NativeAppRenderer({ app, dashboard, isFullscreen, onEvent, onFoc
       {app.app_type === "video.script" ? <VideoScriptApp app={app} /> : null}
       {app.app_type === "video.player" ? <VideoPlayerApp app={app} isFullscreen={isFullscreen} /> : null}
       {app.app_type === "resource.center" ? <ResourceCenterApp app={app} isFullscreen={isFullscreen} onDashboardUpdate={onDashboardUpdate} sessionContext={sessionContext} /> : null}
-      {app.app_type === "custom.html" ? <CustomHtmlAppRenderer code={String(app.payload.html ?? "")} theme="dark" mode="canvas" forceDeckBridge={isPptDeck} /> : null}
+      {app.app_type === "custom.html" ? (
+        <CustomHtmlAppRenderer
+          code={String(app.payload.html ?? "")}
+          codeUrl={typeof app.payload.html_url === "string" ? app.payload.html_url : undefined}
+          theme="dark"
+          mode="canvas"
+          forceDeckBridge={isPptDeck}
+          artifactKind={artifactKind}
+          sessionContext={sessionContext}
+        />
+      ) : null}
     </div>
   );
 }

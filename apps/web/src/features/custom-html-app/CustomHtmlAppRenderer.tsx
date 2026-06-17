@@ -8,6 +8,7 @@ type Props = {
   theme: "light" | "dark";
   mode?: "canvas" | "inline";
   forceDeckBridge?: boolean;
+  artifactKind?: string;
   sessionContext?: SessionContext;
 };
 
@@ -305,45 +306,152 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
   send({ type: 'widget:ready' });
   window.addEventListener('load', reportHeight);
   window.addEventListener('resize', reportHeight);
-  let nudgeQueued = false;
-  let nudgeCount = 0;
-  function nudgeVisuals() {
+  setTimeout(reportHeight, 80);
+  setTimeout(reportHeight, 400);
+  setTimeout(removeLeakedRuntimeText, 20);
+  setTimeout(removeLeakedRuntimeText, 120);
+  setTimeout(removeLeakedRuntimeText, 600);
+})();
+</script>`;
+}
+
+function learnForgeDocumentBridgeScript(widgetId: string, enableDeckBridge: boolean) {
+  const encodedWidgetId = JSON.stringify(widgetId);
+  const encodedDeckBridge = JSON.stringify(enableDeckBridge);
+  const parentOriginSnippet = `
+  const PARENT_ORIGIN = (() => { try { return parent.location.origin; } catch (e) { return "*"; } })();
+  `;
+  return `
+<script data-lf-runtime="document-bridge">
+(() => {
+  const WIDGET_ID = ${encodedWidgetId};
+  const ENABLE_DECK_BRIDGE = ${encodedDeckBridge};
+  ${parentOriginSnippet}
+  const qs = (selector, root = document) => root.querySelector(selector);
+  const qsa = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+  function send(message) {
+    parent.postMessage({ ...message, widgetId: WIDGET_ID }, PARENT_ORIGIN);
+  }
+  function removeLeakedRuntimeText() {
+    const runtimeTokens = /renderMathInElement|ignoredTags|LFRenderMath|throwOnError|DOMContentLoaded|setTimeout\\(renderMathNow/i;
     try {
-      nudgeCount += 1;
-      qsa('canvas').forEach((canvas) => {
-        const parent = canvas.parentElement;
-        const rect = parent ? parent.getBoundingClientRect() : canvas.getBoundingClientRect();
-        if ((!canvas.width || !canvas.height) && rect.width > 20 && rect.height > 20) {
-          const dpr = window.devicePixelRatio || 1;
-          canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-          canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-          canvas.style.width = rect.width + 'px';
-          canvas.style.height = rect.height + 'px';
-        }
-      });
-      window.dispatchEvent(new Event('resize'));
-      reportHeight();
+      const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+      const leaked = [];
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (node.nodeValue && runtimeTokens.test(node.nodeValue)) leaked.push(node);
+      }
+      leaked.forEach((node) => { node.nodeValue = ""; });
     } catch (_) {}
   }
-  function queueNudge() {
-    if (nudgeQueued || nudgeCount > 8) return;
-    nudgeQueued = true;
-    requestAnimationFrame(function () {
-      nudgeQueued = false;
-      nudgeVisuals();
-    });
+  function reportHeight() {
+    removeLeakedRuntimeText();
+    const height = Math.max(
+      document.documentElement ? document.documentElement.scrollHeight : 0,
+      document.body ? document.body.scrollHeight : 0,
+      document.documentElement ? Math.ceil(document.documentElement.getBoundingClientRect().height) : 0,
+      document.body ? Math.ceil(document.body.getBoundingClientRect().height) : 0
+    );
+    send({ type: 'widget:height', height });
   }
-  if (typeof MutationObserver !== 'undefined') {
-    new MutationObserver(function () { queueNudge(); }).observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+  window.addEventListener('error', (event) => {
+    send({ type: 'widget:error', message: String(event.message || 'script error') });
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    send({ type: 'widget:error', message: String(event.reason && event.reason.message || event.reason || 'unhandled rejection') });
+  });
+  let deckInstallAttempts = 0;
+  let deckInstalled = false;
+  function installDeckRuntime() {
+    if (!ENABLE_DECK_BRIDGE || deckInstalled) return;
+    deckInstallAttempts += 1;
+    const slideSelectors = [
+      'section.slide',
+      '.slide',
+      '[data-slide]',
+      '[data-layout]',
+      '.deck > section',
+      'main > section'
+    ];
+    const slides = Array.from(new Set(slideSelectors.flatMap((selector) => qsa(selector))))
+      .filter((node) => node && node.getBoundingClientRect && node.getBoundingClientRect().width > 0);
+    if (slides.length < 2) {
+      if (deckInstallAttempts < 12) setTimeout(installDeckRuntime, 120);
+      return;
+    }
+    deckInstalled = true;
+    const deck = qs('.deck') || qs('[data-deck]') || qs('main') || document.scrollingElement || document.documentElement;
+    let index = Math.max(0, slides.findIndex((slide) => {
+      const rect = slide.getBoundingClientRect();
+      return rect.left >= -20 && rect.left < window.innerWidth * 0.6;
+    }));
+    if (index < 0) index = 0;
+    function goto(nextIndex) {
+      index = Math.max(0, Math.min(slides.length - 1, nextIndex));
+      const slide = slides[index];
+      if (!slide) return;
+      try {
+        slide.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+      } catch (_) {
+        const rect = slide.getBoundingClientRect();
+        const left = (deck.scrollLeft || window.scrollX || 0) + rect.left;
+        if (deck && typeof deck.scrollTo === 'function') {
+          try { deck.scrollTo({ left, top: 0, behavior: 'smooth' }); } catch (_) { deck.scrollLeft = left; }
+        } else {
+          try { window.scrollTo({ left, top: 0, behavior: 'smooth' }); } catch (_) { window.scrollTo(left, 0); }
+        }
+      }
+      document.documentElement.dataset.lfDeckIndex = String(index + 1);
+      document.documentElement.dataset.lfDeckTotal = String(slides.length);
+      send({ type: 'deck:navigate', index: index + 1, total: slides.length });
+      reportHeight();
+    }
+    function syncIndex() {
+      const viewportWidth = Math.max(1, window.innerWidth);
+      const next = slides.reduce((best, slide, slideIndex) => {
+        const distance = Math.abs(slide.getBoundingClientRect().left);
+        return distance < best.distance ? { index: slideIndex, distance } : best;
+      }, { index, distance: viewportWidth * 2 }).index;
+      index = Math.max(0, Math.min(slides.length - 1, next));
+    }
+    window.LFDeck = {
+      slides,
+      get index() { return index; },
+      get total() { return slides.length; },
+      next: () => goto(index + 1),
+      prev: () => goto(index - 1),
+      goto
+    };
+    window.addEventListener('keydown', (event) => {
+      const tag = String(event.target && event.target.tagName || '').toLowerCase();
+      if (['input', 'textarea', 'select', 'button'].includes(tag)) return;
+      if (['ArrowRight', 'PageDown', ' ', 'Spacebar'].includes(event.key)) {
+        event.preventDefault();
+        syncIndex();
+        goto(index + 1);
+      }
+      if (['ArrowLeft', 'PageUp'].includes(event.key)) {
+        event.preventDefault();
+        syncIndex();
+        goto(index - 1);
+      }
+      if (event.key === 'Home') { event.preventDefault(); goto(0); }
+      if (event.key === 'End') { event.preventDefault(); goto(slides.length - 1); }
+    }, { capture: true });
+    setTimeout(() => goto(index), 60);
   }
-  if (typeof ResizeObserver !== 'undefined') {
-    new ResizeObserver(function () { queueNudge(); }).observe(document.documentElement);
-    if (document.body) new ResizeObserver(function () { queueNudge(); }).observe(document.body);
+  if (ENABLE_DECK_BRIDGE) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', installDeckRuntime, { once: true });
+    }
+    requestAnimationFrame(installDeckRuntime);
+    setTimeout(installDeckRuntime, 120);
+    setTimeout(installDeckRuntime, 420);
   }
-  queueNudge();
-  setTimeout(nudgeVisuals, 80);
-  setTimeout(nudgeVisuals, 300);
-  setTimeout(nudgeVisuals, 900);
+  send({ type: 'widget:ready' });
+  window.addEventListener('load', reportHeight);
+  setTimeout(reportHeight, 80);
+  setTimeout(reportHeight, 400);
   setTimeout(removeLeakedRuntimeText, 20);
   setTimeout(removeLeakedRuntimeText, 120);
   setTimeout(removeLeakedRuntimeText, 600);
@@ -444,10 +552,17 @@ function sourceLooksLikeMath(html: string) {
   return /(?:\$\$[\s\S]{1,200}?\$\$|\$[^$\n]{1,160}\$|\\\(|\\\[|\\(?:frac|sqrt|sum|int|Delta|theta|rho|vec)\b|[A-Za-z]_\{?[A-Za-z0-9]+\}?)/.test(html);
 }
 
-function injectBridgeIntoDocument(html: string, widgetId: string, enableDeckBridge: boolean) {
-  const bridge = learnForgeBridgeScript(widgetId, enableDeckBridge);
-  const rescueStyle = learnForgeFullDocumentRescueStyle();
-  const mathRuntime = sourceLooksLikeMath(html) ? learnForgeMathRuntimeScript() : "";
+function normalizeArtifactKind(artifactKind?: string) {
+  return String(artifactKind || "").trim().toLowerCase();
+}
+
+function injectBridgeIntoDocument(html: string, widgetId: string, enableDeckBridge: boolean, artifactKind?: string) {
+  const kind = normalizeArtifactKind(artifactKind);
+  const isInteractiveModel = kind === "interactive_model";
+  if (isInteractiveModel && !enableDeckBridge) return html;
+  const bridge = learnForgeDocumentBridgeScript(widgetId, enableDeckBridge);
+  const rescueStyle = kind === "ppt_deck" ? "" : learnForgeFullDocumentRescueStyle();
+  const mathRuntime = kind === "interactive_model" || kind === "ppt_deck" ? "" : sourceLooksLikeMath(html) ? learnForgeMathRuntimeScript() : "";
   const hideRuntime = learnForgeRuntimeHideStyle();
   if (/<\/head\s*>/i.test(html)) {
     html = html.replace(/<\/head\s*>/i, `${rescueStyle}${mathRuntime}${bridge}</head>`);
@@ -462,12 +577,16 @@ function injectBridgeIntoDocument(html: string, widgetId: string, enableDeckBrid
   return `${html}${hideRuntime}`;
 }
 
-function receiverPage(theme: "light" | "dark", widgetId: string, html: string, forceDeckBridge = false) {
-  const source = normalizeLatexForHtml(String(html || ""));
+function receiverPage(theme: "light" | "dark", widgetId: string, html: string, forceDeckBridge = false, artifactKind?: string) {
+  const rawSource = String(html || "");
+  const kind = normalizeArtifactKind(artifactKind);
+  const rawIsFullDocument = sourceLooksLikeFullDocument(rawSource);
+  const preserveInteractiveDocument = kind === "interactive_model" && rawIsFullDocument && !forceDeckBridge;
+  const source = preserveInteractiveDocument ? rawSource : normalizeLatexForHtml(rawSource);
   const enableDeckBridge = (forceDeckBridge || sourceLooksLikeDeck(source)) && !sourceLooksLikeNativeDeckNavigation(source);
-  const mathRuntime = sourceLooksLikeMath(source) ? learnForgeMathRuntimeScript() : "";
+  const mathRuntime = kind === "interactive_model" || kind === "ppt_deck" ? "" : sourceLooksLikeMath(source) ? learnForgeMathRuntimeScript() : "";
   if (sourceLooksLikeFullDocument(source)) {
-    return injectBridgeIntoDocument(source, widgetId, enableDeckBridge);
+    return injectBridgeIntoDocument(source, widgetId, enableDeckBridge, artifactKind);
   }
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
   :root{color-scheme:${theme};--bg:${theme === "dark" ? "#080914" : "#f8fafc"};--panel:rgba(255,255,255,.08);--panel2:rgba(255,255,255,.13);--line:rgba(202,211,255,.18);--fg:#f6f7fb;--muted:#aab3ca;--cyan:#64d8ff;--green:#7ef0b2;--amber:#ffd166;--rose:#ff7aa8;--violet:#9b8cff}
@@ -503,7 +622,7 @@ function receiverPage(theme: "light" | "dark", widgetId: string, html: string, f
   </style>${mathRuntime}${learnForgeBridgeScript(widgetId, enableDeckBridge)}</head><body><div id="widget-root">${source}</div>${learnForgeRuntimeHideStyle()}</body></html>`;
 }
 
-export function CustomHtmlAppRenderer({ code, codeUrl, theme, mode = "inline", forceDeckBridge = false, sessionContext = DEFAULT_SESSION_CONTEXT }: Props) {
+export function CustomHtmlAppRenderer({ code, codeUrl, theme, mode = "inline", forceDeckBridge = false, artifactKind, sessionContext = DEFAULT_SESSION_CONTEXT }: Props) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [remoteCode, setRemoteCode] = useState<string | null>(null);
   const [remoteError, setRemoteError] = useState<string | null>(null);
@@ -551,7 +670,7 @@ export function CustomHtmlAppRenderer({ code, codeUrl, theme, mode = "inline", f
   const key = useMemo(() => fingerprint(renderedCode), [renderedCode]);
   const widgetId = useMemo(() => `lf-${key}`, [key]);
   const [height, setHeight] = useState(getCachedHeight(key));
-  const srcDoc = useMemo(() => receiverPage(theme, widgetId, renderedCode, forceDeckBridge), [theme, widgetId, renderedCode, forceDeckBridge]);
+  const srcDoc = useMemo(() => receiverPage(theme, widgetId, renderedCode, forceDeckBridge, artifactKind), [theme, widgetId, renderedCode, forceDeckBridge, artifactKind]);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
