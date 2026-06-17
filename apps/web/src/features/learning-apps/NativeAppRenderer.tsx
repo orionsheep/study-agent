@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { CanvasApp, DashboardSnapshot } from "@learnforge/app-protocol";
-import { Activity, BookOpen, Boxes, Brain, CheckCircle2, Code2, ExternalLink, FileImage, Film, Gauge, GitBranch, Image, Maximize2, NotebookPen, Presentation, RotateCcw, Route, Search, Tags, UserRound, ZoomIn, ZoomOut } from "lucide-react";
+import { Activity, BookOpen, Boxes, Brain, CheckCircle2, Code2, ExternalLink, FileImage, Film, Gauge, GitBranch, Image, Languages, Maximize2, NotebookPen, Presentation, RotateCcw, Route, Search, Tags, UserRound, ZoomIn, ZoomOut } from "lucide-react";
 import { fetchResources, postAppEvent, postResourceFeedback, submitQuiz, type SessionContext } from "../../lib/api/client";
 import { gradientDescent, isLearningRateUnstable, workEnergy, type WorkEnergyInput } from "./calculations";
 import { CustomHtmlAppRenderer } from "../custom-html-app/CustomHtmlAppRenderer";
@@ -33,7 +33,9 @@ const iconMap: Partial<Record<CanvasApp["app_type"], typeof Boxes>> = {
   "video.player": Film,
   "resource.center": BookOpen,
   "resource.folder": Boxes,
-  "custom.html": Image
+  "custom.html": Image,
+  "english.workspace": Languages,
+  "humanities.notebook": BookOpen
 };
 
 const appTypeLabels: Partial<Record<CanvasApp["app_type"], string>> = {
@@ -53,7 +55,9 @@ const appTypeLabels: Partial<Record<CanvasApp["app_type"], string>> = {
   "video.player": "教学视频",
   "resource.center": "学习资源",
   "resource.folder": "资源文件夹",
-  "custom.html": "互动演示"
+  "custom.html": "互动演示",
+  "english.workspace": "英语工作区",
+  "humanities.notebook": "文科笔记本"
 };
 
 function customHtmlIsPptDeck(app: CanvasApp): boolean {
@@ -114,6 +118,8 @@ export function NativeAppRenderer({ app, dashboard, isFullscreen, onEvent, onFoc
       {app.app_type === "video.script" ? <VideoScriptApp app={app} /> : null}
       {app.app_type === "video.player" ? <VideoPlayerApp app={app} isFullscreen={isFullscreen} /> : null}
       {app.app_type === "resource.center" ? <ResourceCenterApp app={app} isFullscreen={isFullscreen} onDashboardUpdate={onDashboardUpdate} sessionContext={sessionContext} /> : null}
+      {app.app_type === "english.workspace" ? <EnglishWorkspaceApp app={app} onEvent={onEvent} /> : null}
+      {app.app_type === "humanities.notebook" ? <HumanitiesNotebookApp app={app} onEvent={onEvent} /> : null}
       {app.app_type === "custom.html" ? (
         <CustomHtmlAppRenderer
           code={String(app.payload.html ?? "")}
@@ -1320,6 +1326,105 @@ function ResourceCenterApp({ app, isFullscreen, onDashboardUpdate, sessionContex
         ) : <p className="feedback-status">没有匹配资源。</p>}
       </div>
       {status ? <p className="feedback-status" data-testid="resource-feedback-status">{status}</p> : null}
+    </div>
+  );
+}
+
+// ── English Workspace ─────────────────────────────────────────────────────
+function EnglishWorkspaceApp({ app, onEvent }: { app: CanvasApp; onEvent: Props["onEvent"] }) {
+  const [activeTab, setActiveTab] = useState<"vocabulary" | "fission" | "quiz" | "chat">("vocabulary");
+  const [selectedWord, setSelectedWord] = useState<string>(String(app.payload?.incoming_word ?? app.payload?.selected_word ?? ""));
+
+  // Listen for incoming_word updates from external events
+  useEffect(() => {
+    const incoming = app.payload?.incoming_word as string | undefined;
+    if (incoming && incoming !== selectedWord) {
+      setSelectedWord(incoming);
+      setActiveTab("fission");
+    }
+  }, [app.payload?.incoming_word]);
+
+  const tabs = [
+    { key: "vocabulary" as const, label: "单词列表", icon: BookOpen },
+    { key: "fission" as const, label: "裂变图", icon: GitBranch },
+    { key: "quiz" as const, label: "测验", icon: CheckCircle2 },
+    { key: "chat" as const, label: "AI 对话", icon: Sparkles },
+  ];
+
+  return (
+    <div className="english-workspace" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      {/* Tab bar */}
+      <div className="ew-tabs" style={{ display: "flex", gap: 4, padding: "8px 12px", borderBottom: "1px solid var(--border-1)" }}>
+        {tabs.map((t) => {
+          const Icon = t.icon;
+          const isActive = activeTab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={isActive ? "ew-tab-active" : "ew-tab"}
+              style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8,
+                border: "none", cursor: "pointer", fontSize: 13,
+                background: isActive ? "var(--accent-grad)" : "transparent",
+                color: isActive ? "#fff" : "var(--text-2)",
+              }}
+            >
+              <Icon size={14} /> {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab content */}
+      <div className="ew-content" style={{ flex: 1, overflow: "auto", padding: 12 }}>
+        {activeTab === "vocabulary" && (
+          <div className="ew-placeholder">
+            <p>单词列表</p>
+            <p style={{ color: "var(--text-3)", fontSize: 13 }}>从 english-word-fission 提取的虚拟滚动单词列表</p>
+          </div>
+        )}
+        {activeTab === "fission" && (
+          <div className="ew-placeholder">
+            <p>裂变图</p>
+            <p style={{ color: "var(--text-3)", fontSize: 13 }}>d3-force 力导向图，中心词：{selectedWord || "未选择"}</p>
+            {selectedWord && (
+              <button
+                onClick={() => onEvent(app.app_id, "english.setImmersive", { word: selectedWord })}
+                style={{ marginTop: 12, padding: "8px 16px", borderRadius: 8, border: "none", background: "var(--accent-grad)", color: "#fff", cursor: "pointer" }}
+              >
+                沉浸模式
+              </button>
+            )}
+          </div>
+        )}
+        {activeTab === "quiz" && (
+          <div className="ew-placeholder">
+            <p>测验</p>
+            <p style={{ color: "var(--text-3)", fontSize: 13 }}>拼写/选择/回忆三种测验模式</p>
+          </div>
+        )}
+        {activeTab === "chat" && (
+          <div className="ew-placeholder">
+            <p>AI 英语助手</p>
+            <p style={{ color: "var(--text-3)", fontSize: 13 }}>对接 LearnForge Agent（EnglishAgent）</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Humanities Notebook ──────────────────────────────────────────────────
+function HumanitiesNotebookApp({ app }: { app: CanvasApp }) {
+  return (
+    <div className="humanities-notebook" style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+      <BookOpen size={48} style={{ color: "var(--text-3)" }} />
+      <h3 style={{ margin: 0, fontSize: 18, color: "var(--text-1)" }}>文科笔记本</h3>
+      <p style={{ margin: 0, fontSize: 14, color: "var(--text-3)", textAlign: "center", maxWidth: 300 }}>
+        NotebookLM 风格的文科文档分析系统
+      </p>
+      <p style={{ margin: 0, fontSize: 13, color: "var(--text-3)" }}>功能开发中，敬请期待</p>
     </div>
   );
 }
