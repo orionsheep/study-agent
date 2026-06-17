@@ -1376,7 +1376,7 @@ class HermesTaskExecutor:
 - `ppt`: 使用 guizang-ppt-skill / ppt-skill 实时生成网页 PPT deck。
 - `image_explanation`: 使用 image-generation-skill 规划图片生成；后端会调用 Gemini 图片接口生成真实图片。
 - `interactive_demo`: 使用 custom-html-app-skill 实时生成动态/可交互模型。
-- `detailed_analysis`: 使用 detailed-analysis-skill 生成题目/作业/图片分析 HTML。严格限定：只有用户上传了具体题目图片并明确要求讲解时才用。
+- `detailed_analysis`: 使用 detailed-analysis-skill 生成「生成详细讲解」HTML 报告。只有用户明确要求“生成详细讲解 / 详细 HTML 讲解 / 详细解析报告”，或上传具体题目图片并明确要求生成讲解报告时才用。
 - `custom_infographic`, `mindmap`, `quiz`, `code_lab`, `video_script`, `notes`, `learning_path`, `resource_bundle`: 按对应 Skill 实时生成。
 
 	硬规则:
@@ -1487,14 +1487,14 @@ class HermesTaskExecutor:
 | **练习题/测验** | "出题"、"测试"、"练习题"、"给我出几道题" | JSON → quiz.practice |
 | **代码实验** | "编程"、"写代码"、"代码演示" | JSON → code.lab |
 | **生成图片** | "画图"、"生成图片"、"示意图" | JSON → image.explanation |
-| **题目讲解/详细分析** | 上传了题目图片 + "讲解"、"分析这道题" | HTML 报告 |
+| **生成详细讲解/HTML讲解报告** | "生成详细讲解"、"详细HTML讲解"、"生成详细解析报告"，或上传题目图片 + 明确要求生成讲解报告 | HTML 报告 |
 | **笔记整理** | "记笔记"、"整理笔记" | JSON → notes.session |
 
 ### 🔑 关键判断规则
 
 1. **DEFAULT = answer_only**：你没有收到明确产物指令 → 纯文本回答。绝不上传 HTML/apps/resources。
 2. **概念解释 ≠ 报告**："什么是机器学习"、"解释一下快速排序"、"微积分怎么理解" — 这些都是 answer_only，**不是** detailed_analysis。
-3. **detailed_analysis 严格限定**：只用于用户上传了具体题目图片/文件 + 明确要求讲解/分析。没有上传图片的纯文字提问不能变成 HTML 报告。
+3. **detailed_analysis 严格限定**：只用于显式“生成详细讲解/HTML讲解报告/详细解析报告”，或用户上传了具体题目图片/文件并明确要求生成讲解报告。普通纯文字提问不能变成 HTML 报告。
 4. **记忆确认 → answer_only**："你还记得吗"、"我之前说过什么"、"我的弱点是什么" → 纯文本回答。
 5. **PPT ≠ 普通解释**：只有用户说「做PPT/幻灯片/课件/deck」才是 PPT。解释一个概念不是 PPT。
 6. **宁可少生成，不要多生成**：模棱两可时，选 answer_only。用户真的需要产物会再明确说。
@@ -1509,8 +1509,10 @@ class HermesTaskExecutor:
 | "解释一下牛顿第二定律" | answer_only | interactive_demo |
 | "你觉得我数学哪里弱" | answer_only | detailed_analysis |
 | "帮我做个傅里叶变换的PPT" | ppt | answer_only |
+| "基于傅里叶变换生成详细讲解" | detailed_analysis | answer_only / ppt |
 | "生成一个单摆运动的交互演示" | interactive_demo | answer_only |
-| [上传数学题图片] "帮我看看这道题" | detailed_analysis | answer_only |
+| [上传数学题图片] "帮我看看这道题" | answer_only | detailed_analysis |
+| [上传数学题图片] "生成详细讲解" | detailed_analysis | answer_only |
 | "帮我搜一下B站上的微积分视频" | video_search | answer_only |
 | "画一个细胞结构示意图" | image_explanation | answer_only |
 | "帮我出5道一元二次方程练习题" | quiz | answer_only |
