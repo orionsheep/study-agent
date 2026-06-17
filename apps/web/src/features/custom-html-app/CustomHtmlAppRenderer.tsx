@@ -67,6 +67,57 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
     );
     send({ type: 'widget:height', height });
   }
+  function ensureFitRoot() {
+    if (!document.body) return null;
+    let root = document.getElementById('lf-fit-root');
+    if (root) return root;
+    root = document.createElement('div');
+    root.id = 'lf-fit-root';
+    root.style.transformOrigin = 'top left';
+    root.style.width = '100%';
+    root.style.minHeight = '100%';
+    const children = Array.from(document.body.childNodes).filter((node) => {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const element = node;
+        if (element.id === 'lf-fit-root') return false;
+        if (element.getAttribute && element.getAttribute('data-lf-runtime')) return false;
+        if (element.matches && element.matches('script[data-lf-runtime],style[data-lf-runtime],link[data-lf-runtime]')) return false;
+      }
+      if (node.nodeType === Node.TEXT_NODE && !String(node.nodeValue || '').trim()) return false;
+      return true;
+    });
+    if (!children.length) return null;
+    document.body.insertBefore(root, children[0]);
+    children.forEach((node) => root.appendChild(node));
+    return root;
+  }
+  function fitWideContent() {
+    try {
+      const root = ensureFitRoot();
+      if (!root) return;
+      root.style.transform = 'none';
+      root.style.width = '100%';
+      document.documentElement.style.overflowX = 'hidden';
+      document.body.style.overflowX = 'hidden';
+      const viewportWidth = Math.max(1, document.documentElement.clientWidth || window.innerWidth || 1);
+      const contentWidth = Math.max(
+        root.scrollWidth || 0,
+        document.body.scrollWidth || 0,
+        document.documentElement.scrollWidth || 0,
+        root.getBoundingClientRect ? root.getBoundingClientRect().width : 0
+      );
+      if (contentWidth <= viewportWidth + 8) {
+        document.body.style.minHeight = '';
+        return;
+      }
+      const scale = Math.max(0.5, Math.min(1, viewportWidth / contentWidth));
+      root.style.width = (100 / scale) + '%';
+      root.style.transform = 'scale(' + scale + ')';
+      const rect = root.getBoundingClientRect();
+      document.body.style.minHeight = Math.ceil(rect.height + 8) + 'px';
+      document.body.dataset.lfFitScale = scale.toFixed(3);
+    } catch (_) {}
+  }
   function installLearnForgeRuntime() {
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
     const toNumber = (value, fallback = 0) => {
@@ -320,6 +371,7 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
   function nudgeVisuals() {
     try {
       nudgeCount += 1;
+      fitWideContent();
       qsa('canvas').forEach((canvas) => {
         const parent = canvas.parentElement;
         const rect = parent ? parent.getBoundingClientRect() : canvas.getBoundingClientRect();
@@ -333,6 +385,7 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
       });
       resetCanvasTransforms();
       window.dispatchEvent(new Event('resize'));
+      fitWideContent();
       reportHeight();
     } catch (_) {}
   }
@@ -358,6 +411,9 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
   setTimeout(removeLeakedRuntimeText, 20);
   setTimeout(removeLeakedRuntimeText, 120);
   setTimeout(removeLeakedRuntimeText, 600);
+  setTimeout(fitWideContent, 30);
+  setTimeout(fitWideContent, 180);
+  setTimeout(fitWideContent, 700);
 })();
 </script>`;
 }
@@ -367,6 +423,7 @@ function learnForgeFullDocumentRescueStyle() {
 html,body{width:100%;height:100%;min-height:100%;margin:0}
 body{min-height:100vh}
 canvas,svg{max-width:100%}
+#lf-fit-root{transform-origin:top left}
 :where(.layout-container,.stage-panel,.canvas-wrapper,[class*="stage"],[id*="canvas"]){min-width:0;min-height:0}
 :where(.canvas-wrapper,[id*="canvas"]){overflow:hidden}
 [data-lf-runtime]{display:none!important;visibility:hidden!important}

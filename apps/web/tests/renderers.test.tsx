@@ -359,8 +359,36 @@ describe("component behavior", () => {
 
     expect(iframe?.srcdoc).toContain("renderMathInElement");
     expect(iframe?.srcdoc).toContain("katex.min.js");
+    expect(iframe?.srcdoc).toContain('data-lf-runtime="math-renderer"');
     expect(iframe?.srcdoc).toContain("$\\frac{1}{2}mv_0^2$");
     expect(iframe?.srcdoc).toContain("$E_k$");
+    cleanup();
+  });
+
+  it("injects overflow fitting for wide custom HTML artifacts", () => {
+    const htmlApp: CanvasApp = {
+      ...app,
+      app_id: "app-html-wide",
+      app_type: "custom.html",
+      title: "宽布局实验室",
+      payload: {
+        html: "<section style='width:2400px'><h1>气体扩散动态模拟物理实验室</h1><div>宽内容</div></section>",
+      },
+    };
+    const { host, cleanup } = render(
+      <NativeAppRenderer
+        app={htmlApp}
+        isFullscreen
+        onEvent={() => undefined}
+        onFocusApp={() => undefined}
+        sessionContext={DEFAULT_SESSION_CONTEXT}
+      />
+    );
+    const iframe = host.querySelector("[data-testid='custom-html-renderer']") as HTMLIFrameElement | null;
+
+    expect(iframe?.srcdoc).toContain("fitWideContent");
+    expect(iframe?.srcdoc).toContain("lf-fit-root");
+    expect(iframe?.srcdoc).toContain("lfFitScale");
     cleanup();
   });
 
