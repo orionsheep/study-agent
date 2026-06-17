@@ -9,6 +9,7 @@ import { AppLinkChip } from "../src/features/applink-flight/AppLinkChip";
 import { RichMessageContent } from "../src/features/tutor-chat/RichMessageContent";
 import { normalizeLatexForHtml } from "../src/features/custom-html-app/CustomHtmlAppRenderer";
 import { TutorChat } from "../src/features/tutor-chat/TutorChat";
+import { ChatComposer } from "../src/components/chat/ChatComposer";
 import { buildResourceCanvasAppRequest } from "../src/app/LearnForgeApp";
 import { DEFAULT_SESSION_CONTEXT, patchApp } from "../src/lib/api/client";
 import type { ChatMessage, TraceItem } from "../src/lib/events/agentEvents";
@@ -495,6 +496,44 @@ describe("component behavior", () => {
       "请基于动量守恒生成详细讲解",
       undefined,
       expect.objectContaining({ key: "explain", label: "生成详细讲解" }),
+    );
+    cleanup();
+  });
+
+  it("composer skill menu includes detailed explanation generation", () => {
+    const onActiveSkillChange = vi.fn();
+    const { host, cleanup } = render(
+      <ChatComposer
+        input=""
+        onInputChange={() => undefined}
+        onSubmit={() => undefined}
+        isStreaming={false}
+        attachments={[]}
+        onAddFiles={() => undefined}
+        onRemoveAttachment={() => undefined}
+        listening={false}
+        onToggleVoice={() => undefined}
+        imageInputRef={React.createRef<HTMLInputElement>()}
+        fileInputRef={React.createRef<HTMLInputElement>()}
+        waveCanvasRef={React.createRef<HTMLCanvasElement>()}
+        onActiveSkillChange={onActiveSkillChange}
+        onSummarize={() => undefined}
+      />
+    );
+    const trigger = host.querySelector("button[title='附加功能']") as HTMLButtonElement | null;
+    act(() => trigger?.click());
+    const detailedButton = Array.from(host.querySelectorAll(".composer-skill-item")).find((button) =>
+      button.textContent?.includes("生成详细讲解"),
+    ) as HTMLButtonElement | undefined;
+
+    expect(detailedButton).toBeTruthy();
+    act(() => detailedButton?.click());
+    expect(onActiveSkillChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "explain",
+        label: "生成详细讲解",
+        prompt: "请生成详细讲解，做成可在画布打开的 HTML 讲解报告",
+      }),
     );
     cleanup();
   });

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { FC } from "react";
-import { Film, ImagePlus, NotebookPen, Plus, Sparkles } from "lucide-react";
+import { FileText, Film, ImagePlus, NotebookPen, Plus, Sparkles } from "lucide-react";
 
 /* ── Types ── */
 
@@ -14,6 +14,7 @@ const SKILLS: SkillItem[] = [
   { key: "video", icon: Film, label: "搜索视频", prompt: "请搜索与当前主题相关的B站教学视频" },
   { key: "image", icon: ImagePlus, label: "生成图片", prompt: "请生成一张教学图解，包含关键概念和公式" },
   { key: "demo", icon: Sparkles, label: "可交互模型", prompt: "请生成一个可交互的演示模型，让我能动手操作理解" },
+  { key: "explain", icon: FileText, label: "生成详细讲解", prompt: "请生成详细讲解，做成可在画布打开的 HTML 讲解报告" },
   { key: "notes", icon: NotebookPen, label: "整理到笔记 App", action: "summarize" },
 ];
 

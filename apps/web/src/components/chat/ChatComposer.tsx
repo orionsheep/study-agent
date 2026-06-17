@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, type FC, type FormEvent, type RefObject } from "react";
-import { Film, ImagePlus, Mic, NotebookPen, Paperclip, Plus, Presentation, Send, Sparkles, Square, X } from "lucide-react";
+import { FileText, Film, ImagePlus, Mic, NotebookPen, Paperclip, Plus, Presentation, Send, Sparkles, Square, X } from "lucide-react";
 
 /* ── Types ── */
 
@@ -87,6 +87,15 @@ const SKILLS: SkillDef[] = [
     prompt: "请生成一个可交互的演示模型，让我能动手操作理解",
   },
   {
+    key: "explain",
+    icon: FileText,
+    label: "生成详细讲解",
+    color: "#facc15",
+    bgColor: "rgba(250, 204, 21, 0.12)",
+    borderColor: "rgba(250, 204, 21, 0.4)",
+    prompt: "请生成详细讲解，做成可在画布打开的 HTML 讲解报告",
+  },
+  {
     key: "notes",
     icon: NotebookPen,
     label: "整理到笔记",
@@ -102,6 +111,7 @@ const SKILL_ICON_MAP: Record<string, FC<{ size: number; className?: string }>> =
   image: ImagePlus,
   ppt: Presentation,
   demo: Sparkles,
+  explain: FileText,
   notes: NotebookPen,
 };
 
