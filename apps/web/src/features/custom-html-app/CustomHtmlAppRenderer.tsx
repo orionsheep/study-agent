@@ -40,7 +40,25 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
   function send(message) {
     parent.postMessage({ ...message, widgetId: WIDGET_ID }, PARENT_ORIGIN);
   }
+  function removeLeakedRuntimeText() {
+    const runtimeTokens = /renderMathInElement|ignoredTags|LFRenderMath|throwOnError|DOMContentLoaded|setTimeout\\(renderMathNow/i;
+    try {
+      const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+      const leaked = [];
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (node.nodeValue && runtimeTokens.test(node.nodeValue)) leaked.push(node);
+      }
+      leaked.forEach((node) => {
+        node.nodeValue = "";
+      });
+      document.querySelectorAll('[data-lf-runtime],script[data-lf-runtime],style[data-lf-runtime],link[data-lf-runtime]').forEach((node) => {
+        node.setAttribute('aria-hidden', 'true');
+      });
+    } catch (_) {}
+  }
   function reportHeight() {
+    removeLeakedRuntimeText();
     const height = Math.max(
       document.documentElement ? document.documentElement.scrollHeight : 0,
       document.body ? document.body.scrollHeight : 0,
@@ -337,6 +355,9 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
   setTimeout(nudgeVisuals, 80);
   setTimeout(nudgeVisuals, 300);
   setTimeout(nudgeVisuals, 900);
+  setTimeout(removeLeakedRuntimeText, 20);
+  setTimeout(removeLeakedRuntimeText, 120);
+  setTimeout(removeLeakedRuntimeText, 600);
 })();
 </script>`;
 }
@@ -354,6 +375,8 @@ canvas,svg{max-width:100%}
 
 export function normalizeLatexForHtml(html: string) {
   let next = String(html || "");
+  next = next.replace(/(?:if\s*\(window\.renderMathInElement\)|window\.renderMathInElement|throwOnError:\s*false|ignoredTags:\s*\['script')[\s\S]{0,1800}?setTimeout\(renderMathNow,\s*1200\);\s*\}\)\(\);?/g, "");
+  next = next.replace(/\{\s*left:\s*'\$'[\s\S]{0,1200}?setTimeout\(renderMathNow,\s*1200\);\s*\}\)\(\);?/g, "");
   next = next.replace(/\\\\(frac|sqrt|sum|int|left|right|cdot|times|div|Delta|alpha|beta|gamma|theta|lambda|mu|rho|omega|Omega|vec|overline|hat|dot|sin|cos|tan|ln|log|lim|begin|end)\b/g, "\\$1");
   next = next.replace(/\\_([A-Za-z0-9{}])/g, "_$1");
   next = next.replace(/\$\\\s*([A-Za-z])/g, "$\\$1");
