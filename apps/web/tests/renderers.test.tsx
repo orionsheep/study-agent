@@ -365,14 +365,14 @@ describe("component behavior", () => {
     cleanup();
   });
 
-  it("injects overflow fitting for wide custom HTML artifacts", () => {
+  it("does not inject math runtime into non-math interactive HTML", () => {
     const htmlApp: CanvasApp = {
       ...app,
-      app_id: "app-html-wide",
+      app_id: "app-html-no-math",
       app_type: "custom.html",
-      title: "宽布局实验室",
+      title: "气体实验室",
       payload: {
-        html: "<section style='width:2400px'><h1>气体扩散动态模拟物理实验室</h1><div>宽内容</div></section>",
+        html: "<section><h1>气体扩散动态模拟物理实验室</h1><canvas></canvas><button>暂停模拟</button></section>",
       },
     };
     const { host, cleanup } = render(
@@ -386,38 +386,10 @@ describe("component behavior", () => {
     );
     const iframe = host.querySelector("[data-testid='custom-html-renderer']") as HTMLIFrameElement | null;
 
-    expect(iframe?.srcdoc).toContain("fitWideContent");
-    expect(iframe?.srcdoc).toContain("lf-fit-root");
-    expect(iframe?.srcdoc).toContain("lfFitScale");
-    cleanup();
-  });
-
-  it("injects duplicate-section cleanup for repeated custom HTML labs", () => {
-    const htmlApp: CanvasApp = {
-      ...app,
-      app_id: "app-html-duplicate-lab",
-      app_type: "custom.html",
-      title: "重复实验室",
-      payload: {
-        html: [
-          "<section><h1>气体扩散物理模型动态实验室</h1><canvas></canvas><button>暂停模拟</button></section>",
-          "<section><h1>气体扩散物理模型动态实验室</h1><canvas></canvas><button>暂停模拟</button></section>",
-        ].join(""),
-      },
-    };
-    const { host, cleanup } = render(
-      <NativeAppRenderer
-        app={htmlApp}
-        isFullscreen
-        onEvent={() => undefined}
-        onFocusApp={() => undefined}
-        sessionContext={DEFAULT_SESSION_CONTEXT}
-      />
-    );
-    const iframe = host.querySelector("[data-testid='custom-html-renderer']") as HTMLIFrameElement | null;
-
-    expect(iframe?.srcdoc).toContain("removeDuplicateArtifactSections");
-    expect(iframe?.srcdoc).toContain("lfDedupeDone");
+    expect(iframe?.srcdoc).not.toContain('data-lf-runtime="math-renderer"');
+    expect(iframe?.srcdoc).not.toContain("katex.min.js");
+    expect(iframe?.srcdoc).not.toContain("lf-fit-root");
+    expect(iframe?.srcdoc).not.toContain("lfFitScale");
     cleanup();
   });
 

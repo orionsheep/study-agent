@@ -67,86 +67,6 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
     );
     send({ type: 'widget:height', height });
   }
-  function ensureFitRoot() {
-    if (!document.body) return null;
-    let root = document.getElementById('lf-fit-root');
-    if (root) return root;
-    root = document.createElement('div');
-    root.id = 'lf-fit-root';
-    root.style.transformOrigin = 'top left';
-    root.style.width = '100%';
-    root.style.minHeight = '100%';
-    const children = Array.from(document.body.childNodes).filter((node) => {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const element = node;
-        if (element.id === 'lf-fit-root') return false;
-        if (element.getAttribute && element.getAttribute('data-lf-runtime')) return false;
-        if (element.matches && element.matches('script[data-lf-runtime],style[data-lf-runtime],link[data-lf-runtime]')) return false;
-      }
-      if (node.nodeType === Node.TEXT_NODE && !String(node.nodeValue || '').trim()) return false;
-      return true;
-    });
-    if (!children.length) return null;
-    document.body.insertBefore(root, children[0]);
-    children.forEach((node) => root.appendChild(node));
-    return root;
-  }
-  function removeDuplicateArtifactSections() {
-    try {
-      const root = ensureFitRoot();
-      if (!root || root.dataset.lfDedupeDone === '1') return;
-      const seen = new Map();
-      const headings = qsa('h1,h2', root);
-      headings.forEach((heading) => {
-        const title = String(heading.textContent || '').replace(/\\s+/g, '');
-        if (title.length < 8) return;
-        let block = heading.closest('section,article,main,[class*="lab"],[class*="Lab"],[class*="sim"],[class*="Sim"],[class*="experiment"],[class*="Experiment"],[id*="lab"],[id*="sim"]');
-        if (!block) {
-          block = heading;
-          while (block.parentElement && block.parentElement !== root) block = block.parentElement;
-        }
-        if (!block || block === root || block.getAttribute('data-lf-runtime')) return;
-        const hasInteractiveSurface = !!block.querySelector('canvas,svg,input,button,select');
-        const textSize = String(block.textContent || '').replace(/\\s+/g, '').length;
-        if (!hasInteractiveSurface && textSize < 180) return;
-        const first = seen.get(title);
-        if (first && first !== block && !first.contains(block)) {
-          block.remove();
-          return;
-        }
-        if (!first) seen.set(title, block);
-      });
-      root.dataset.lfDedupeDone = '1';
-    } catch (_) {}
-  }
-  function fitWideContent() {
-    try {
-      const root = ensureFitRoot();
-      if (!root) return;
-      removeDuplicateArtifactSections();
-      root.style.transform = 'none';
-      root.style.width = '100%';
-      document.documentElement.style.overflowX = 'hidden';
-      document.body.style.overflowX = 'hidden';
-      const viewportWidth = Math.max(1, document.documentElement.clientWidth || window.innerWidth || 1);
-      const contentWidth = Math.max(
-        root.scrollWidth || 0,
-        document.body.scrollWidth || 0,
-        document.documentElement.scrollWidth || 0,
-        root.getBoundingClientRect ? root.getBoundingClientRect().width : 0
-      );
-      if (contentWidth <= viewportWidth + 8) {
-        document.body.style.minHeight = '';
-        return;
-      }
-      const scale = Math.max(0.5, Math.min(1, viewportWidth / contentWidth));
-      root.style.width = (100 / scale) + '%';
-      root.style.transform = 'scale(' + scale + ')';
-      const rect = root.getBoundingClientRect();
-      document.body.style.minHeight = Math.ceil(rect.height + 8) + 'px';
-      document.body.dataset.lfFitScale = scale.toFixed(3);
-    } catch (_) {}
-  }
   function installLearnForgeRuntime() {
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
     const toNumber = (value, fallback = 0) => {
@@ -387,21 +307,9 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
   window.addEventListener('resize', reportHeight);
   let nudgeQueued = false;
   let nudgeCount = 0;
-  function resetCanvasTransforms() {
-    qsa('canvas').forEach((canvas) => {
-      try {
-        const ctx = canvas.getContext && canvas.getContext('2d');
-        if (ctx && typeof ctx.setTransform === 'function') {
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-        }
-      } catch (_) {}
-    });
-  }
   function nudgeVisuals() {
     try {
       nudgeCount += 1;
-      removeDuplicateArtifactSections();
-      fitWideContent();
       qsa('canvas').forEach((canvas) => {
         const parent = canvas.parentElement;
         const rect = parent ? parent.getBoundingClientRect() : canvas.getBoundingClientRect();
@@ -413,9 +321,7 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
           canvas.style.height = rect.height + 'px';
         }
       });
-      resetCanvasTransforms();
       window.dispatchEvent(new Event('resize'));
-      fitWideContent();
       reportHeight();
     } catch (_) {}
   }
@@ -441,12 +347,6 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
   setTimeout(removeLeakedRuntimeText, 20);
   setTimeout(removeLeakedRuntimeText, 120);
   setTimeout(removeLeakedRuntimeText, 600);
-  setTimeout(removeDuplicateArtifactSections, 25);
-  setTimeout(removeDuplicateArtifactSections, 160);
-  setTimeout(removeDuplicateArtifactSections, 650);
-  setTimeout(fitWideContent, 30);
-  setTimeout(fitWideContent, 180);
-  setTimeout(fitWideContent, 700);
 })();
 </script>`;
 }
@@ -456,7 +356,6 @@ function learnForgeFullDocumentRescueStyle() {
 html,body{width:100%;height:100%;min-height:100%;margin:0}
 body{min-height:100vh}
 canvas,svg{max-width:100%}
-#lf-fit-root{transform-origin:top left}
 :where(.layout-container,.stage-panel,.canvas-wrapper,[class*="stage"],[id*="canvas"]){min-width:0;min-height:0}
 :where(.canvas-wrapper,[id*="canvas"]){overflow:hidden}
 [data-lf-runtime]{display:none!important;visibility:hidden!important}
@@ -541,10 +440,14 @@ function sourceLooksLikeFullDocument(html: string) {
   return /<\s*(?:!doctype|html|head|body)\b/i.test(html);
 }
 
+function sourceLooksLikeMath(html: string) {
+  return /(?:\$\$[\s\S]{1,200}?\$\$|\$[^$\n]{1,160}\$|\\\(|\\\[|\\(?:frac|sqrt|sum|int|Delta|theta|rho|vec)\b|[A-Za-z]_\{?[A-Za-z0-9]+\}?)/.test(html);
+}
+
 function injectBridgeIntoDocument(html: string, widgetId: string, enableDeckBridge: boolean) {
   const bridge = learnForgeBridgeScript(widgetId, enableDeckBridge);
   const rescueStyle = learnForgeFullDocumentRescueStyle();
-  const mathRuntime = learnForgeMathRuntimeScript();
+  const mathRuntime = sourceLooksLikeMath(html) ? learnForgeMathRuntimeScript() : "";
   const hideRuntime = learnForgeRuntimeHideStyle();
   if (/<\/head\s*>/i.test(html)) {
     html = html.replace(/<\/head\s*>/i, `${rescueStyle}${mathRuntime}${bridge}</head>`);
@@ -562,6 +465,7 @@ function injectBridgeIntoDocument(html: string, widgetId: string, enableDeckBrid
 function receiverPage(theme: "light" | "dark", widgetId: string, html: string, forceDeckBridge = false) {
   const source = normalizeLatexForHtml(String(html || ""));
   const enableDeckBridge = (forceDeckBridge || sourceLooksLikeDeck(source)) && !sourceLooksLikeNativeDeckNavigation(source);
+  const mathRuntime = sourceLooksLikeMath(source) ? learnForgeMathRuntimeScript() : "";
   if (sourceLooksLikeFullDocument(source)) {
     return injectBridgeIntoDocument(source, widgetId, enableDeckBridge);
   }
@@ -596,7 +500,7 @@ function receiverPage(theme: "light" | "dark", widgetId: string, html: string, f
   [data-lf-answer].is-correct{background:linear-gradient(135deg,var(--green),var(--cyan));color:#06111c}[data-lf-answer].is-wrong{background:linear-gradient(135deg,var(--rose),#ffb86b);color:#17070f}
   @keyframes lfxIn{from{opacity:.4;transform:translateY(8px)}to{opacity:1;transform:none}}
   @media(max-width:760px){.lfx-hero,.lfx-grid{grid-template-columns:1fr}.lfx-span-4,.lfx-span-5,.lfx-span-6,.lfx-span-7,.lfx-span-8,.lfx-span-12{grid-column:auto}.lfx-lab,.lf-concept-demo,.lf-sort-demo,.lf-hash-demo,.lf-pigeon-demo,.lf-card{padding:16px!important}}
-  </style>${learnForgeMathRuntimeScript()}${learnForgeBridgeScript(widgetId, enableDeckBridge)}</head><body><div id="widget-root">${source}</div>${learnForgeRuntimeHideStyle()}</body></html>`;
+  </style>${mathRuntime}${learnForgeBridgeScript(widgetId, enableDeckBridge)}</head><body><div id="widget-root">${source}</div>${learnForgeRuntimeHideStyle()}</body></html>`;
 }
 
 export function CustomHtmlAppRenderer({ code, codeUrl, theme, mode = "inline", forceDeckBridge = false, sessionContext = DEFAULT_SESSION_CONTEXT }: Props) {
