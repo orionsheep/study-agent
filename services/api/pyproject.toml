@@ -4,8 +4,12 @@ version = "0.1.0"
 description = "LearnForge V2 FastAPI service"
 requires-python = ">=3.12"
 dependencies = [
+  "boto3>=1.35.0",
   "fastapi>=0.115.12",
+  "hermes-agent>=0.14.0",
   "httpx>=0.28.1",
+  "pillow>=10.4.0",
+  "pypdf>=5.0.0",
   "pydantic>=2.11.5",
   "python-multipart>=0.0.20",
   "python-dotenv>=1.1.0",
@@ -17,7 +21,6 @@ postgres = [
   "psycopg[binary]>=3.2.9"
 ]
 hermes = [
-  "hermes-agent>=0.14.0"
 ]
 test = [
   "pytest>=8.3.5",

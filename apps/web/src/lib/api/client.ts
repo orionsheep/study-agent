@@ -2,6 +2,7 @@ import type { AgentStreamEvent, CanvasApp, DashboardSnapshot, ChatAppLink, Learn
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8011";
 const TOKEN_KEY = "learnforge.auth.token";
+const JSON_REQUEST_TIMEOUT_MS = 30_000;
 
 export type SessionContext = {
   studentId: string;
@@ -10,6 +11,19 @@ export type SessionContext = {
 };
 
 export type ModelProvider = "gemini";
+export type ChatAttachmentPayload = { name: string; preview?: string };
+export type NotebookLMContext = {
+  notebookId?: string;
+  learnforgeNotebookId?: string;
+  openNotebookId?: string;
+  notebookTitle?: string;
+  sourceId?: string;
+  sourceTitle?: string;
+  sourceRefs?: Array<Record<string, unknown>>;
+  citation?: string;
+  kind?: string;
+  mode?: "source" | "selection" | "workspace";
+};
 
 // #25: single source of truth for the model picker. UI surfaces (ChatHeader etc.)
 // import this instead of hardcoding their own copy, so labels stay in sync with the
@@ -70,14 +84,27 @@ export function sessionRequestHeaders(context: SessionContext): Record<string, s
 }
 
 async function jsonFetch<T>(path: string, init?: RequestInit, context = DEFAULT_SESSION_CONTEXT): Promise<T> {
-  const response = await fetch(apiUrl(path), {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...sessionHeaders(context),
-      ...(init?.headers ?? {})
+  const controller = init?.signal ? null : new AbortController();
+  const timeout = controller ? setTimeout(() => controller.abort(), JSON_REQUEST_TIMEOUT_MS) : null;
+  let response: Response;
+  try {
+    response = await fetch(apiUrl(path), {
+      ...init,
+      signal: init?.signal ?? controller?.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...sessionHeaders(context),
+        ...(init?.headers ?? {})
+      }
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("请求超时，请检查 LearnForge API 是否正在运行。");
     }
-  });
+    throw error;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
     try {
@@ -180,6 +207,154 @@ export async function fetchResources(
   return data.resources;
 }
 
+export type NotebookLMStatus = {
+  status: string;
+  provider?: string;
+  reason?: string;
+  web_url?: string;
+  api_url?: string;
+  embed_url?: string;
+};
+
+export type NotebookLMBootstrap = NotebookLMStatus & {
+  notebook_id?: string;
+  learnforge_notebook_id?: string;
+  external_id?: string;
+};
+
+export type NotebookLMSyncResult = NotebookLMBootstrap & {
+  synced?: Array<Record<string, unknown>>;
+  blocked?: Array<Record<string, unknown>> | boolean;
+};
+
+export type NotebookLMSource = {
+  id: string;
+  title: string;
+  summary?: string;
+  chunk_count?: number;
+  source_refs?: Array<Record<string, unknown>>;
+  source_id?: string;
+  source_role?: string;
+  source_scope?: string;
+  ingest_type?: string;
+  upload_status?: string;
+  sync_status?: string;
+  open_notebook_source_id?: string;
+  original_url?: string;
+  mime_type?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type NotebookLMNotebook = {
+  id: string;
+  title: string;
+  purpose: "course_official" | "system_review" | "personal_review" | "temporary" | string;
+  owner_scope: "course" | "system" | "user" | string;
+  owner_id: string;
+  course_id?: string;
+  description?: string;
+  tags?: string[];
+  open_notebook_id?: string;
+  sync_status?: string;
+  assignment_status?: string;
+  source_count?: number;
+  rank?: number;
+};
+
+export async function fetchNotebookLMStatus(context = DEFAULT_SESSION_CONTEXT): Promise<NotebookLMStatus> {
+  return jsonFetch<NotebookLMStatus>("/api/notebooklm/status", undefined, context);
+}
+
+export async function bootstrapNotebookLM(context = DEFAULT_SESSION_CONTEXT, learnforgeNotebookId?: string): Promise<NotebookLMBootstrap> {
+  return jsonFetch<NotebookLMBootstrap>("/api/notebooklm/bootstrap", {
+    method: "POST",
+    body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, learnforge_notebook_id: learnforgeNotebookId ?? null })
+  }, context);
+}
+
+export async function syncNotebookLMSources(context = DEFAULT_SESSION_CONTEXT, learnforgeNotebookId?: string): Promise<NotebookLMSyncResult> {
+  return jsonFetch<NotebookLMSyncResult>("/api/notebooklm/sources/sync", {
+    method: "POST",
+    body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, learnforge_notebook_id: learnforgeNotebookId ?? null })
+  }, context);
+}
+
+export async function fetchNotebookLMSources(context = DEFAULT_SESSION_CONTEXT): Promise<NotebookLMSource[]> {
+  const data = await jsonFetch<{ sources: NotebookLMSource[] }>("/api/notebooklm/sources", undefined, context);
+  return data.sources;
+}
+
+export async function fetchNotebookLMNotebooks(context = DEFAULT_SESSION_CONTEXT): Promise<NotebookLMNotebook[]> {
+  const data = await jsonFetch<{ notebooks: NotebookLMNotebook[] }>("/api/notebooklm/notebooks", undefined, context);
+  return data.notebooks;
+}
+
+export async function createNotebookLMNotebook(payload: { title: string; description?: string; tags?: string[] }, context = DEFAULT_SESSION_CONTEXT): Promise<NotebookLMNotebook> {
+  const data = await jsonFetch<{ notebook: NotebookLMNotebook }>("/api/notebooklm/notebooks", {
+    method: "POST",
+    body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, ...payload })
+  }, context);
+  return data.notebook;
+}
+
+export async function fetchNotebookLMNotebookSources(notebookId: string, context = DEFAULT_SESSION_CONTEXT): Promise<{ notebook: NotebookLMNotebook; sources: NotebookLMSource[] }> {
+  return jsonFetch<{ notebook: NotebookLMNotebook; sources: NotebookLMSource[] }>(`/api/notebooklm/notebooks/${encodeURIComponent(notebookId)}/sources`, undefined, context);
+}
+
+export async function syncNotebookLMNotebook(notebookId: string, context = DEFAULT_SESSION_CONTEXT): Promise<NotebookLMSyncResult> {
+  return jsonFetch<NotebookLMSyncResult>(`/api/notebooklm/notebooks/${encodeURIComponent(notebookId)}/sync`, {
+    method: "POST",
+    body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId })
+  }, context);
+}
+
+export async function addNotebookLMTextSource(notebookId: string, payload: { title: string; content: string; sync?: boolean }, context = DEFAULT_SESSION_CONTEXT) {
+  return jsonFetch(`/api/notebooklm/notebooks/${encodeURIComponent(notebookId)}/sources/text`, {
+    method: "POST",
+    body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, ...payload })
+  }, context);
+}
+
+export async function addNotebookLMLinkSource(notebookId: string, payload: { url: string; title?: string; sync?: boolean }, context = DEFAULT_SESSION_CONTEXT) {
+  return jsonFetch(`/api/notebooklm/notebooks/${encodeURIComponent(notebookId)}/sources/link`, {
+    method: "POST",
+    body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, ...payload })
+  }, context);
+}
+
+export async function uploadNotebookLMFileSource(notebookId: string, payload: { file: File; title?: string; sync?: boolean }, context = DEFAULT_SESSION_CONTEXT) {
+  const search = new URLSearchParams({
+    filename: payload.file.name || "upload.bin",
+    sync: String(payload.sync ?? true),
+  });
+  if (payload.title) search.set("title", payload.title);
+  // 注意：filename/title 不能放进 HTTP 头（X-Filename 等），因为中文等非 ASCII 文件名
+  // 会让浏览器 fetch 直接抛 "Failed to fetch"、请求根本发不出去。这里只走 query string
+  // （URLSearchParams 会自动 percent-encode），后端 backend 用 `header or query` 读取。
+  const response = await fetch(apiUrl(`/api/notebooklm/notebooks/${encodeURIComponent(notebookId)}/sources/upload?${search.toString()}`), {
+    method: "POST",
+    headers: {
+      ...sessionHeaders(context),
+      "Content-Type": payload.file.type || "application/octet-stream",
+    },
+    body: payload.file,
+  });
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  return response.json();
+}
+
+export async function recordNotebookLMEvent(eventType: string, payload: Record<string, unknown>, context = DEFAULT_SESSION_CONTEXT) {
+  return jsonFetch("/api/notebooklm/events", {
+    method: "POST",
+    body: JSON.stringify({
+      student_id: context.studentId,
+      course_id: context.courseId,
+      event_type: eventType,
+      payload
+    })
+  }, context);
+}
+
 export async function patchApp(appId: string, patch: Record<string, unknown>, context = DEFAULT_SESSION_CONTEXT): Promise<CanvasApp> {
   return jsonFetch<CanvasApp>(`/api/canvas/apps/${appId}`, {
     method: "PATCH",
@@ -198,20 +373,20 @@ export async function submitQuiz(questionId: string, answer: unknown, context = 
   }, context);
 }
 
-export async function sendChatMessage(message: string, context = DEFAULT_SESSION_CONTEXT, modelProvider: ModelProvider = "gemini", imageData?: string[]): Promise<{ events: AgentStreamEvent[]; assistant_text: string }> {
+export async function sendChatMessage(message: string, context = DEFAULT_SESSION_CONTEXT, modelProvider: ModelProvider = "gemini", imageData?: string[], attachments?: ChatAttachmentPayload[], requestedSkill?: string): Promise<{ events: AgentStreamEvent[]; assistant_text: string }> {
   return jsonFetch("/api/chat/message", {
     method: "POST",
-    body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, conversation_id: context.conversationId, model_provider: modelProvider, message, image_data: imageData ?? null })
+    body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, conversation_id: context.conversationId, model_provider: modelProvider, message, image_data: imageData ?? null, attachments: attachments ?? null, requested_skill: requestedSkill ?? null })
   }, context);
 }
 
-export async function streamChatMessage(message: string, onEvent: (event: AgentStreamEvent) => void, context = DEFAULT_SESSION_CONTEXT, modelProvider: ModelProvider = "gemini", imageData?: string[], signal?: AbortSignal): Promise<void> {
+export async function streamChatMessage(message: string, onEvent: (event: AgentStreamEvent) => void, context = DEFAULT_SESSION_CONTEXT, modelProvider: ModelProvider = "gemini", imageData?: string[], signal?: AbortSignal, attachments?: ChatAttachmentPayload[], requestedSkill?: string): Promise<void> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE}/api/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...sessionHeaders(context) },
-      body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, conversation_id: context.conversationId, model_provider: modelProvider, message, image_data: imageData ?? null }),
+      body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, conversation_id: context.conversationId, model_provider: modelProvider, message, image_data: imageData ?? null, attachments: attachments ?? null, requested_skill: requestedSkill ?? null }),
       signal,
     });
   } catch (error) {
@@ -252,46 +427,6 @@ export async function streamChatMessage(message: string, onEvent: (event: AgentS
       throw error;
     }
     throw error;
-  }
-}
-
-export async function approveAndGenerate(
-  approveAction: { capability: string; topic: string; original_message: string },
-  onEvent: (event: AgentStreamEvent) => void,
-  context = DEFAULT_SESSION_CONTEXT,
-  modelProvider: ModelProvider = "gemini",
-  signal?: AbortSignal,
-): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/chat/stream`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...sessionHeaders(context) },
-    body: JSON.stringify({
-      student_id: context.studentId,
-      course_id: context.courseId,
-      conversation_id: context.conversationId,
-      model_provider: modelProvider,
-      message: `确认生成: ${approveAction.topic}`,
-      approve_action: approveAction,
-    }),
-    signal,
-  });
-  if (!response.ok || !response.body) {
-    throw new Error(`approve stream failed: ${response.status}`);
-  }
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const blocks = buffer.split("\n\n");
-    buffer = blocks.pop() ?? "";
-    for (const block of blocks) {
-      const line = block.split("\n").find((item) => item.startsWith("data: "));
-      if (!line) continue;
-      try { onEvent(JSON.parse(line.slice(6)) as AgentStreamEvent); } catch { /* skip */ }
-    }
   }
 }
 
@@ -388,6 +523,7 @@ export type ChatMessageRecord = {
   text: string;
   metadata: Record<string, unknown>;
   links?: ChatAppLink[];
+  resources?: LearningResource[];
   created_at: string;
 };
 

@@ -290,20 +290,24 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
     setImporting(true);
     let ok = 0;
     let fail = 0;
+    let lastError = "";
     try {
       for (let i = 0; i < list.length; i++) {
         setMessage(`正在上传 ${i + 1}/${list.length}：${list[i].name}`);
         try {
           await uploadNotebookLMFileSource(targetId, { file: list[i], sync: true }, sessionContext);
           ok++;
-        } catch {
+        } catch (error) {
           fail++;
+          lastError = error instanceof Error ? error.message : String(error);
+          // 控制台留底，便于排查真实原因（网络/CORS/后端报错）
+          console.error("[NotebookLM upload] 失败:", list[i].name, error);
         }
       }
       setMessage(
         fail === 0
           ? `已上传 ${ok} 个文件到当前 Notebook。`
-          : `已上传 ${ok}/${list.length}，${fail} 个失败。`,
+          : `已上传 ${ok}/${list.length}，${fail} 个失败。原因：${lastError || "未知"}`,
       );
       await loadNotebookSources(targetId);
     } finally {

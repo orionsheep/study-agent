@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import re
 import zipfile
 from html import unescape
@@ -39,7 +40,7 @@ def compact_text(text: str, limit: int = 6000) -> str:
 
 
 async def extract_dimensions_with_llm(message: str) -> dict[str, Any]:
-    """Use the LLM (Gemini/MiMo) to parse a free-form message into the 13 profile
+    """Use the LLM (Gemini) to parse a free-form message into the 13 profile
     dimensions as JSON. Far more robust than keyword rules — handles any school,
     major, grade, study time, etc. Returns only non-empty fields; {} on failure."""
     import json as _json
@@ -70,7 +71,12 @@ async def extract_dimensions_with_llm(message: str) -> dict[str, Any]:
         if start == -1 or end == -1:
             return {}
         data = _json.loads(raw[start : end + 1])
+    except _json.JSONDecodeError:
+        # Model returned something we couldn't parse — profile extraction is best-effort.
+        logging.getLogger("learnforge").warning("extract_dimensions_with_llm: non-JSON model output, skipping")
+        return {}
     except Exception:
+        logging.getLogger("learnforge").exception("extract_dimensions_with_llm: unexpected failure, skipping")
         return {}
     if not isinstance(data, dict):
         return {}
@@ -171,14 +177,33 @@ def _parse_xlsx(data: bytes) -> tuple[str, dict[str, Any]]:
 
 
 def _parse_pdf(data: bytes) -> tuple[str, str]:
-    decoded = _decode_bytes(data)
-    text = unescape(re.sub(r"\\[rn]", " ", decoded))
-    text = re.sub(r"[^\S\r\n]+", " ", text)
-    visible = "".join(ch for ch in text if ch.isprintable() or ch in "\n\t")
-    extracted = compact_text(visible, 5000)
-    if len(extracted) < 80:
-        return "", "PDF 文本抽取结果过短，请补充文字说明或上传可解析文档。"
-    return extracted, "PDF 已用轻量文本抽取处理，复杂扫描件可能需要 OCR。"
+    """抽取 PDF 文本。
+
+    优先用 pypdf 做真正的结构化抽取（按页 extract_text）。旧实现只是把原始字节
+    decode 成文本，拿到的是 `%PDF-1.7 ... 1 0 obj` 这种二进制标记，存进 chunk 后
+    既不能检索也不能被 Open Notebook 向量化。
+
+    抽不出文字（扫描件 / 图片型 PDF）时返回空字符串，绝不把原始字节当文本存。
+    """
+    try:
+        from pypdf import PdfReader
+        import io as _io
+        reader = PdfReader(_io.BytesIO(data))
+    except Exception as exc:  # pypdf 未安装或文件损坏
+        return "", f"PDF 解析器不可用：{type(exc).__name__}: {exc}"
+    parts: list[str] = []
+    for page in reader.pages:
+        try:
+            page_text = page.extract_text() or ""
+        except Exception:
+            page_text = ""
+        if page_text:
+            parts.append(page_text)
+    text = "\n".join(parts).strip()
+    if len(text) < 80:
+        return "", "PDF 抽取到的文字过短（可能是扫描件或图片型 PDF），请上传可选中文字的 PDF，或补充文字说明。"
+    # 保留较完整内容（上限 50000 字），交给下游 _compact_chunks 切片
+    return compact_text(text, 50000), "PDF 文本已用 pypdf 抽取；扫描件/图片型 PDF 可能仍需 OCR。"
 
 
 def classify_source(filename: str | None, mime_type: str | None, explicit: str | None = None) -> str:
