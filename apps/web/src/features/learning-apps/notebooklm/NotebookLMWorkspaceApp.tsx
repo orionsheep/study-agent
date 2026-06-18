@@ -219,16 +219,32 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
     }
   };
 
+  // 解析可写 Notebook：当前只读时自动切换到 writableNotebookId，与文件上传行为一致。
+  const resolveWritableTarget = async (): Promise<string | null> => {
+    if (writableNotebook) return selectedNotebook?.id ?? null;
+    const targetId = writableNotebookId;
+    if (!targetId) {
+      setMessage("找不到可写的 Notebook，请先点左上角「+」新建一个「我的 Notebook」。");
+      return null;
+    }
+    const writableTitle = notebooks.find((item) => item.id === targetId)?.title ?? "我的复习 Notebook";
+    setMessage(`当前「${selectedNotebook?.title ?? "课程知识库"}」只读，已自动切换到「${writableTitle}」。`);
+    await selectNotebook(targetId);
+    return targetId;
+  };
+
   const addLink = async () => {
-    if (!selectedNotebook || !linkUrl.trim()) return;
+    if (!linkUrl.trim()) return;
+    const targetId = await resolveWritableTarget();
+    if (!targetId) return;
     setImporting(true);
     setMessage("");
     try {
-      await addNotebookLMLinkSource(selectedNotebook.id, { url: linkUrl.trim(), title: linkTitle.trim() || undefined, sync: true }, sessionContext);
+      await addNotebookLMLinkSource(targetId, { url: linkUrl.trim(), title: linkTitle.trim() || undefined, sync: true }, sessionContext);
       setLinkUrl("");
       setLinkTitle("");
       setMessage("链接已保存到当前 Notebook。");
-      await loadNotebookSources(selectedNotebook.id);
+      await loadNotebookSources(targetId);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "链接保存失败");
     } finally {
@@ -237,14 +253,16 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
   };
 
   const addText = async () => {
-    if (!selectedNotebook || !textContent.trim()) return;
+    if (!textContent.trim()) return;
+    const targetId = await resolveWritableTarget();
+    if (!targetId) return;
     setImporting(true);
     setMessage("");
     try {
-      await addNotebookLMTextSource(selectedNotebook.id, { title: textTitle.trim() || "粘贴资料", content: textContent, sync: true }, sessionContext);
+      await addNotebookLMTextSource(targetId, { title: textTitle.trim() || "粘贴资料", content: textContent, sync: true }, sessionContext);
       setTextContent("");
       setMessage("文本已保存到当前 Notebook。");
-      await loadNotebookSources(selectedNotebook.id);
+      await loadNotebookSources(targetId);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "文本保存失败");
     } finally {
@@ -509,13 +527,13 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
               <div className="nblm-import-box">
                 <label>
                   <Link size={13} />
-                  <input value={linkTitle} onChange={(event) => setLinkTitle(event.target.value)} placeholder="链接标题" disabled={!writableNotebook || importing} />
+                  <input value={linkTitle} onChange={(event) => setLinkTitle(event.target.value)} placeholder="链接标题" disabled={importing} />
                 </label>
                 <label>
                   <ClipboardPaste size={13} />
-                  <input value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} placeholder="https://..." disabled={!writableNotebook || importing} />
+                  <input value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} placeholder="https://..." disabled={importing} />
                 </label>
-                <button type="button" onClick={addLink} disabled={!writableNotebook || importing || !linkUrl.trim()}>
+                <button type="button" onClick={addLink} disabled={importing || !linkUrl.trim()}>
                   <Link size={15} />
                   <span>添加链接</span>
                 </button>
@@ -524,10 +542,10 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
               <div className="nblm-import-box">
                 <label>
                   <TextCursorInput size={13} />
-                  <input value={textTitle} onChange={(event) => setTextTitle(event.target.value)} placeholder="文本标题" disabled={!writableNotebook || importing} />
+                  <input value={textTitle} onChange={(event) => setTextTitle(event.target.value)} placeholder="文本标题" disabled={importing} />
                 </label>
-                <textarea value={textContent} onChange={(event) => setTextContent(event.target.value)} placeholder="粘贴阅读材料、讲义摘录或题目素材" disabled={!writableNotebook || importing} />
-                <button type="button" onClick={addText} disabled={!writableNotebook || importing || !textContent.trim()}>
+                <textarea value={textContent} onChange={(event) => setTextContent(event.target.value)} placeholder="粘贴阅读材料、讲义摘录或题目素材" disabled={importing} />
+                <button type="button" onClick={addText} disabled={importing || !textContent.trim()}>
                   <TextCursorInput size={15} />
                   <span>粘贴文本</span>
                 </button>
