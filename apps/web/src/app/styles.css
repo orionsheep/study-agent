@@ -189,6 +189,23 @@ button {
   touch-action: none;
 }
 
+/* Native App Layer — transform-sensitive apps (English workspace, English dashboard)
+   render here, as a sibling of canvas-world (NOT inside it).
+   canvas-world carries a `transform: scale()` that would break backdrop-filter (the
+   liquid-glass effect) and skew canvas coordinate systems. By placing these apps in a
+   transform-free sibling layer they regain native rendering fidelity while keeping
+   the same left/top/zIndex positioning and drag/resize behaviour. */
+.native-app-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20; /* above canvas-world (which is z-index:auto in the viewport) */
+}
+
+.native-app-layer .native-window-frame {
+  pointer-events: auto;
+}
+
 .canvas-drop-hint {
   position: absolute;
   z-index: 95;
@@ -2506,8 +2523,10 @@ textarea {
 .canvas-app.focused,
 .appwin.focused {
   outline: 0;
-  border-color: rgba(91, 140, 255, 0.55);
-  box-shadow: var(--shadow-window), var(--glow-blue);
+  /* Keep a subtle border highlight on focus, but drop the heavy blue glow — it
+     read as a strange foreground halo over dense workspace content. */
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: var(--shadow-window);
   z-index: 40 !important;
 }
 
@@ -2713,6 +2732,732 @@ textarea {
   background: rgba(91, 140, 255, 0.12);
 }
 
+/* ── Workspace-class windows (English workspace, NotebookLM) ───────────────────
+   These are heavy multi-pane tools that render their own full-bleed UI. They carry a
+   slim, always-visible top bar — a macOS-style
+   traffic area that is both the drag handle and the home of the standard window
+   controls (canvas fullscreen / page fullscreen / close). The bar is intentionally
+   short (~30px) so it barely dents the workspace's vertical space. */
+.canvas-app.is-workspace {
+  border-radius: var(--r-md, 12px);
+}
+
+.canvas-app.is-workspace .workspace-topbar {
+  position: relative;
+  z-index: 30;
+  flex: 0 0 auto;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, rgba(20, 20, 28, 0.92), rgba(12, 12, 18, 0.92));
+  backdrop-filter: blur(8px);
+  user-select: none;
+  cursor: grab;
+}
+
+.canvas-app.is-workspace .workspace-topbar:active {
+  cursor: grabbing;
+}
+
+/* A short centered "grip" pill — a visual affordance that this bar drags the window,
+   echoing the traffic-light / notch idiom without copying macOS colors. */
+.canvas-app.is-workspace .workspace-topbar-grip {
+  width: 28px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  flex: 0 0 auto;
+}
+
+.canvas-app.is-workspace .workspace-topbar-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.canvas-app.is-workspace .workspace-topbar-ctrls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.canvas-app.is-workspace .workspace-topbar-ctrls button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.canvas-app.is-workspace .workspace-topbar-ctrls button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.canvas-app.is-workspace .workspace-topbar-ctrls .win-btn-close:hover {
+  background: rgba(239, 68, 68, 0.22);
+  color: #f87171;
+}
+
+.canvas-app.is-workspace .appwin-body {
+  /* No card padding — the workspace renders its own full-bleed panes. */
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.native-app-body-workspace {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  overflow: hidden;
+  padding: 0;
+}
+
+/* ── NotebookLM source workbench ───────────────────────────────────────────── */
+.notebooklm-workspace {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 34%) minmax(0, 1fr);
+  color: rgba(245, 247, 250, 0.92);
+  background:
+    linear-gradient(180deg, rgba(9, 17, 22, 0.96), rgba(11, 14, 20, 0.98)),
+    radial-gradient(circle at 10% 0%, rgba(16, 185, 129, 0.06), transparent 32%);
+  overflow: hidden;
+}
+
+.nblm-source-rail,
+.nblm-detail {
+  min-width: 0;
+  min-height: 0;
+}
+
+.nblm-source-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.nblm-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+
+.nblm-mark {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #d1fae5;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.24), rgba(56, 189, 248, 0.14));
+  border: 1px solid rgba(167, 243, 208, 0.22);
+}
+
+.nblm-brand strong,
+.nblm-manager-head strong,
+.nblm-preview-head strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.35;
+  color: #f8fafc;
+}
+
+.nblm-brand span,
+.nblm-manager-head span,
+.nblm-preview-head span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(203, 213, 225, 0.66);
+}
+
+.nblm-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  color: rgba(226, 232, 240, 0.86);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.nblm-status.ready {
+  color: #a7f3d0;
+  border-color: rgba(16, 185, 129, 0.32);
+  background: rgba(16, 185, 129, 0.09);
+}
+
+.nblm-status.blocked {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.26);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.nblm-compact-btn,
+.nblm-icon-btn,
+.nblm-wide-action,
+.nblm-generate-menu button,
+.nblm-source-card,
+.nblm-notebook-card,
+.nblm-import-box button,
+.nblm-create-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: rgba(241, 245, 249, 0.9);
+  background: rgba(255, 255, 255, 0.045);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.nblm-compact-btn:hover,
+.nblm-icon-btn:hover,
+.nblm-wide-action:hover,
+.nblm-generate-menu button:hover,
+.nblm-source-card:hover,
+.nblm-notebook-card:hover,
+.nblm-import-box button:hover,
+.nblm-create-row button:hover {
+  border-color: rgba(125, 211, 252, 0.36);
+  background: rgba(125, 211, 252, 0.08);
+  transform: translateY(-1px);
+}
+
+.nblm-compact-btn:disabled,
+.nblm-icon-btn:disabled,
+.nblm-wide-action:disabled,
+.nblm-generate-menu button:disabled,
+.nblm-import-box button:disabled,
+.nblm-create-row button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.nblm-create-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 7px;
+}
+
+.nblm-create-row input,
+.nblm-import-box input,
+.nblm-import-box textarea {
+  width: 100%;
+  min-width: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(241, 245, 249, 0.92);
+  outline: none;
+  font-size: 12px;
+}
+
+.nblm-create-row input {
+  height: 34px;
+  padding: 0 10px;
+}
+
+.nblm-create-row button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+}
+
+.nblm-notebooks,
+.nblm-source-list {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.nblm-notebooks {
+  flex: 1 1 48%;
+}
+
+.nblm-source-list {
+  flex: 1 1 38%;
+}
+
+.nblm-rail-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 2px 0;
+  color: rgba(203, 213, 225, 0.68);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.nblm-rail-section-head small {
+  color: rgba(203, 213, 225, 0.48);
+  font-size: 10px;
+}
+
+.nblm-notebook-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nblm-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 2px 0;
+  color: rgba(203, 213, 225, 0.62);
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.nblm-source-card,
+.nblm-notebook-card {
+  justify-content: flex-start;
+  width: 100%;
+  padding: 9px 9px;
+  text-align: left;
+}
+
+.nblm-source-card.active,
+.nblm-notebook-card.active {
+  border-color: rgba(16, 185, 129, 0.46);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.nblm-source-card span,
+.nblm-notebook-card span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.nblm-source-card small,
+.nblm-notebook-card small {
+  flex: 0 0 auto;
+  color: rgba(203, 213, 225, 0.58);
+  font-size: 10px;
+}
+
+.nblm-empty {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 130px;
+  padding: 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.13);
+  border-radius: 8px;
+  color: rgba(203, 213, 225, 0.62);
+  text-align: center;
+  font-size: 12px;
+}
+
+.nblm-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  overflow: hidden;
+}
+
+.nblm-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+}
+
+.nblm-preview-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 34px;
+}
+
+.nblm-preview-head > div {
+  min-width: 0;
+}
+
+.nblm-preview-head strong,
+.nblm-preview-head span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nblm-toolbar-actions {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.nblm-icon-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+}
+
+.nblm-compact-btn {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.nblm-compact-btn.active,
+.nblm-icon-btn.active {
+  color: #d1fae5;
+  border-color: rgba(16, 185, 129, 0.38);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.nblm-ask-btn {
+  color: #e0f2fe;
+  border-color: rgba(56, 189, 248, 0.26);
+  background: rgba(14, 165, 233, 0.11);
+}
+
+.nblm-menu-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.nblm-generate-menu {
+  position: absolute;
+  z-index: 55;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 172px;
+  display: grid;
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 8px;
+  background: rgba(8, 13, 18, 0.98);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.28);
+}
+
+.nblm-generate-menu button {
+  justify-content: flex-start;
+  min-height: 32px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.nblm-icon-btn {
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.nblm-source-summary {
+  padding: 12px 13px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.nblm-source-summary p {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.86);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.nblm-source-summary small {
+  display: block;
+  margin-top: 8px;
+  color: rgba(167, 243, 208, 0.76);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.nblm-source-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.nblm-source-meta span {
+  max-width: 100%;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(226, 232, 240, 0.72);
+  background: rgba(15, 23, 42, 0.42);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nblm-citations {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+}
+
+.nblm-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: rgba(203, 213, 225, 0.78);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.nblm-citations article {
+  padding: 11px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.nblm-citations article strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #f8fafc;
+  font-size: 12px;
+}
+
+.nblm-citations article p,
+.nblm-muted {
+  margin: 0;
+  color: rgba(203, 213, 225, 0.72);
+  font-size: 12px;
+  line-height: 1.58;
+}
+
+.nblm-source-manager {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+}
+
+.nblm-manager-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 13px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.nblm-manager-head > span {
+  flex: 0 0 auto;
+  margin-top: 0;
+  padding: 4px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(203, 213, 225, 0.7);
+  background: rgba(15, 23, 42, 0.38);
+  font-size: 10px;
+}
+
+.nblm-manager-note {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: rgba(254, 202, 202, 0.86);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  background: rgba(248, 113, 113, 0.07);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.nblm-manager-message {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: rgba(204, 251, 241, 0.92);
+  border: 1px solid rgba(45, 212, 191, 0.25);
+  background: rgba(45, 212, 191, 0.08);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.nblm-manager-hint {
+  display: block;
+  margin: 4px 2px 0;
+  color: rgba(226, 232, 240, 0.62);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.nblm-file-input {
+  display: none;
+}
+
+.nblm-wide-action {
+  width: fit-content;
+  min-height: 32px;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.nblm-import-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.nblm-import-box {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.nblm-import-box label {
+  display: grid;
+  grid-template-columns: 15px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  color: rgba(203, 213, 225, 0.66);
+}
+
+.nblm-import-box input {
+  height: 30px;
+  padding: 0 9px;
+}
+
+.nblm-import-box textarea {
+  min-height: 68px;
+  max-height: 112px;
+  resize: vertical;
+  padding: 8px 9px;
+  line-height: 1.45;
+}
+
+.nblm-import-box button {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.nblm-rule-card {
+  margin-top: auto;
+  padding: 11px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(167, 243, 208, 0.14);
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.nblm-rule-card strong {
+  display: block;
+  margin-bottom: 5px;
+  color: rgba(209, 250, 229, 0.92);
+  font-size: 12px;
+}
+
+.nblm-rule-card p {
+  margin: 0;
+  color: rgba(203, 213, 225, 0.74);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+@media (max-width: 980px) {
+  .notebooklm-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(190px, 0.45fr) minmax(260px, 1fr);
+  }
+
+  .nblm-source-rail {
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .nblm-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nblm-toolbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .nblm-import-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The canvas resize handle must sit above the workspace content (which paints its
+   own full-bleed panels) so it stays grabbable. Without this the handle was
+   covered by the workspace body and window resizing silently did nothing. */
+.canvas-app.is-workspace .resize-handle {
+  z-index: 35;
+}
+
 .app-action-row {
   display: inline-flex;
   align-items: center;
@@ -2786,29 +3531,27 @@ textarea {
   transition: opacity var(--dur-slow) var(--ease-out);
 }
 
+/* The blue radial "focus halo" (a blurred breathing glow around the focused app)
+   read as a strange foreground artefact over dense workspace content, so it is
+   disabled everywhere. Kept as a no-op rather than removed from JSX to avoid
+   churning the canvas focus logic. */
 .focus-halo.on {
-  opacity: 1;
+  opacity: 0;
 }
 
 .focus-halo::before {
-  content: "";
-  position: absolute;
-  inset: -18px;
-  border-radius: 36px;
-  background: radial-gradient(closest-side, rgba(91, 140, 255, 0.28), transparent 78%);
-  filter: blur(8px);
-  animation: halo-breath 3.4s ease-in-out infinite;
+  content: none;
 }
 
 @keyframes halo-breath {
   0%,
   100% {
-    opacity: 0.72;
+    opacity: 0;
     transform: scale(1);
   }
   50% {
-    opacity: 1;
-    transform: scale(1.03);
+    opacity: 0;
+    transform: scale(1);
   }
 }
 
@@ -3090,6 +3833,21 @@ textarea {
     transparent 100%
   );
   flex: 0 0 auto;
+}
+
+/* ── English Workspace ─────────────────────────────────────── */
+@keyframes ew-cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.english-workspace {
+  color: var(--text-1);
+  font-size: 13px;
+}
+
+.english-workspace .ew-word-item:hover {
+  background: var(--glass-2) !important;
 }
 
 .dock-dot {
@@ -4242,6 +5000,134 @@ textarea {
   border-right: 0;
   border-bottom: 0;
   box-shadow: none;
+}
+
+/* English context chip — sits between the chat header and the message list when a
+   word from the English workspace is the active Hermes topic. */
+.english-context-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.12), rgba(59, 130, 246, 0.04));
+}
+
+.english-context-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 6px 3px 10px;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.18);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  color: #ddd6fe;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.english-context-label {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.english-context-word {
+  color: #fff;
+  font-weight: 600;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.english-context-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: #c4b5fd;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.english-context-clear:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.notebooklm-context-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.12), rgba(56, 189, 248, 0.05));
+}
+
+.notebooklm-context-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 6px 3px 10px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(16, 185, 129, 0.36);
+  color: #d1fae5;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.notebooklm-context-label {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.82;
+}
+
+.notebooklm-context-title {
+  color: #fff;
+  font-weight: 600;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notebooklm-context-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: #a7f3d0;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.notebooklm-context-clear:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
 }
 
 .tutor-chat .chat-head,
