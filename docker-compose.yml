@@ -24,5 +24,36 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+  open_notebook_surrealdb:
+    image: surrealdb/surrealdb:v2
+    profiles: ["notebooklm"]
+    command: start --log info --user root --pass root rocksdb:/mydata/mydatabase.db
+    user: root
+    volumes:
+      - open_notebook_surreal:/mydata
+    environment:
+      SURREAL_EXPERIMENTAL_GRAPHQL: "true"
+    restart: unless-stopped
+  open_notebook:
+    image: lfnovo/open_notebook:v1-latest
+    profiles: ["notebooklm"]
+    ports:
+      - "8502:8502"
+      - "5055:5055"
+    environment:
+      OPEN_NOTEBOOK_ENCRYPTION_KEY: ${OPEN_NOTEBOOK_ENCRYPTION_KEY:-replace_with_32_char_secret}
+      OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-}
+      SURREAL_URL: ws://open_notebook_surrealdb:8000/rpc
+      SURREAL_USER: root
+      SURREAL_PASSWORD: root
+      SURREAL_NAMESPACE: open_notebook
+      SURREAL_DATABASE: open_notebook
+    volumes:
+      - open_notebook_data:/app/data
+    depends_on:
+      - open_notebook_surrealdb
+    restart: unless-stopped
 volumes:
   learnforge_pg:
+  open_notebook_surreal:
+  open_notebook_data:

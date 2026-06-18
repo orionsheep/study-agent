@@ -34,11 +34,9 @@ def test_hermes_python_adapter_embeds_aiagent_sdk(monkeypatch):
     settings = SimpleNamespace(
         project_root=Path("/tmp/learnforge"),
         hermes_home=".runtime/hermes",
-        hermes_provider="mimo",
-        mimo_api_key="local-key",
-        mimo_base_url="https://mimo.example/v1",
-        mimo_text_model="mimo-v2.5-pro",
-        mimo_fast_model="mimo-v2.5",
+        hermes_provider="gemini",
+        gemini_api_key="local-key",
+        gemini_text_model="gemini-3.1-pro-preview",
         hermes_sdk_path="",
         hermes_sdk_site_packages="",
     )
@@ -52,23 +50,22 @@ def test_hermes_python_adapter_embeds_aiagent_sdk(monkeypatch):
     assert probe.sdk_module == "run_agent"
     assert probe.sdk_version == "0.test"
     assert probe.embedded_agent_class == "run_agent.FakeAgent"
-    assert captured["base_url"] == "https://mimo.example/v1"
-    assert captured["provider"] == "mimo"
-    assert captured["model"] == "mimo-v2.5-pro"
+    assert captured["base_url"] == "https://generativelanguage.googleapis.com/v1beta"
+    assert captured["provider"] == "gemini"
+    assert captured["model"] == "gemini-3.1-pro-preview"
     assert captured["enabled_toolsets"] == []
-    assert captured["skip_memory"] is True
+    # 记忆系统已启用:EduMem0Provider 通过 skip_memory=False + memory.provider=edumem0 接入。
+    assert captured["skip_memory"] is False
     assert captured["skip_context_files"] is True
 
 
-def test_hermes_python_adapter_blocks_without_mimo_key():
+def test_hermes_python_adapter_blocks_without_gemini_key():
     settings = SimpleNamespace(
         project_root=Path("/tmp/learnforge"),
         hermes_home=".runtime/hermes",
-        hermes_provider="mimo",
-        mimo_api_key="",
-        mimo_base_url="https://mimo.example/v1",
-        mimo_text_model="mimo-v2.5-pro",
-        mimo_fast_model="mimo-v2.5",
+        hermes_provider="gemini",
+        gemini_api_key="",
+        gemini_text_model="gemini-3.1-pro-preview",
         hermes_sdk_path="",
         hermes_sdk_site_packages="",
     )
@@ -78,7 +75,7 @@ def test_hermes_python_adapter_blocks_without_mimo_key():
     probe = adapter.probe()
 
     assert probe.status == "blocked_missing_credentials"
-    assert "MIMO_API_KEY" in probe.reason
+    assert "GEMINI_API_KEY" in probe.reason
 
 
 def test_hermes_cli_probe_prefers_version_command(monkeypatch):

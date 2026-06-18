@@ -84,7 +84,8 @@ function appTypeLabel(appType: string) {
     "resource.folder": "资源文件夹",
     "custom.html": "互动演示",
     "english.workspace": "英语工作区",
-    "humanities.notebook": "文科笔记本"
+    "notebooklm.workspace": "NotebookLM",
+    "humanities.notebook": "NotebookLM"
   }[appType] ?? "学习应用";
 }
 
@@ -106,6 +107,7 @@ function appAccent(app: CanvasApp) {
     "resource.center": "linear-gradient(135deg,#4ade80,#7aa2ff)",
     "custom.html": "linear-gradient(135deg,#5b8cff,#f9a23c)",
     "english.workspace": "linear-gradient(135deg,#f59e0b,#ef4444)",
+    "notebooklm.workspace": "linear-gradient(135deg,#10b981,#38bdf8)",
     "humanities.notebook": "linear-gradient(135deg,#8b5cf6,#ec4899)"
   } as Record<string, string>;
   return palette[app.app_type] ?? "var(--accent-grad)";
@@ -131,6 +133,7 @@ const APP_ICON_MAP: Record<string, string> = {
   "custom.html": "/icons/folder_infographic_app.png",
   "resource.folder": "/icons/folder_other_app.png",
   "english.workspace": "/icons/folder_notes_app.png",
+  "notebooklm.workspace": "/icons/folder_mindmap_app.png",
   "humanities.notebook": "/icons/folder_mindmap_app.png",
 };
 
@@ -212,12 +215,25 @@ function displaySizeForApp(app: CanvasApp) {
       height: Math.max(680, app.size.height)
     };
   }
+  // Workspace-class apps (English workspace, NotebookLM) are heavy, multi-pane
+  // tools — a 420×300 default leaves almost no usable area after the window chrome.
+  // Force a large working area so the content (word list + detail, fission graph, etc.)
+  // is actually usable instead of cramped into a tiny strip.
+  if (app.app_type === "english.workspace" || app.app_type === "notebooklm.workspace" || app.app_type === "humanities.notebook") {
+    return {
+      width: Math.max(1080, app.size.width),
+      height: Math.max(760, app.size.height)
+    };
+  }
   return app.size;
 }
 
 function minResizeSizeForApp(app: CanvasApp) {
   if (customHtmlIsInteractiveDemo(app)) return { width: 860, height: 620 };
   if (app.app_type === "image.explanation") return { width: 720, height: 520 };
+  if (app.app_type === "english.workspace" || app.app_type === "notebooklm.workspace" || app.app_type === "humanities.notebook") {
+    return { width: 820, height: 560 };
+  }
   return { width: 260, height: 190 };
 }
 
@@ -285,6 +301,14 @@ const FOLDER_POSITIONS: Record<FolderKey, { x: number; y: number }> = {
 
 function isFolderApp(app: CanvasApp) {
   return (app.app_type as string) === "resource.folder";
+}
+
+// Some workspace-class apps need native, transform-free coordinates for canvas
+// rendering. NotebookLM is a source workbench, so it stays inside canvas-world and
+// follows pan/zoom like any other learning window.
+const NATIVE_LAYER_APP_TYPES = new Set(["english.workspace", "english.dashboard"]);
+function isNativeLayerAppType(appType: string): boolean {
+  return NATIVE_LAYER_APP_TYPES.has(appType);
 }
 
 // Pinned monitoring apps are docked into the top "监控总览" frame at fixed slots.
@@ -762,7 +786,7 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
             />
           ) : null}
           <AnimatePresence initial={false}>
-          {visibleApps.map((app) => isFolderApp(app) ? (
+          {visibleApps.filter((app) => !isNativeLayerAppType(app.app_type)).map((app) => isFolderApp(app) ? (
             /* Compact folder icon card — click opens FolderModal */
             <motion.div
               key={app.app_id}
@@ -810,6 +834,60 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
           })())}
           </AnimatePresence>
         </div>
+
+        {/* Native App Layer — transform-sensitive workspace apps live here,
+            outside canvas-world, so their canvas coordinate systems stay native. */}
+        {(() => {
+          const nativeAppIds = new Set(visibleApps.filter((a) => isNativeLayerAppType(a.app_type)).map((a) => a.app_id));
+          const topMost = zOrder.length ? zOrder[zOrder.length - 1] : focusedId;
+          const nativeOnTop = !!topMost && nativeAppIds.has(topMost);
+          return (
+        <div
+          className="native-app-layer"
+          style={{
+            transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`,
+            transition: drag?.kind === "canvas" || directManip ? "none" : undefined,
+            zIndex: nativeOnTop ? 60 : 5,
+          }}
+        >
+          <AnimatePresence initial={false}>
+            {visibleApps.filter((app) => isNativeLayerAppType(app.app_type)).map((app) => {
+              const pos = app.position;
+              const size = displaySizeForApp(app);
+              return (
+                <div
+                  key={app.app_id}
+                  data-window-frame={app.app_id}
+                  className="window-frame native-window-frame"
+                  style={{ position: "absolute", left: pos.x, top: pos.y, width: size.width, height: size.height, zIndex: zIndexFor(app.app_id) }}
+                >
+                  <AppWindow
+                    app={app}
+                    dimmed={!!(focusedApp && focusedApp.app_id !== app.app_id)}
+                    isFullscreen={false}
+                    fixed={false}
+                    dashboard={dashboard}
+                    onFocus={() => focusWindow(app.app_id)}
+                    onDragStart={(event) => startWindowInteraction(event, app, "app")}
+                    onResizeStart={(event) => startWindowInteraction(event, app, "resize")}
+                    onToggleFullscreen={() => toggleFullscreen(app.app_id)}
+                    onTogglePageFullscreen={() => setPageFullscreenId((current) => (current === app.app_id ? null : app.app_id))}
+                    onClose={() => closeWindow(app.app_id)}
+                    onDelete={() => deleteApp(app.app_id)}
+                    onAppEvent={onAppEvent}
+                    onFocusApp={openWindow}
+                    onDashboardUpdate={onDashboardUpdate}
+                    sessionContext={sessionContext}
+                  />
+                </div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+        );
+        })()}
+
+
         <div className="canvas-minimap" data-testid="minimap" onPointerDown={(event) => event.stopPropagation()}>
           <button type="button" onClick={resetView} title="在小地图中复位视角" aria-label="在小地图中复位视角">
             <span className="minimap-viewport" />
@@ -818,12 +896,13 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
       </div>
       <footer className="app-dock dock glass glass-hi" data-testid="app-dock">
         {(() => {
-          // 4-zone dock: pinned | system modules | real-time resources | folders
+          // 3-zone dock: pinned | generated content (system modules + real-time) | folders
           const pinnedApps = apps.filter(isPinnedApp).slice(0, 3);
-          // 系统模块固定显示（英语工作区、文科笔记本），即使 apps 中不存在
-          const SYSTEM_MODULE_DEFS: Array<{ app_id: string; app_type: string; title: string }> = [
+          // 系统模块固定显示（英语工作区、NotebookLM），即使 apps 中不存在。
+          // humanities.notebook 仅作为旧类型 alias，不再单独出现在 Dock。
+          const SYSTEM_MODULE_DEFS: Array<{ app_id: string; app_type: string; title: string; aliases?: string[] }> = [
             { app_id: "app-english", app_type: "english.workspace", title: "英语工作区" },
-            { app_id: "app-humanities", app_type: "humanities.notebook", title: "文科笔记本" },
+            { app_id: "app-notebooklm", app_type: "notebooklm.workspace", title: "NotebookLM", aliases: ["humanities.notebook"] },
           ];
           const makeSystemModuleApp = (def: (typeof SYSTEM_MODULE_DEFS)[0]): CanvasApp => ({
             app_id: def.app_id,
@@ -844,19 +923,27 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
             updated_at: new Date().toISOString(),
           });
           const systemModules = SYSTEM_MODULE_DEFS.map(def => {
-            const existing = apps.find(a => a.app_type === def.app_type);
-            return existing || makeSystemModuleApp(def);
+            const existing = apps.find(a => a.app_type === def.app_type || def.aliases?.includes(a.app_type as string));
+            if (!existing) return makeSystemModuleApp(def);
+            return {
+              ...existing,
+              title: def.title,
+            };
           });
-          // 实时资源区：限制为最近使用的3个，避免Dock过长
-          const realTimeApps = apps
-            .filter(a => isRealTimeResource(a) && !isPinnedApp(a) && !isSystemModule(a))
-            .sort(byUpdatedDesc)
-            .slice(0, 3);
+          // 实时资源区：不再显示在 Dock 上，只归类到文件夹中
+          // const realTimeApps = apps
+          //   .filter(a => isRealTimeResource(a) && !isPinnedApp(a) && !isSystemModule(a))
+          //   .sort(byUpdatedDesc)
+          //   .slice(0, 3);
+          // 合并系统模块和实时资源为一个生成模块区域
+          // const generatedApps = [...systemModules, ...realTimeApps];
+          // 中区只保留系统模块（英语工作区、文科笔记本），实时资源归类到文件夹
+          const generatedApps = [...systemModules];
           const contentApps = [...folderApps];
           const renderDockBtn = (app: CanvasApp) => {
             const isOpen = openedSet.has(app.app_id) || isPinnedApp(app);
             const iconSrc = isFolderApp(app) ? folderIconSrc(app) : undefined;
-            const isVirtualSystemModule = app.app_id === "app-english" || app.app_id === "app-humanities";
+            const isVirtualSystemModule = app.app_id === "app-english" || app.app_id === "app-notebooklm";
             return (
             <button
               key={app.app_id}
@@ -887,20 +974,14 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
               {/* 左区：系统应用（pinned） */}
               {pinnedApps.map(renderDockBtn)}
               
-              {/* 左中区：系统自带模块 */}
-              {systemModules.length > 0 && pinnedApps.length > 0 && (
+              {/* 中区：生成模块（系统自带模块 + 实时生成资源） */}
+              {generatedApps.length > 0 && pinnedApps.length > 0 && (
                 <div className="dock-sep" aria-hidden="true" />
               )}
-              {systemModules.map(renderDockBtn)}
-              
-              {/* 右中区：实时生成资源 */}
-              {realTimeApps.length > 0 && (pinnedApps.length > 0 || systemModules.length > 0) && (
-                <div className="dock-sep" aria-hidden="true" />
-              )}
-              {realTimeApps.map(renderDockBtn)}
+              {generatedApps.map(renderDockBtn)}
               
               {/* 右区：Folder Apps */}
-              {contentApps.length > 0 && (pinnedApps.length > 0 || systemModules.length > 0 || realTimeApps.length > 0) && (
+              {contentApps.length > 0 && (pinnedApps.length > 0 || generatedApps.length > 0) && (
                 <div className="dock-sep" aria-hidden="true" />
               )}
               {contentApps.map(renderDockBtn)}
@@ -1020,18 +1101,74 @@ type AppWindowProps = {
 function AppWindow({ app, dimmed, isFullscreen, fixed, dashboard, onFocus, onDragStart, onResizeStart, onToggleFullscreen, onTogglePageFullscreen, onClose, onDelete, onAppEvent, onFocusApp, onDashboardUpdate, sessionContext }: AppWindowProps) {
   // Positioning is handled by the motion.div wrapper in canvas; fullscreen uses inset:0
   const isCustomHtml = app.app_type === "custom.html";
+  // Workspace-class apps (English workspace, NotebookLM) are heavy multi-pane
+  // tools, not lightweight cards. Treat them as "immersive": drop the redundant footer
+  // ("已保存到学习画布" / "问老师") and the duplicate type strip, and use a compact
+  // titlebar so the app content — not the chrome — fills the window.
+  const isWorkspaceApp = app.app_type === "english.workspace" || app.app_type === "notebooklm.workspace" || app.app_type === "humanities.notebook";
   const posStyle = isFullscreen
     ? { position: "absolute" as const, inset: 0, width: "auto", height: "auto", zIndex: 500, borderRadius: 0 }
     : { width: "100%", height: "100%" };
 
   return (
     <article
-      className={`canvas-app appwin ${isFullscreen ? "fullscreen" : app.state} ${dimmed ? "dimmed" : ""}`}
+      className={`canvas-app appwin ${isFullscreen ? "fullscreen" : app.state} ${dimmed ? "dimmed" : ""} ${isWorkspaceApp ? "is-workspace" : ""}`}
       data-app-id={app.app_id}
+      data-app-type={app.app_type}
       data-testid={`canvas-app-${app.app_id}`}
       style={posStyle}
       onPointerDown={onFocus}
     >
+      {isWorkspaceApp ? (
+        // Workspace apps (English workspace, NotebookLM) render their own
+        // full-bleed UI. They keep a slim, visible top bar — a macOS-style traffic
+        // area that doubles as the drag handle — plus the standard window controls
+        // (canvas fullscreen / page fullscreen / close) on the right. This bar is
+        // intentionally short so it doesn't steal vertical space from the workspace.
+        <div
+          className="workspace-topbar"
+          onPointerDown={(event) => {
+            if (isFullscreen) return;
+            // Don't start a window drag when the pointer lands on a control button.
+            if ((event.target as HTMLElement).closest("button")) return;
+            event.stopPropagation();
+            onDragStart(event);
+            onFocus();
+          }}
+        >
+          <span className="workspace-topbar-grip" aria-hidden="true" />
+          <span className="workspace-topbar-title">{app.title}</span>
+          <div className="workspace-topbar-ctrls">
+            <button
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={onToggleFullscreen}
+              title={isFullscreen ? "退出画布全屏" : "画布内全屏"}
+              aria-label={isFullscreen ? "退出画布全屏" : "画布内全屏"}
+            >
+              {isFullscreen ? <Shrink size={13} /> : <Maximize2 size={13} />}
+            </button>
+            <button
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={onTogglePageFullscreen}
+              title="页面全屏"
+              aria-label="页面全屏"
+            >
+              <Fullscreen size={13} />
+            </button>
+            {onClose && (
+              <button
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={onClose}
+                title="关闭窗口"
+                aria-label="关闭窗口"
+                className="win-btn-close"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
       <header
         className="app-titlebar appwin-bar"
         onPointerDown={(event) => {
@@ -1080,38 +1217,41 @@ function AppWindow({ app, dimmed, isFullscreen, fixed, dashboard, onFocus, onDra
           )}
         </div>
       </header>
+      )}
       <div className="appwin-body">
         <NativeAppRenderer app={app} dashboard={dashboard} isFullscreen={isFullscreen} onEvent={onAppEvent} onFocusApp={onFocusApp} onDashboardUpdate={onDashboardUpdate} sessionContext={sessionContext} />
       </div>
-      <footer className="appwin-foot">
-        <span><Sparkles size={12} />已保存到学习画布</span>
-        {app.actions.length ? (
-          <div className="app-action-row">
-            {(isCustomHtml && !app.actions.some((action) => String(action.action ?? "") === "custom.fullscreen")
-              ? [{ label: "全屏演示", action: "custom.fullscreen" }, ...app.actions]
-              : app.actions
-            ).slice(0, 3).map((action, index) => (
-              <button
-                key={`${String(action.action ?? action.label)}-${index}`}
-                className="app-action"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (String(action.action ?? "") === "custom.fullscreen") {
-                    onTogglePageFullscreen();
-                    return;
-                  }
-                  onAppEvent(app.app_id, String(action.action ?? "app.action"), { app_id: app.app_id, title: app.title, action });
-                }}
-              >
-                {String(action.label ?? action.action ?? "执行")}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        <button className="ask" onClick={(event) => { event.stopPropagation(); onAppEvent(app.app_id, "tutor.ask", { app_id: app.app_id, title: app.title }); }}>
-          问老师
-        </button>
-      </footer>
+      {!isWorkspaceApp && (
+        <footer className="appwin-foot">
+          <span><Sparkles size={12} />已保存到学习画布</span>
+          {app.actions.length ? (
+            <div className="app-action-row">
+              {(isCustomHtml && !app.actions.some((action) => String(action.action ?? "") === "custom.fullscreen")
+                ? [{ label: "全屏演示", action: "custom.fullscreen" }, ...app.actions]
+                : app.actions
+              ).slice(0, 3).map((action, index) => (
+                <button
+                  key={`${String(action.action ?? action.label)}-${index}`}
+                  className="app-action"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (String(action.action ?? "") === "custom.fullscreen") {
+                      onTogglePageFullscreen();
+                      return;
+                    }
+                    onAppEvent(app.app_id, String(action.action ?? "app.action"), { app_id: app.app_id, title: app.title, action });
+                  }}
+                >
+                  {String(action.label ?? action.action ?? "执行")}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <button className="ask" onClick={(event) => { event.stopPropagation(); onAppEvent(app.app_id, "tutor.ask", { app_id: app.app_id, title: app.title }); }}>
+            问老师
+          </button>
+        </footer>
+      )}
       {!isFullscreen && !fixed && (
         <button
           className="resize-handle"

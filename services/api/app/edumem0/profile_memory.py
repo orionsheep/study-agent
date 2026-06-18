@@ -6,6 +6,7 @@ def profile_memory(student_id: str, dimensions: dict, course_id: str | None = No
         student_id=student_id,
         course_id=course_id,
         memory_type="profile",
+        source_event_id=f"edumem0:{student_id}:profile",
         content=f"学习画像更新：{dimensions}",
         structured_payload={"dimensions": dimensions},
         confidence=0.68,

@@ -47,13 +47,6 @@ class Settings:
     api_port: int = int(_env("API_PORT", "8000"))
     database_url: str = _env("DATABASE_URL", "sqlite:///.data/learnforge_dev.sqlite")
     redis_url: str = _env("REDIS_URL", "redis://localhost:6379/0")
-    mimo_api_key: str = _env("MIMO_API_KEY", "")
-    mimo_base_url: str = _env("MIMO_BASE_URL", "https://token-plan-cn.xiaomimimo.com/v1")
-    mimo_text_model: str = _env("MIMO_TEXT_MODEL", "mimo-v2.5-pro")
-    mimo_fast_model: str = _env("MIMO_FAST_MODEL", "mimo-v2.5")
-    mimo_use_thinking: bool = _env("MIMO_USE_THINKING", "false").lower() == "true"
-    mimo_timeout_seconds: int = int(_env("MIMO_TIMEOUT_SECONDS", "180"))
-    mimo_max_tokens: int = int(_env("MIMO_MAX_TOKENS", "16384"))
     model_provider: str = _env("MODEL_PROVIDER", "gemini")
     gemini_api_key: str = _env("GEMINI_API_KEY", "")
     gemini_text_model: str = _env("GEMINI_TEXT_MODEL", "gemini-3.1-pro-preview")
@@ -61,7 +54,7 @@ class Settings:
     gemini_image_model: str = _env("GEMINI_IMAGE_MODEL", "gemini-3-pro-image")
     gemini_image_fallback_model: str = _env("GEMINI_IMAGE_FALLBACK_MODEL", "gemini-3-pro-image-preview")
     gemini_embedding_model: str = _env("GEMINI_EMBEDDING_MODEL", "gemini-embedding-2")
-    gemini_timeout_seconds: int = int(_env("GEMINI_TIMEOUT_SECONDS", _env("MIMO_TIMEOUT_SECONDS", "180")))
+    gemini_timeout_seconds: int = int(_env("GEMINI_TIMEOUT_SECONDS", "180"))
     gemini_connect_timeout_seconds: int = int(_env("GEMINI_CONNECT_TIMEOUT_SECONDS", "10"))
     gemini_max_tokens: int = int(_env("GEMINI_MAX_TOKENS", "32768"))
     image2_api_key: str = _env("IMAGE2_API_KEY", "")
@@ -70,17 +63,31 @@ class Settings:
     hermes_home: str = _env("HERMES_HOME", ".runtime/hermes")
     hermes_provider: str = _env("HERMES_PROVIDER", "gemini")
     hermes_require_sdk: bool = _env("HERMES_REQUIRE_SDK", "false").lower() == "true"
-    hermes_command: str = _env("HERMES_COMMAND", "/Users/mychanging/.local/bin/hermes")
+    hermes_command: str = _env("HERMES_COMMAND", "hermes")
     hermes_task_timeout_seconds: int = int(_env("HERMES_TASK_TIMEOUT_SECONDS", "600"))
     hermes_sdk_path: str = _env("HERMES_SDK_PATH", "")
     hermes_sdk_site_packages: str = _env("HERMES_SDK_SITE_PACKAGES", "")
     hermes_toolsets: str = _env("HERMES_TOOLSETS", "web,file,vision")
+    python_vision_fallback_enabled: bool = _env("PYTHON_VISION_FALLBACK_ENABLED", "false").lower() == "true"
     hermes_default_skills: str = _env(
         "HERMES_DEFAULT_SKILLS",
         "resource-bundle-skill,document-skill,mindmap-skill,quiz-skill,code-practice-skill,ppt-skill,guizang-ppt-skill,image-generation-skill,video-script-skill,reading-material-skill,custom-html-app-skill,notes-skill,dashboard-skill,verifier-skill,app-generation-skill,memory-update-skill,course-ingestion-skill,detailed-analysis-skill",
     )
-    unified_orchestrator_enabled: bool = _env("UNIFIED_ORCHESTRATOR", "false").lower() == "true"
+    unified_orchestrator_enabled: bool = _env("UNIFIED_ORCHESTRATOR", "true").lower() == "true"
     vector_store: str = _env("VECTOR_STORE", "pgvector")
+    object_storage_endpoint: str = _env("OBJECT_STORAGE_ENDPOINT", "")
+    object_storage_bucket: str = _env("OBJECT_STORAGE_BUCKET", "")
+    object_storage_access_key_id: str = _env("OBJECT_STORAGE_ACCESS_KEY_ID", "")
+    object_storage_secret_access_key: str = _env("OBJECT_STORAGE_SECRET_ACCESS_KEY", "")
+    object_storage_public_base_url: str = _env("OBJECT_STORAGE_PUBLIC_BASE_URL", "")
+    object_storage_region: str = _env("OBJECT_STORAGE_REGION", "auto")
+    api_public_base_url: str = _env("API_PUBLIC_BASE_URL", "http://127.0.0.1:8011")
+    notebooklm_provider: str = _env("NOTEBOOKLM_PROVIDER", "open_notebook")
+    open_notebook_web_url: str = _env("OPEN_NOTEBOOK_WEB_URL", "http://localhost:8502")
+    open_notebook_api_url: str = _env("OPEN_NOTEBOOK_API_URL", "http://localhost:5055")
+    open_notebook_allowed_origin: str = _env("OPEN_NOTEBOOK_ALLOWED_ORIGIN", "http://localhost:8502")
+    open_notebook_timeout_seconds: int = int(_env("OPEN_NOTEBOOK_TIMEOUT_SECONDS", "8"))
+    open_notebook_password: str = _env("OPEN_NOTEBOOK_PASSWORD", "")
 
     @property
     def project_root(self) -> Path:

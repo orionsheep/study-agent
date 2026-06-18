@@ -14,6 +14,7 @@ def app_interaction_memory(
         course_id=course_id,
         knowledge_point_id=knowledge_point_id,
         memory_type="app_interaction",
+        source_event_id=f"edumem0:{student_id}:app_interaction:{app_id}",
         content=f"{app_id} 交互：{event_type}",
         structured_payload={"app_id": app_id, "event_type": event_type, "payload": payload},
         confidence=0.62,

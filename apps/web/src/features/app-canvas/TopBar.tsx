@@ -1,9 +1,10 @@
-import { Cpu, Download, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Brain, Cpu, Download, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { TraceItem } from "../../lib/events/agentEvents";
 
 type Props = {
   isStreaming: boolean;
   traceLatest?: TraceItem;
+  memoryActive?: boolean;
   canvasHidden?: boolean;
   currentTopic?: string;
   courseLabel?: string;
@@ -12,7 +13,7 @@ type Props = {
   onLogout?: () => void;
 };
 
-export function TopBar({ isStreaming, traceLatest, canvasHidden, currentTopic, courseLabel, learningObjective, onToggleCanvas, onLogout }: Props) {
+export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, currentTopic, courseLabel, learningObjective, onToggleCanvas, onLogout }: Props) {
   return (
     <div className="topbar">
       <div className="brand">
@@ -60,6 +61,13 @@ export function TopBar({ isStreaming, traceLatest, canvasHidden, currentTopic, c
           已自动保存
         </div>
       )}
+
+      {memoryActive ? (
+        <div className="memory-chip" title="LearnForge 正在根据你的学习记录个性化内容">
+          <Brain size={13} />
+          记忆已就绪
+        </div>
+      ) : null}
 
       {onToggleCanvas ? (
         <button

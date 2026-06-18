@@ -99,7 +99,7 @@ class HermesPythonAgentAdapter:
                 enabled_toolsets=[item.strip() for item in toolsets.split(",") if item.strip()],
                 quiet_mode=quiet_mode,
                 skip_memory=False,
-                skip_context_files=False,
+                skip_context_files=True,
                 max_iterations=max_iterations,
                 session_id=session_id,
                 user_id=user_id,

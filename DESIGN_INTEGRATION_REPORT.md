@@ -110,7 +110,7 @@
   - `streamChatMessage`
   - `openAppLink`
   - `postAppEvent`
-- Backend, Agent, EduMem0, MiMo, and Hermes files were not rewritten for this design integration.
+- Backend, Agent, EduMem0, Gemini, and Hermes files were not rewritten for this design integration.
 
 ## AppLink Flight Verification
 
@@ -123,7 +123,7 @@ PLAYWRIGHT_BASE_URL=http://127.0.0.1:3006 npx playwright test apps/web/e2e/produ
 Covered by:
 
 - `chat stream creates AppLink and AppLink Flight focuses target App`
-- `chat trace exposes the MiMo model gateway step`
+- `chat trace exposes the Gemini model gateway step`
 - `LearningPath stage click focuses App and canvas controls work`
 
 Manual browser evidence captured during integration:
@@ -227,7 +227,7 @@ Results:
 
 External readiness during validation:
 
-- MiMo: `ready`
+- Gemini: `ready`
 - Hermes: `ready`, `python_aiagent_sdk`, `sdk_embedded`
 
 The design integration did not change unrelated external-provider configuration.

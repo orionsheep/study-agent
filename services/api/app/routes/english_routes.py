@@ -8,14 +8,17 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.auth import get_current_student
+from app.core.session import SessionHeaders, get_session_headers, resolve_session_context
 from app.english_word_service import (
+    _efw_request,
     get_fission_graph,
     get_word_detail,
     get_word_list,
     get_quiz_data,
     submit_quiz_result,
-    get_user_libraries,
+    get_libraries,
+    get_library_words,
+    get_library_groups,
     create_user_library,
     get_study_plan,
     update_study_plan,
@@ -23,6 +26,16 @@ from app.english_word_service import (
 )
 
 router = APIRouter(prefix="/api/english", tags=["english"])
+
+
+def get_current_student(headers: SessionHeaders = Depends(get_session_headers)) -> str:
+    """Extract student_id from session headers."""
+    ctx = resolve_session_context(
+        explicit_student_id=None,
+        explicit_course_id=None,
+        headers=headers,
+    )
+    return ctx.student_id
 
 
 @router.get("/health")
@@ -47,14 +60,19 @@ async def fission_graph(
 @router.get("/words")
 async def word_list(
     library_id: str | None = None,
-    search: str | None = None,
+    search: str | None = Query(default=None),
+    # The english-word-fission frontend historically sends `query` (not `search`),
+    # and the ported WordList.tsx still does. Accept both so the search box actually
+    # filters words instead of silently returning an empty list.
+    query: str | None = Query(default=None, alias="query"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     student_id: str = Depends(get_current_student),
-) -> dict[str, Any]:
+) -> Any:
     """Get word list."""
     try:
-        return await get_word_list(student_id, library_id, search, limit, offset)
+        effective_search = search or query
+        return await get_word_list(student_id, library_id, effective_search, limit, offset)
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"EFW backend error: {e}")
 
@@ -104,11 +122,107 @@ async def quiz_submit(
 
 @router.get("/libraries")
 async def libraries(
+    path: str | None = Query(default=None),
     student_id: str = Depends(get_current_student),
-) -> dict[str, Any]:
-    """Get user libraries."""
+) -> Any:
+    """Get libraries (system file system + user libraries).
+
+    Only directories are surfaced to the workspace — the individual CSV files inside
+    考试考纲 are an implementation detail; the workspace treats the directory as a
+    single library and lists its aggregated words directly.
+    """
     try:
-        return await get_user_libraries(student_id)
+        data = await get_libraries(student_id, path)
+        items = data if isinstance(data, list) else data.get("libraries", [])
+        # Keep directories only; drop the raw .csv file entries.
+        dirs = [it for it in items if it.get("type") == "directory"]
+        return dirs
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"EFW backend error: {e}")
+
+
+@router.get("/library-words")
+async def library_words(
+    path: str = Query(...),
+    group_index: int | None = Query(default=None, alias="groupIndex"),
+    group_size: int = Query(default=100, ge=1, le=500, alias="groupSize"),
+    include_definitions: bool = Query(default=False, alias="includeDefinitions"),
+    student_id: str = Depends(get_current_student),
+) -> Any:
+    """Get words from a library file."""
+    try:
+        return await get_library_words(student_id, path, group_index, group_size, include_definitions)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"EFW backend error: {e}")
+
+
+@router.get("/library-groups")
+async def library_groups(
+    path: str = Query(...),
+    group_size: int = Query(default=100, ge=1, le=500, alias="groupSize"),
+    student_id: str = Depends(get_current_student),
+) -> Any:
+    """Get groups for a library file."""
+    try:
+        return await get_library_groups(student_id, path, group_size)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"EFW backend error: {e}")
+
+
+@router.get("/user/progress")
+async def user_progress(
+    student_id: str = Depends(get_current_student),
+) -> Any:
+    """Get user learning progress."""
+    try:
+        # Proxy to english-word-fission /api/user/progress
+        return await _efw_request("GET", "/api/user/progress", student_id)
+    except Exception as e:
+        # Fallback: return empty progress if backend not available
+        return {}
+
+
+@router.get("/notes")
+async def notes(
+    word: str = Query(...),
+    student_id: str = Depends(get_current_student),
+) -> Any:
+    """Get notes for a word."""
+    try:
+        return await _efw_request("GET", "/api/notes", student_id, params={"word": word})
+    except Exception as e:
+        return []
+
+
+@router.get("/user/libraries/{library_id}/words")
+async def user_library_words(
+    library_id: str,
+    group_index: int | None = Query(default=None),
+    group_size: int = Query(default=100, ge=1, le=500),
+    include_definitions: bool = Query(default=False),
+    student_id: str = Depends(get_current_student),
+) -> Any:
+    """Get words from a user library."""
+    try:
+        params: dict[str, Any] = {"groupSize": group_size}
+        if group_index is not None:
+            params["groupIndex"] = group_index
+        if include_definitions:
+            params["includeDefinitions"] = "true"
+        return await _efw_request("GET", f"/api/user/libraries/{library_id}/words", student_id, params=params)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"EFW backend error: {e}")
+
+
+@router.get("/user/libraries/{library_id}/groups")
+async def user_library_groups(
+    library_id: str,
+    group_size: int = Query(default=100, ge=1, le=500),
+    student_id: str = Depends(get_current_student),
+) -> Any:
+    """Get groups for a user library."""
+    try:
+        return await _efw_request("GET", f"/api/user/libraries/{library_id}/groups", student_id, params={"groupSize": group_size})
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"EFW backend error: {e}")
 

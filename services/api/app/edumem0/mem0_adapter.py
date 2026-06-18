@@ -5,7 +5,13 @@ from app.schemas.app_protocol import EduMemoryItem
 
 
 class Mem0CompatibleAdapter:
-    """Small adapter exposing add/search/update/delete-shaped operations for EduMem0."""
+    """为 EduMem0 提供 add/search/update/delete 形态的薄适配层。
+
+    注意:类名里的 "Mem0" 只是历史命名,本系统并非真正的 Mem0 向量记忆库,
+    也不调用 Mem0 云 API。EduMem0 是基于 edu_memories 关系表 + 关键词检索的
+    自研记忆层。若需真正的语义向量记忆,应改接 Hermes MemoryProvider(见
+    .runtime/hermes/plugins/edumem0/)或启用 mem0 云 provider。
+    """
 
     def __init__(self, client: EduMem0Client | None = None) -> None:
         self.client = client or EduMem0Client()

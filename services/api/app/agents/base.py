@@ -10,6 +10,8 @@ class TutorTurnContext(BaseModel):
     course_id: str = "ai-course"
     conversation_id: str = "demo-conversation"
     message: str
+    requested_skill: str | None = None
+    attachments: list[dict[str, Any]] = Field(default_factory=list)
     model_provider: str | None = None
     recent_messages: list[dict[str, Any]] = Field(default_factory=list)
     last_assistant_answer: str | None = None

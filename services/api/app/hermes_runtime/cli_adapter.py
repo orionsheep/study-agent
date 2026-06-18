@@ -111,11 +111,6 @@ class HermesCliAdapter:
         env = os.environ.copy()
         env["HERMES_HOME"] = str(settings.project_root / settings.hermes_home)
         env["HERMES_ACCEPT_HOOKS"] = "1"
-        if settings.mimo_api_key:
-            env["MIMO_API_KEY"] = settings.mimo_api_key
-            env["XIAOMI_API_KEY"] = settings.mimo_api_key
-        env["MIMO_BASE_URL"] = settings.mimo_base_url
-        env["XIAOMI_BASE_URL"] = settings.mimo_base_url
         if settings.gemini_api_key:
             env["GEMINI_API_KEY"] = settings.gemini_api_key
         return env

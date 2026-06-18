@@ -6,15 +6,15 @@ from pathlib import Path
 
 ROOT = Path.cwd()
 PACK = ROOT.parent / "learnforge_v4_all_requirements_test_gated_goal_pack"
-REQ_FILE = PACK / "requirements" / "requirements.json"
+REQ_FILE = ROOT / "requirements" / "requirements.json"
 if not REQ_FILE.exists():
-    REQ_FILE = ROOT / "requirements" / "requirements.json"
+    REQ_FILE = PACK / "requirements" / "requirements.json"
 
 EVIDENCE_BY_CATEGORY = {
     "architecture": ["TARGET_PROJECT_STRUCTURE.md", "scripts/verify_no_mock_runtime.sh"],
     "backend": ["services/api/app/main.py", "services/api/tests/test_health_routes.py", "services/api/tests/test_database_schema.py"],
     "backend-api": ["services/api/app/main.py", "services/api/tests/test_health_routes.py"],
-    "external": ["services/api/app/model_gateway/mimo_client.py", "services/api/app/hermes_runtime/runtime.py", "services/api/app/image_gateway/image2_client.py", "services/api/tests/test_gateway_status.py"],
+    "external": ["services/api/app/model_gateway/gemini_client.py", "services/api/app/hermes_runtime/runtime.py", "services/api/app/image_gateway/gemini_image_client.py", "services/api/tests/test_gateway_status.py"],
     "agent": ["services/api/app/agents/", "services/api/tests/test_agents_and_skills.py"],
     "skill": ["services/api/app/skills/", "services/api/hermes_profile/skills/", "services/api/tests/test_agents_and_skills.py"],
     "memory": ["services/api/app/edumem0/", "services/api/tests/test_edumem0_policies.py", "services/api/tests/test_memory_end_to_end.py"],

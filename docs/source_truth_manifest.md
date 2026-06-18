@@ -7,8 +7,9 @@ Every non-OS file in the requirement pack is inventoried here with a hash and pr
 | Pack file | SHA-256 | Role | Product evidence |
 | --- | --- | --- | --- |
 | `.omx/logs/omx-2026-06-03.jsonl` | `cc5c593dd34daee6` | pack operational metadata | `RUN_REPORT.md` |
-| `.omx/state/native-stop-state.json` | `9b82d0fc504aa532` | pack operational metadata | `RUN_REPORT.md` |
-| `.omx/state/session.json` | `bdd2ab80abc0dfc8` | pack operational metadata | `RUN_REPORT.md` |
+| `.omx/logs/omx-2026-06-04.jsonl` | `a691fc746d47f049` | pack operational metadata | `RUN_REPORT.md` |
+| `.omx/state/native-stop-state.json` | `9031c0fb5cf98a5e` | pack operational metadata | `RUN_REPORT.md` |
+| `.omx/state/session.json` | `558c30f427b54589` | pack operational metadata | `RUN_REPORT.md` |
 | `AGENT_TOPOLOGY_REQUIRED.md` | `803c93a0d3d44e1b` | requirements source document | `services/api/app/agents`, `docs/agent_design.md`, `docs/agents` |
 | `APP_CANVAS_REQUIRED.md` | `fc63076c54430566` | requirements source document | `apps/web/src/features/app-canvas`, `docs/app_canvas_design.md` |
 | `APP_PROTOCOL_REQUIRED.md` | `b8affa0a4d9173b8` | requirements source document | `packages/app-protocol/src/types.ts`, `services/api/app/schemas/app_protocol.py` |
@@ -21,7 +22,7 @@ Every non-OS file in the requirement pack is inventoried here with a hash and pr
 | `DELIVERABLES_REQUIRED.md` | `5f8604e01490bd70` | requirements source document | `RUN_REPORT.md`, `docs/test_report.md`, `validation/requirement_results.json` |
 | `FRONTEND_PRODUCT_REQUIRED.md` | `bd75b2cf9e9c0585` | requirements source document | `apps/web/src/app/LearnForgeApp.tsx`, `apps/web/src/app/styles.css` |
 | `FULL_GOAL_COMMAND.md` | `2e7c88eeb23ac394` | requirements source document | `RUN_REPORT.md`, `BLOCKED_REAL_INTEGRATION_REPORT.md`, `docs/runbook.md` |
-| `HERMES_MIMO_IMAGE2_REQUIRED.md` | `47bdd3a6dd6402f8` | requirements source document | `services/api/app/hermes_runtime`, `services/api/app/model_gateway/mimo_client.py`, `services/api/app/image_gateway/image2_client.py` |
+| `HERMES_MIMO_IMAGE2_REQUIRED.md` | `47bdd3a6dd6402f8` | requirements source document | `services/api/app/hermes_runtime`, `services/api/app/model_gateway/gemini_client.py`, `services/api/app/image_gateway/gemini_image_client.py` |
 | `IMPLEMENT_FULL_PRODUCT.md` | `873d3034ee82569e` | requirements source document | `RUN_REPORT.md`, `scripts/run_full_validation.sh` |
 | `MEMORY_SYSTEM_REQUIRED.md` | `404d666840a9cd90` | requirements source document | `services/api/app/edumem0`, `docs/memory_design.md` |
 | `NATIVE_LEARNING_APPS_REQUIRED.md` | `f1ebaf090ac94734` | requirements source document | `apps/web/src/features/learning-apps/NativeAppRenderer.tsx`, `packages/learning-apps/src/index.ts` |

@@ -19,6 +19,7 @@ export type CanvasAppType =
   | 'resource.folder'
   | 'custom.html'
   | 'english.workspace'
+  | 'notebooklm.workspace'
   | 'humanities.notebook';
 
 export interface CanvasViewport { x: number; y: number; scale: number; }

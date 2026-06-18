@@ -132,8 +132,25 @@ CREATE TABLE IF NOT EXISTS course_documents (
   title TEXT NOT NULL,
   file_url TEXT,
   parser TEXT,
+  ingest_type TEXT NOT NULL DEFAULT 'course_seed',
+  owner_scope TEXT NOT NULL DEFAULT 'course',
+  owner_id TEXT,
+  source_scope TEXT NOT NULL DEFAULT 'course_official',
+  original_url TEXT,
+  mime_type TEXT,
+  upload_status TEXT NOT NULL DEFAULT 'ready',
+  metadata JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMP NOT NULL DEFAULT now()
 );
+
+ALTER TABLE course_documents ADD COLUMN IF NOT EXISTS ingest_type TEXT NOT NULL DEFAULT 'course_seed';
+ALTER TABLE course_documents ADD COLUMN IF NOT EXISTS owner_scope TEXT NOT NULL DEFAULT 'course';
+ALTER TABLE course_documents ADD COLUMN IF NOT EXISTS owner_id TEXT;
+ALTER TABLE course_documents ADD COLUMN IF NOT EXISTS source_scope TEXT NOT NULL DEFAULT 'course_official';
+ALTER TABLE course_documents ADD COLUMN IF NOT EXISTS original_url TEXT;
+ALTER TABLE course_documents ADD COLUMN IF NOT EXISTS mime_type TEXT;
+ALTER TABLE course_documents ADD COLUMN IF NOT EXISTS upload_status TEXT NOT NULL DEFAULT 'ready';
+ALTER TABLE course_documents ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}';
 
 CREATE TABLE IF NOT EXISTS document_chunks (
   id TEXT PRIMARY KEY,
@@ -143,6 +160,57 @@ CREATE TABLE IF NOT EXISTS document_chunks (
   content TEXT NOT NULL,
   source_ref JSONB NOT NULL DEFAULT '{}',
   embedding vector,
+  created_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS notebooks (
+  id TEXT PRIMARY KEY,
+  owner_scope TEXT NOT NULL,
+  owner_id TEXT NOT NULL,
+  course_id TEXT REFERENCES courses(id),
+  title TEXT NOT NULL,
+  purpose TEXT NOT NULL,
+  description TEXT,
+  tags JSONB NOT NULL DEFAULT '[]',
+  open_notebook_id TEXT,
+  sync_status TEXT NOT NULL DEFAULT 'not_synced',
+  created_at TIMESTAMP NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS notebook_sources (
+  id TEXT PRIMARY KEY,
+  notebook_id TEXT NOT NULL REFERENCES notebooks(id),
+  source_id TEXT NOT NULL,
+  source_kind TEXT NOT NULL DEFAULT 'course_document',
+  source_role TEXT NOT NULL DEFAULT 'primary',
+  sync_status TEXT NOT NULL DEFAULT 'not_synced',
+  open_notebook_source_id TEXT,
+  synced_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT now(),
+  UNIQUE(notebook_id, source_id)
+);
+
+CREATE TABLE IF NOT EXISTS notebook_assignments (
+  id TEXT PRIMARY KEY,
+  notebook_id TEXT NOT NULL REFERENCES notebooks(id),
+  student_id TEXT NOT NULL REFERENCES students(id),
+  course_id TEXT REFERENCES courses(id),
+  status TEXT NOT NULL DEFAULT 'active',
+  rank INT NOT NULL DEFAULT 100,
+  assigned_reason TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT now(),
+  UNIQUE(notebook_id, student_id, course_id)
+);
+
+CREATE TABLE IF NOT EXISTS notebook_memory_events (
+  id TEXT PRIMARY KEY,
+  notebook_id TEXT REFERENCES notebooks(id),
+  student_id TEXT NOT NULL REFERENCES students(id),
+  course_id TEXT REFERENCES courses(id),
+  event_type TEXT NOT NULL,
+  source_refs JSONB NOT NULL DEFAULT '[]',
+  payload JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
@@ -243,6 +311,14 @@ CREATE TABLE IF NOT EXISTS chat_app_links (
   created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS chat_resource_links (
+  id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL,
+  resource_id TEXT NOT NULL REFERENCES resources(id),
+  source_run_id TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS chat_messages (
   id TEXT PRIMARY KEY,
   student_id TEXT NOT NULL REFERENCES students(id),
@@ -251,6 +327,22 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   role TEXT NOT NULL,
   text TEXT NOT NULL,
   metadata JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS artifacts (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  object_key TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  size_bytes BIGINT NOT NULL,
+  title TEXT,
+  source_run_id TEXT,
+  student_id TEXT REFERENCES students(id),
+  course_id TEXT REFERENCES courses(id),
+  conversation_id TEXT,
+  metadata_json JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
@@ -353,4 +445,6 @@ CREATE INDEX IF NOT EXISTS idx_edu_memories_student_course_type ON edu_memories(
 CREATE INDEX IF NOT EXISTS idx_edu_memories_student_course_updated ON edu_memories(student_id, course_id, updated_at);
 CREATE INDEX IF NOT EXISTS idx_edu_memories_source_event ON edu_memories(student_id, source_event_id);
 CREATE INDEX IF NOT EXISTS idx_resources_student_course ON resources(student_id, course_id);
+CREATE INDEX IF NOT EXISTS idx_chat_resource_links_message ON chat_resource_links(message_id);
+CREATE INDEX IF NOT EXISTS idx_chat_resource_links_run ON chat_resource_links(source_run_id);
 CREATE INDEX IF NOT EXISTS idx_canvas_apps_student_updated ON canvas_apps(student_id, updated_at);

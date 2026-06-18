@@ -7,6 +7,7 @@ def mastery_memory(student_id: str, topic: str, score: float, evidence_type: str
         course_id=course_id,
         knowledge_point_id=topic,
         memory_type="mastery",
+        source_event_id=f"edumem0:{student_id}:mastery:{topic}",
         content=f"{topic} 掌握度更新为 {score:.2f}",
         structured_payload={"topic": topic, "score": score},
         confidence=0.82,

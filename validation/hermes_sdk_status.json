@@ -1,6 +1,6 @@
 {
   "status": "ready",
-  "reason": "Hermes SDK embedded via run_agent.AIAgent; provider=mimo; api_mode=chat_completions; model=mimo-v2.5-pro.",
+  "reason": "Hermes SDK embedded via run_agent.AIAgent; provider=gemini; api_mode=chat_completions; model=gemini-3.1-pro-preview.",
   "adapter": "python_aiagent_sdk",
   "home": "/Users/mychanging/Downloads/learnforge-v2-product/.runtime/hermes",
   "skills_synced": true,
@@ -11,5 +11,42 @@
   "sdk_version": "0.14.0",
   "sdk_path": "/Users/mychanging/Obsidian本地仓库/2026是最后的交汇点-起飞/.hermes/hermes-agent/run_agent.py",
   "embedded_agent_class": "run_agent.AIAgent",
-  "cli_status": null
+  "cli_status": null,
+  "execution_mode": "sdk_embedded",
+  "skills_path": "/Users/mychanging/Downloads/learnforge-v2-product/services/api/hermes_profile/skills",
+  "last_execution_status": null,
+  "profile_path": "/Users/mychanging/Downloads/learnforge-v2-product/.runtime/hermes/learnforge_hermes_profile.json",
+  "native_config_path": "/Users/mychanging/Downloads/learnforge-v2-product/.runtime/hermes/config.yaml",
+  "profile_synced": true,
+  "configured_skills": [
+    "resource-bundle-skill",
+    "document-skill",
+    "mindmap-skill",
+    "quiz-skill",
+    "code-practice-skill",
+    "ppt-skill",
+    "guizang-ppt-skill",
+    "image-generation-skill",
+    "video-script-skill",
+    "reading-material-skill",
+    "custom-html-app-skill",
+    "notes-skill",
+    "dashboard-skill",
+    "verifier-skill",
+    "app-generation-skill",
+    "memory-update-skill",
+    "course-ingestion-skill",
+    "detailed-analysis-skill"
+  ],
+  "enabled_toolsets": [
+    "web",
+    "file",
+    "vision"
+  ],
+  "skills_status": "ready",
+  "skills_detail": "Installed Skills                         \n┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━┓\n┃ Name                    ┃ Category ┃ Source ┃ Trust ┃ Status  ┃\n┡━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━┩\n│ app-generation-skill    │          │ local  │ local │ enabled │\n│ code-practice-skill     │          │ local  │ local │ enabled │\n│ course-ingestion-skill  │          │ local  │ local │ enabled │\n│ custom-html-app-skill   │          │ local  │ local │ enabled │\n│ dashboard-skill         │          │ local  │ local │ enabled │\n│ detailed-analysis-skill │          │ local  │ local │ enabled │\n│ document-skill          │          │ local  │ local │ enabled │\n│ guizang-ppt-skill       │          │ local  │ local │ enabled │\n│ image-generation-skill  │          │ local  │ local │ enabled │\n│ memory-update-skill     │          │ local  │ local │ enabled │\n│ mindmap-skill           │          │ local  │ local │ enabled │\n│ notes-skill             │          │ local  │ local │ enabled │\n│ ppt-skill               │          │ local  │ local │ enabled │\n│ quiz-skill              │          │ local  │ local │ enabled │\n│ reading-material-skill  │         ",
+  "tools_status": "ready",
+  "tools_detail": "Built-in toolsets (cli):\n  ✓ enabled  web  🔍 Web Search & Scraping\n  ✓ enabled  browser  🌐 Browser Automation\n  ✓ enabled  terminal  💻 Terminal & Processes\n  ✓ enabled  file  📁 File Operations\n  ✓ enabled  code_execution  ⚡ Code Execution\n  ✓ enabled  vision  👁️  Vision / Image Analysis\n  ✗ disabled  video  🎬 Video Analysis\n  ✓ enabled  image_gen  🎨 Image Generation\n  ✗ disabled  video_gen  🎬 Video Generation\n  ✗ disabled  x_search  🐦 X (Twitter) Search\n  ✗ disabled  moa  🧠 Mixture of Agents\n  ✓ enabled  tts  🔊 Text-to-Speech\n  ✓ enabled  skills  📚 Skills\n  ✓ enabled  todo  📋 Task Planning\n  ✓ enabled  memory  💾 Memory\n  ✓ enabled  session_search  🔎 Session Search\n  ✓ enabled  clarify  ❓ Clarifying Questions\n  ✓ enabled  delegation  👥 Task Delegation\n  ✓ enabled  cronjob  ⏰ Cron Jobs\n  ✓ enabled  messaging  📨 Cross-Platform Messaging\n  ✗ disabled  homeassistant  🏠 Home Assistant\n  ✗ disabled  spotify  🎵 Spotify\n  ✗ disabled  yuanbao  🤖 Yuanbao\n  ✓ enabled  computer_use  🖱️  Computer Use (macOS)",
+  "mcp_status": "ready",
+  "mcp_detail": "No MCP servers configured.\n\n  Add one with:\n    hermes mcp add <name> --url <endpoint>\n    hermes mcp add <name> --command <cmd> --args <args...>"
 }

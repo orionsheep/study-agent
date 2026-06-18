@@ -7,6 +7,7 @@ def misconception_memory(student_id: str, topic: str, tags: list[str], course_id
         course_id=course_id,
         knowledge_point_id=topic,
         memory_type="misconception",
+        source_event_id=f"edumem0:{student_id}:misconception:{topic}",
         content=f"{topic} 出现误区：{', '.join(tags)}",
         structured_payload={"topic": topic, "misconception_tags": tags},
         confidence=0.84,

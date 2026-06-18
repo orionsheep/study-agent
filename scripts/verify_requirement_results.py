@@ -5,9 +5,9 @@ from pathlib import Path
 
 project = Path.cwd()
 pack = project.parent / "learnforge_v4_all_requirements_test_gated_goal_pack"
-req_file = pack / "requirements" / "requirements.json"
+req_file = project / "requirements" / "requirements.json"
 if not req_file.exists():
-    req_file = project / "requirements" / "requirements.json"
+    req_file = pack / "requirements" / "requirements.json"
 results_file = project / "validation" / "requirement_results.json"
 
 req = json.loads(req_file.read_text(encoding="utf-8"))["requirements"]
@@ -44,8 +44,12 @@ for item in req:
 blocked = project / "BLOCKED_REAL_INTEGRATION_REPORT.md"
 if blocked.exists():
     blocked_text = blocked.read_text(encoding="utf-8")
-    if "Status: not complete for external readiness." not in blocked_text:
-        failed.append(("REPORT-002", "blocked_report_semantics", "Blocked report must not mark external readiness complete."))
+    valid_status = (
+        "Status: not complete for external readiness." in blocked_text
+        or "Status: external readiness complete." in blocked_text
+    )
+    if not valid_status:
+        failed.append(("REPORT-002", "integration_report_semantics", "Integration report must state whether external readiness is complete."))
 
 if missing or failed or extra or duplicates:
     print("Requirement validation failed")

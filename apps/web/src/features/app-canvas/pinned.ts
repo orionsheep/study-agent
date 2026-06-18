@@ -5,7 +5,7 @@ import type { CanvasApp } from "@learnforge/app-protocol";
 export const PINNED_APP_IDS = new Set(["app-profile", "app-dashboard", "app-resource"]);
 export const PINNED_APP_TYPES = new Set(["profile.dashboard", "dashboard.learning", "resource.center"]);
 
-export const SYSTEM_MODULE_TYPES = new Set(["english.workspace", "humanities.notebook"]);
+export const SYSTEM_MODULE_TYPES = new Set(["english.workspace", "notebooklm.workspace", "humanities.notebook"]);
 export const REALTIME_TYPES = new Set(["ppt.preview", "image.explanation", "video.script", "video.player", "custom.html"]);
 
 export function isPinnedApp(app: Pick<CanvasApp, "app_id" | "app_type">): boolean {

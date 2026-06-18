@@ -5,6 +5,8 @@ import { fetchResources, postAppEvent, postResourceFeedback, submitQuiz, type Se
 import { gradientDescent, isLearningRateUnstable, workEnergy, type WorkEnergyInput } from "./calculations";
 import { CustomHtmlAppRenderer } from "../custom-html-app/CustomHtmlAppRenderer";
 import { bilibiliEmbedUrl, extractBvidFromResource, type BilibiliEmbedOptions } from "../../lib/video/bilibili";
+import { EnglishWorkspaceApp as EnglishWorkspaceAppExternal } from "./english/EnglishWorkspaceApp";
+import { NotebookLMWorkspaceApp } from "./notebooklm/NotebookLMWorkspaceApp";
 
 type Props = {
   app: CanvasApp;
@@ -35,6 +37,7 @@ const iconMap: Partial<Record<CanvasApp["app_type"], typeof Boxes>> = {
   "resource.folder": Boxes,
   "custom.html": Image,
   "english.workspace": Languages,
+  "notebooklm.workspace": BookOpen,
   "humanities.notebook": BookOpen
 };
 
@@ -57,7 +60,8 @@ const appTypeLabels: Partial<Record<CanvasApp["app_type"], string>> = {
   "resource.folder": "资源文件夹",
   "custom.html": "互动演示",
   "english.workspace": "英语工作区",
-  "humanities.notebook": "文科笔记本"
+  "notebooklm.workspace": "NotebookLM",
+  "humanities.notebook": "NotebookLM"
 };
 
 function customHtmlIsPptDeck(app: CanvasApp): boolean {
@@ -93,17 +97,23 @@ export function NativeAppRenderer({ app, dashboard, isFullscreen, onEvent, onFoc
   const artifactKind = customHtmlArtifactKind(app, isPptDeck);
   const Icon = isPptDeck ? Presentation : iconMap[app.app_type] ?? Boxes;
   const appTypeLabel = isPptDeck ? "网页 PPT" : appTypeLabels[app.app_type] ?? "学习应用";
+  // Workspace apps already show their type in the window titlebar; the duplicate
+  // type strip here would just steal ~32px of vertical space for no new information.
+  const isWorkspaceApp = app.app_type === "english.workspace" || app.app_type === "notebooklm.workspace" || app.app_type === "humanities.notebook";
   const bodyClassName = [
     "native-app-body",
     app.app_type === "custom.html" ? "native-app-body-custom" : "",
-    app.app_type === "image.explanation" ? "native-app-body-image" : ""
+    app.app_type === "image.explanation" ? "native-app-body-image" : "",
+    isWorkspaceApp ? "native-app-body-workspace" : ""
   ].filter(Boolean).join(" ");
   return (
     <div className={bodyClassName}>
-      <div className={`app-type-strip ${app.app_type === "custom.html" ? "app-type-strip-custom" : ""}`}>
-        <Icon size={15} />
-        <span>{appTypeLabel}</span>
-      </div>
+      {!isWorkspaceApp && (
+        <div className={`app-type-strip ${app.app_type === "custom.html" ? "app-type-strip-custom" : ""}`}>
+          <Icon size={15} />
+          <span>{appTypeLabel}</span>
+        </div>
+      )}
       {app.app_type === "profile.dashboard" ? <ProfileDashboard dashboard={dashboard} isFullscreen={isFullscreen} /> : null}
       {app.app_type === "learning.path" ? <LearningPathApp dashboard={dashboard} onFocusApp={onFocusApp} /> : null}
       {app.app_type === "knowledge.graph" || app.app_type === "mindmap.concept" ? <KnowledgeGraphApp app={app} /> : null}
@@ -118,8 +128,8 @@ export function NativeAppRenderer({ app, dashboard, isFullscreen, onEvent, onFoc
       {app.app_type === "video.script" ? <VideoScriptApp app={app} /> : null}
       {app.app_type === "video.player" ? <VideoPlayerApp app={app} isFullscreen={isFullscreen} /> : null}
       {app.app_type === "resource.center" ? <ResourceCenterApp app={app} isFullscreen={isFullscreen} onDashboardUpdate={onDashboardUpdate} sessionContext={sessionContext} /> : null}
-      {app.app_type === "english.workspace" ? <EnglishWorkspaceApp app={app} onEvent={onEvent} /> : null}
-      {app.app_type === "humanities.notebook" ? <HumanitiesNotebookApp app={app} onEvent={onEvent} /> : null}
+      {app.app_type === "english.workspace" ? <EnglishWorkspaceAppExternal app={app} onEvent={onEvent} sessionContext={sessionContext} /> : null}
+      {app.app_type === "notebooklm.workspace" || app.app_type === "humanities.notebook" ? <NotebookLMWorkspaceApp app={app} onEvent={onEvent} sessionContext={sessionContext} /> : null}
       {app.app_type === "custom.html" ? (
         <CustomHtmlAppRenderer
           code={String(app.payload.html ?? "")}
@@ -129,6 +139,7 @@ export function NativeAppRenderer({ app, dashboard, isFullscreen, onEvent, onFoc
           forceDeckBridge={isPptDeck}
           artifactKind={artifactKind}
           sessionContext={sessionContext}
+          onEvent={(eventType, payload) => onEvent(app.app_id, eventType, payload)}
         />
       ) : null}
     </div>
@@ -1331,90 +1342,10 @@ function ResourceCenterApp({ app, isFullscreen, onDashboardUpdate, sessionContex
 }
 
 // ── English Workspace ─────────────────────────────────────────────────────
-function EnglishWorkspaceApp({ app, onEvent }: { app: CanvasApp; onEvent: Props["onEvent"] }) {
-  const [activeTab, setActiveTab] = useState<"vocabulary" | "fission" | "quiz" | "chat">("vocabulary");
-  const [selectedWord, setSelectedWord] = useState<string>(String(app.payload?.incoming_word ?? app.payload?.selected_word ?? ""));
-
-  // Listen for incoming_word updates from external events
-  useEffect(() => {
-    const incoming = app.payload?.incoming_word as string | undefined;
-    if (incoming && incoming !== selectedWord) {
-      setSelectedWord(incoming);
-      setActiveTab("fission");
-    }
-  }, [app.payload?.incoming_word]);
-
-  const tabs = [
-    { key: "vocabulary" as const, label: "单词列表", icon: BookOpen },
-    { key: "fission" as const, label: "裂变图", icon: GitBranch },
-    { key: "quiz" as const, label: "测验", icon: CheckCircle2 },
-    { key: "chat" as const, label: "AI 对话", icon: Sparkles },
-  ];
-
-  return (
-    <div className="english-workspace" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      {/* Tab bar */}
-      <div className="ew-tabs" style={{ display: "flex", gap: 4, padding: "8px 12px", borderBottom: "1px solid var(--border-1)" }}>
-        {tabs.map((t) => {
-          const Icon = t.icon;
-          const isActive = activeTab === t.key;
-          return (
-            <button
-              key={t.key}
-              onClick={() => setActiveTab(t.key)}
-              className={isActive ? "ew-tab-active" : "ew-tab"}
-              style={{
-                display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8,
-                border: "none", cursor: "pointer", fontSize: 13,
-                background: isActive ? "var(--accent-grad)" : "transparent",
-                color: isActive ? "#fff" : "var(--text-2)",
-              }}
-            >
-              <Icon size={14} /> {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Tab content */}
-      <div className="ew-content" style={{ flex: 1, overflow: "auto", padding: 12 }}>
-        {activeTab === "vocabulary" && (
-          <div className="ew-placeholder">
-            <p>单词列表</p>
-            <p style={{ color: "var(--text-3)", fontSize: 13 }}>从 english-word-fission 提取的虚拟滚动单词列表</p>
-          </div>
-        )}
-        {activeTab === "fission" && (
-          <div className="ew-placeholder">
-            <p>裂变图</p>
-            <p style={{ color: "var(--text-3)", fontSize: 13 }}>d3-force 力导向图，中心词：{selectedWord || "未选择"}</p>
-            {selectedWord && (
-              <button
-                onClick={() => onEvent(app.app_id, "english.setImmersive", { word: selectedWord })}
-                style={{ marginTop: 12, padding: "8px 16px", borderRadius: 8, border: "none", background: "var(--accent-grad)", color: "#fff", cursor: "pointer" }}
-              >
-                沉浸模式
-              </button>
-            )}
-          </div>
-        )}
-        {activeTab === "quiz" && (
-          <div className="ew-placeholder">
-            <p>测验</p>
-            <p style={{ color: "var(--text-3)", fontSize: 13 }}>拼写/选择/回忆三种测验模式</p>
-          </div>
-        )}
-        {activeTab === "chat" && (
-          <EnglishChatPanel
-            app={app}
-            selectedWord={selectedWord}
-            onEvent={onEvent}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
+// EnglishWorkspaceApp lives in:
+// apps/web/src/features/learning-apps/english/EnglishWorkspaceApp.tsx
+// It no longer embeds an AI chat panel — all English dialogue is unified in the
+// right-side Hermes (TutorChat) via the english_chat skill.
 
 // ── Humanities Notebook ──────────────────────────────────────────────────
 function HumanitiesNotebookApp({ app }: { app: CanvasApp }) {
@@ -1431,109 +1362,6 @@ function HumanitiesNotebookApp({ app }: { app: CanvasApp }) {
 }
 
 // ── English Chat Panel (inside workspace) ─────────────────────────────────
-function EnglishChatPanel({ app, selectedWord, onEvent }: { app: CanvasApp; selectedWord: string; onEvent: Props["onEvent"] }) {
-  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>([]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
-    const text = input.trim();
-    setInput("");
-    setMessages((prev) => [...prev, { role: "user", text }]);
-    setIsLoading(true);
-
-    // Send to LearnForgeShell via app event
-    await onEvent(app.app_id, "english.chat", {
-      word: selectedWord,
-      message: text,
-    });
-
-    // For now, show a placeholder response until Agent integration is complete
-    // In the full implementation, the response will come back via SSE
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          text: selectedWord
-            ? `关于 "${selectedWord}": 这是一个很好的问题。作为你的英语助手，我可以帮你理解这个单词的用法、搭配和常见误区。`
-            : "你好！我是你的英语助手。你可以问我关于任何英语单词的问题，或者让我帮你练习语法、听力、口语。",
-        },
-      ]);
-      setIsLoading(false);
-    }, 800);
-  };
-
-  return (
-    <div className="ew-chat" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Messages */}
-      <div style={{ flex: 1, overflow: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-        {messages.length === 0 && (
-          <div style={{ textAlign: "center", color: "var(--text-3)", padding: "40px 20px" }}>
-            <Sparkles size={32} style={{ marginBottom: 12, opacity: 0.5 }} />
-            <p style={{ margin: 0, fontSize: 14 }}>
-              {selectedWord ? `正在学习 "${selectedWord}"` : "AI 英语助手"}
-            </p>
-            <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.7 }}>
-              问我任何英语问题
-            </p>
-          </div>
-        )}
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            style={{
-              alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
-              maxWidth: "80%",
-              padding: "10px 14px",
-              borderRadius: 12,
-              background: msg.role === "user" ? "var(--accent-grad)" : "var(--glass-2)",
-              color: msg.role === "user" ? "#fff" : "var(--text-1)",
-              fontSize: 13,
-              lineHeight: 1.5,
-            }}
-          >
-            {msg.text}
-          </div>
-        ))}
-        {isLoading && (
-          <div style={{ alignSelf: "flex-start", padding: "10px 14px", borderRadius: 12, background: "var(--glass-2)", fontSize: 13, color: "var(--text-3)" }}>
-            思考中...
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input */}
-      <div style={{ display: "flex", gap: 8, padding: "10px 12px", borderTop: "1px solid var(--border-1)" }}>
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder={selectedWord ? `问关于 "${selectedWord}" 的问题...` : "输入英语问题..."}
-          style={{
-            flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border-1)",
-            background: "var(--glass-1)", color: "var(--text-1)", fontSize: 13,
-          }}
-        />
-        <button
-          onClick={handleSend}
-          disabled={isLoading || !input.trim()}
-          style={{
-            padding: "8px 16px", borderRadius: 8, border: "none",
-            background: "var(--accent-grad)", color: "#fff", cursor: "pointer", fontSize: 13,
-            opacity: isLoading || !input.trim() ? 0.5 : 1,
-          }}
-        >
-          发送
-        </button>
-      </div>
-    </div>
-  );
-}
+// Removed: English dialogue is now unified in the right-side Hermes TutorChat.
+// The English workspace reports selected words via the `english.word_select` app
+// event, which LearnForgeShell turns into the Hermes english context.

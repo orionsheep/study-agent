@@ -797,53 +797,18 @@ function pickCuratedLab(source: string): (() => string) | null {
 }
 
 export function rescueCustomHtml(html: string): string {
-  const source = String(html || "");
-
-  // A static infographic that does not claim interactivity stays as-is (belongs in 信息图).
-  const hasControls = /<\s*(button|input)\b/i.test(source);
-  const hasScene = /<\s*(canvas|svg)\b/i.test(source);
-  const hasTemplateLeak = /\{\{[^}]+\}\}/.test(source);
-  const hasScript = /<\s*script\b/i.test(source);
-  const hasModuleOrExternalScript = /<\s*script\b[^>]*(?:\btype\s*=\s*["']?module|\bsrc\s*=)/i.test(source);
-  const hasAdvanced3dRuntime = /(WebGLRenderer|three\.module|from\s+['"]https?:\/\/[^'"]*three|THREE\.|getContext\s*\(\s*['"]webgl2?['"])/i.test(source);
-  const drawsOnCanvas = /<\s*canvas\b/i.test(source) && hasScript && /(getContext\s*\(|WebGLRenderer|three\.module|from\s+['"]https?:\/\/[^'"]*three|THREE\.)/i.test(source);
-  const svgGraphics = (source.match(/<\s*(path|polyline|circle|line|rect|polygon|ellipse)\b/gi) ?? []).length;
-  const richSvg = /<\s*svg\b/i.test(source) && hasScript && svgGraphics >= 2;
-  const hasAnimationOrDynamic = /requestAnimationFrame|setInterval|addEventListener\s*\(\s*['"](?:input|click|pointerdown|pointermove|change)|WebGLRenderer|THREE\./i.test(source);
-  const hasRealRenderedScene = (drawsOnCanvas || richSvg || hasModuleOrExternalScript) && hasAnimationOrDynamic;
-  const isPureInfographicShell =
-    /学习卡片|信息图|infographic|核心直觉|关键变量|自测迁移|概念可视化主体/.test(source) && !hasScene;
-  if (isPureInfographicShell && !hasControls) {
+  const source = String(html || "").trim();
+  if (!source || !/<[a-z!][\s\S]*>/i.test(source)) {
+    return "<section><h2>HTML artifact 无法渲染</h2><p>服务端返回的内容为空或不是有效 HTML。</p></section>";
+  }
+  if (/data-learnforge-widget=["'][^"']+["']/i.test(source)) {
     return source;
   }
-
-  // Advanced generated demos (WebGL/Three.js/module scripts, or any already-runnable
-  // canvas/SVG scene) must stay model-authored. This helper is kept for chat inline
-  // widgets/tests, but app-canvas custom.html rendering now preserves generated HTML.
-  if ((hasModuleOrExternalScript || hasAdvanced3dRuntime) && hasRealRenderedScene && !hasTemplateLeak) {
+  if (/three\.module\.js|new\s+THREE\.WebGLRenderer|WebGLRenderer|type=["']module["'][\s\S]*\bTHREE\b/i.test(source)) {
     return source;
   }
-
-  // RELIABILITY FIRST: for any topic we have a high-quality curated lab for, ALWAYS use our
-  // lab. The AI pipeline produces unreliable demos (empty canvases, 0.0 readouts) for these
-  // topics, while our labs are guaranteed to render and animate. This is the decisive fix for
-  // "at least native quality" — we never gamble on the model for a topic we can render well.
   const curated = pickCuratedLab(source);
-  if (curated) {
-    // If the AI demo is already one of our curated widgets, keep it (avoid double-wrapping).
-    if (/data-learnforge-widget=["'](?:fluid|quadratic|trig|sorting|momentum|waves|forces|geometry|probability|calculus|hash)-demo["']/i.test(source)) {
-      return source;
-    }
-    return curated();
-  }
-
-  // Unknown topic: keep the AI demo only if it has a genuinely rendered, animated scene.
-  if (hasRealRenderedScene && !hasTemplateLeak) {
-    return source;
-  }
-
-  // Broken / unknown topic → high-quality generic interactive lab.
-  return genericInteractiveRescueHtml(source);
+  return curated ? curated() : source;
 }
 
 export function truncateOpenScript(html: string): string {

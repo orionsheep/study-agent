@@ -49,8 +49,8 @@ def evidence_for(rel_path: str) -> list[str]:
         "FRONTEND_PRODUCT_REQUIRED.md": ["apps/web/src/app/LearnForgeApp.tsx", "apps/web/src/app/styles.css"],
         "HERMES_MIMO_IMAGE2_REQUIRED.md": [
             "services/api/app/hermes_runtime",
-            "services/api/app/model_gateway/mimo_client.py",
-            "services/api/app/image_gateway/image2_client.py",
+            "services/api/app/model_gateway/gemini_client.py",
+            "services/api/app/image_gateway/gemini_image_client.py",
         ],
         "IMPLEMENT_FULL_PRODUCT.md": ["RUN_REPORT.md", "scripts/run_full_validation.sh"],
         "MEMORY_SYSTEM_REQUIRED.md": ["services/api/app/edumem0", "docs/memory_design.md"],

@@ -67,7 +67,6 @@ app/model_gateway/__init__.py
 app/model_gateway/base.py
 app/model_gateway/errors.py
 app/model_gateway/gemini_client.py
-app/model_gateway/mimo_client.py
 app/model_gateway/router.py
 app/model_gateway/structured_output.py
 app/rag/__init__.py
@@ -103,6 +102,7 @@ app/skills/registry.py
 app/skills/resource_bundle_skill.py
 app/skills/verifier_skill.py
 app/skills/video_script_skill.py
+app/storage/artifacts.py
 app/video/__init__.py
 app/video/bilibili.py
 app/video/search.py
@@ -113,6 +113,7 @@ learnforge_api.egg-info/requires.txt
 learnforge_api.egg-info/top_level.txt
 tests/test_agents_and_skills.py
 tests/test_auth_onboarding.py
+tests/test_chat_message_links.py
 tests/test_component_naming.py
 tests/test_config_env.py
 tests/test_database_schema.py
@@ -121,6 +122,7 @@ tests/test_gateway_status.py
 tests/test_health_routes.py
 tests/test_hermes_runtime_status.py
 tests/test_hermes_skill_files.py
+tests/test_hermes_subprocess_streaming.py
 tests/test_memory_closed_loop.py
 tests/test_memory_end_to_end.py
 tests/test_memory_security_isolation.py

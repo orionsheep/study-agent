@@ -48,6 +48,22 @@ def loads(value: str | None, default: Any) -> Any:
     return json.loads(value)
 
 
+def strip_raw_html_report_text(text: str) -> str:
+    value = str(text or "")
+    marker = "---HERMES_HTML_OUTPUT---"
+    if marker in value:
+        prefix = value.split(marker, 1)[0].strip()
+        return prefix or "✅ 分析完成！报告已生成并推送到画布。"
+    lower = value.lower()
+    starts = [index for index in (lower.find("<!doctype html"), lower.find("<html")) if index >= 0]
+    if starts:
+        prefix = value[: min(starts)].strip()
+        return prefix or "✅ 分析完成！报告已生成并推送到画布。"
+    if "<style" in lower and "{" in value and "}" in value:
+        return "✅ 分析完成！报告已生成并推送到画布。"
+    return value
+
+
 def stable_id(prefix: str, value: str) -> str:
     digest = hashlib.sha1(value.encode("utf-8")).hexdigest()[:16]
     return f"{prefix}-{digest}"
@@ -456,7 +472,24 @@ class LearningStore:
     def create_schema(self) -> None:
         for statement in SQLITE_SCHEMA:
             self.conn.execute(statement)
+        self._ensure_course_document_metadata_columns()
         self.conn.commit()
+
+    def _ensure_course_document_metadata_columns(self) -> None:
+        existing = {str(row["name"]) for row in self.conn.execute("PRAGMA table_info(course_documents)").fetchall()}
+        columns = {
+            "ingest_type": "TEXT NOT NULL DEFAULT 'course_seed'",
+            "owner_scope": "TEXT NOT NULL DEFAULT 'course'",
+            "owner_id": "TEXT",
+            "source_scope": "TEXT NOT NULL DEFAULT 'course_official'",
+            "original_url": "TEXT",
+            "mime_type": "TEXT",
+            "upload_status": "TEXT NOT NULL DEFAULT 'ready'",
+            "metadata": "TEXT NOT NULL DEFAULT '{}'",
+        }
+        for name, definition in columns.items():
+            if name not in existing:
+                self.conn.execute(f"ALTER TABLE course_documents ADD COLUMN {name} {definition}")
 
     def table_names(self) -> list[str]:
         rows = self.conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
@@ -567,12 +600,13 @@ class LearningStore:
     ) -> dict[str, Any]:
         now = utc_now()
         row_id = message_id or new_id("chatmsg")
+        safe_text = strip_raw_html_report_text(text) if role == "assistant" else text
         self.conn.execute(
             """
             INSERT INTO chat_messages(id, student_id, course_id, conversation_id, role, text, metadata, created_at)
             VALUES(?,?,?,?,?,?,?,?)
             """,
-            (row_id, student_id, course_id, conversation_id, role, text, dumps(metadata or {}), now),
+            (row_id, student_id, course_id, conversation_id, role, safe_text, dumps(metadata or {}), now),
         )
         self.conn.commit()
         return {
@@ -581,7 +615,7 @@ class LearningStore:
             "course_id": course_id,
             "conversation_id": conversation_id,
             "role": role,
-            "text": text,
+            "text": safe_text,
             "metadata": metadata or {},
             "created_at": now,
         }
@@ -611,12 +645,82 @@ class LearningStore:
                 "course_id": row["course_id"],
                 "conversation_id": row["conversation_id"],
                 "role": row["role"],
-                "text": row["text"],
+                "text": strip_raw_html_report_text(row["text"]) if row["role"] == "assistant" else row["text"],
                 "metadata": loads(row["metadata"], {}),
                 "created_at": row["created_at"],
+                "links": [],
+                "resources": [],
             }
             for row in rows
         ]
+        if messages:
+            message_ids = [message["id"] for message in messages]
+            run_message_ids: dict[str, list[str]] = {}
+            for message in messages:
+                run_id = message.get("metadata", {}).get("run_id")
+                if message.get("role") == "assistant" and run_id and str(run_id) not in run_message_ids:
+                    run_message_ids[str(run_id)] = [message["id"]]
+            conditions = [f"message_id IN ({','.join('?' for _ in message_ids)})"]
+            params: list[str] = [*message_ids]
+            if run_message_ids:
+                conditions.append(f"source_run_id IN ({','.join('?' for _ in run_message_ids)})")
+                params.extend(run_message_ids)
+            link_rows = self.conn.execute(
+                f"""
+                SELECT id, message_id, app_id, label, action, anchor_text, source_run_id, created_at
+                FROM chat_app_links
+                WHERE {" OR ".join(conditions)}
+                ORDER BY datetime(created_at) ASC, rowid ASC
+                """,
+                tuple(params),
+            ).fetchall()
+            links_by_message: dict[str, list[dict[str, Any]]] = {}
+            for link_row in link_rows:
+                direct_message_ids = [link_row["message_id"]] if link_row["message_id"] in message_ids else []
+                run_message_targets = run_message_ids.get(str(link_row["source_run_id"] or ""), [])
+                for target_message_id in direct_message_ids or run_message_targets:
+                    link = ChatAppLink(
+                        link_id=link_row["id"],
+                        message_id=target_message_id,
+                        app_id=link_row["app_id"],
+                        label=link_row["label"],
+                        action=link_row["action"],
+                        anchor_text=link_row["anchor_text"],
+                        source_run_id=link_row["source_run_id"],
+                        created_at=link_row["created_at"],
+                    ).model_dump()
+                    links_by_message.setdefault(target_message_id, []).append(link)
+            resource_rows = self.conn.execute(
+                f"""
+                SELECT
+                  l.id AS link_id,
+                  l.message_id AS link_message_id,
+                  l.source_run_id AS link_source_run_id,
+                  r.*
+                FROM chat_resource_links l
+                JOIN resources r ON r.id = l.resource_id
+                WHERE {" OR ".join(conditions)}
+                ORDER BY datetime(l.created_at) ASC, l.rowid ASC
+                """,
+                tuple(params),
+            ).fetchall()
+            resources_by_message: dict[str, list[dict[str, Any]]] = {}
+            seen_resources: set[tuple[str, str]] = set()
+            for resource_row in resource_rows:
+                direct_message_ids = [resource_row["link_message_id"]] if resource_row["link_message_id"] in message_ids else []
+                run_message_targets = run_message_ids.get(str(resource_row["link_source_run_id"] or ""), [])
+                resource = self._resource_from_row(resource_row)
+                if not resource:
+                    continue
+                for target_message_id in direct_message_ids or run_message_targets:
+                    key = (target_message_id, resource.resource_id)
+                    if key in seen_resources:
+                        continue
+                    seen_resources.add(key)
+                    resources_by_message.setdefault(target_message_id, []).append(resource.model_dump())
+            for message in messages:
+                message["links"] = links_by_message.get(message["id"], [])
+                message["resources"] = resources_by_message.get(message["id"], [])
         return list(reversed(messages))
 
     def seed(self) -> None:
@@ -1158,29 +1262,7 @@ class LearningStore:
 
     def get_resource(self, resource_id: str) -> LearningResource | None:
         row = self.fetchone("SELECT * FROM resources WHERE id=?", (resource_id,))
-        if not row:
-            return None
-        content = loads(row["content_json"], {})
-        quality = loads(row["verifier_result"], {})
-        tags = content.get("tags", [])
-        if not isinstance(tags, list):
-            tags = []
-        estimated_minutes = content.get("estimated_minutes")
-        if not isinstance(estimated_minutes, int):
-            estimated_minutes = None
-        return LearningResource(
-            resource_id=row["id"],
-            type=row["type"],
-            title=row["title"],
-            target_topic=content.get("target_topic") or content.get("module_name") or row["title"],
-            difficulty=row["difficulty"] or "adaptive",
-            content=content,
-            source_refs=loads(row["source_refs"], []),
-            personalized_reason=row["personalized_reason"] or "",
-            estimated_minutes=estimated_minutes,
-            tags=[str(tag) for tag in tags if tag],
-            quality_check=VerifierResult(**quality) if quality else None,
-        )
+        return self._resource_from_row(row)
 
     def list_resources(
         self,
@@ -1192,16 +1274,20 @@ class LearningStore:
         resource_type: str | None = None,
         limit: int | None = None,
     ) -> list[LearningResource]:
-        sql = "SELECT id FROM resources WHERE student_id=?"
-        params: tuple[Any, ...] = (student_id,)
+        # Fetch full rows in ONE query (avoids the previous per-row get_resource() N+1).
+        # type filtering is pushed into SQL; tag/query stay in Python because they
+        # operate on content_json (a JSON blob).
+        sql = "SELECT * FROM resources WHERE student_id=?"
+        params: list[Any] = [student_id]
         if course_id:
             sql += " AND (course_id = ? OR course_id IS NULL)"
-            params = (student_id, course_id)
-        sql += " ORDER BY created_at"
-        rows = self.fetchall(sql, params)
-        resources = [res for row in rows if (res := self.get_resource(row["id"]))]
+            params.append(course_id)
         if resource_type:
-            resources = [resource for resource in resources if resource.type == resource_type]
+            sql += " AND type = ?"
+            params.append(resource_type)
+        sql += " ORDER BY created_at"
+        rows = self.fetchall(sql, tuple(params))
+        resources = [res for row in rows if (res := self._resource_from_row(row))]
         if tag:
             normalized_tag = tag.casefold()
             resources = [
@@ -1230,6 +1316,36 @@ class LearningStore:
                 ).casefold()
             ]
         return resources[-limit:] if limit and limit > 0 else resources
+
+    def _resource_from_row(self, row: Any) -> LearningResource | None:
+        """Materialize a LearningResource directly from a resources-table row.
+
+        Shared by get_resource() and list_resources() so neither needs a separate lookup
+        when the full row is already available.
+        """
+        if not row:
+            return None
+        content = loads(row["content_json"], {})
+        quality = loads(row["verifier_result"], {})
+        tags = content.get("tags", [])
+        if not isinstance(tags, list):
+            tags = []
+        estimated_minutes = content.get("estimated_minutes")
+        if not isinstance(estimated_minutes, int):
+            estimated_minutes = None
+        return LearningResource(
+            resource_id=row["id"],
+            type=row["type"],
+            title=row["title"],
+            target_topic=content.get("target_topic") or content.get("module_name") or row["title"],
+            difficulty=row["difficulty"] or "adaptive",
+            content=content,
+            source_refs=loads(row["source_refs"], []),
+            personalized_reason=row["personalized_reason"] or "",
+            estimated_minutes=estimated_minutes,
+            tags=[str(tag) for tag in tags if tag],
+            quality_check=VerifierResult(**quality) if quality else None,
+        )
 
     def search_video_resources(self, query: str, limit: int = 6) -> list[LearningResource]:
         cleaned_query = (query or "").strip()
@@ -1378,14 +1494,43 @@ class LearningStore:
         file_url: str | None = None,
         parser: str = "api_text",
         document_id: str | None = None,
+        ingest_type: str = "course_seed",
+        owner_scope: str = "course",
+        owner_id: str | None = None,
+        source_scope: str = "course_official",
+        original_url: str | None = None,
+        mime_type: str | None = None,
+        upload_status: str = "ready",
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        self._ensure_course_document_metadata_columns()
         cleaned_title = (title or "未命名资料").strip() or "未命名资料"
         fingerprint = f"{course_id}\n{cleaned_title}\n" + "\n\n".join(chunks)
         doc_id = document_id or stable_id("doc-api", fingerprint)
         now = utc_now()
         self.conn.execute(
-            "INSERT OR REPLACE INTO course_documents(id, course_id, title, file_url, parser, created_at) VALUES(?,?,?,?,?,?)",
-            (doc_id, course_id, cleaned_title, file_url, parser, now),
+            """
+            INSERT OR REPLACE INTO course_documents(
+              id, course_id, title, file_url, parser, ingest_type, owner_scope, owner_id,
+              source_scope, original_url, mime_type, upload_status, metadata, created_at
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                doc_id,
+                course_id,
+                cleaned_title,
+                file_url,
+                parser,
+                ingest_type,
+                owner_scope,
+                owner_id,
+                source_scope,
+                original_url,
+                mime_type,
+                upload_status,
+                dumps(metadata or {}),
+                now,
+            ),
         )
         self.conn.execute("DELETE FROM document_chunks WHERE document_id=? AND course_id=?", (doc_id, course_id))
         saved_chunks: list[dict[str, Any]] = []
@@ -1417,8 +1562,400 @@ class LearningStore:
             "document_id": doc_id,
             "course_id": course_id,
             "title": cleaned_title,
+            "ingest_type": ingest_type,
+            "owner_scope": owner_scope,
+            "owner_id": owner_id,
+            "source_scope": source_scope,
+            "original_url": original_url,
+            "mime_type": mime_type,
+            "upload_status": upload_status,
+            "metadata": metadata or {},
             "chunks": saved_chunks,
             "chunk_count": len(saved_chunks),
+        }
+
+    def list_course_documents(self, course_id: str) -> list[dict[str, Any]]:
+        self._ensure_course_document_metadata_columns()
+        rows = self.fetchall(
+            """
+            SELECT d.id AS document_id, d.course_id, d.title, d.file_url, d.parser, d.created_at,
+                   d.ingest_type, d.owner_scope, d.owner_id, d.source_scope, d.original_url,
+                   d.mime_type, d.upload_status, d.metadata,
+                   COUNT(c.id) AS chunk_count
+            FROM course_documents d
+            LEFT JOIN document_chunks c ON c.document_id = d.id AND c.course_id = d.course_id
+            WHERE d.course_id=?
+            GROUP BY d.id, d.course_id, d.title, d.file_url, d.parser, d.created_at,
+                     d.ingest_type, d.owner_scope, d.owner_id, d.source_scope, d.original_url,
+                     d.mime_type, d.upload_status, d.metadata
+            ORDER BY d.created_at DESC
+            """,
+            (course_id,),
+        )
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["metadata"] = loads(item.get("metadata"), {})
+            result.append(item)
+        return result
+
+    def list_document_chunks(self, course_id: str, document_id: str) -> list[dict[str, Any]]:
+        rows = self.fetchall(
+            """
+            SELECT id AS chunk_id, document_id, course_id, chunk_index, content, source_ref, embedding, created_at
+            FROM document_chunks
+            WHERE course_id=? AND document_id=?
+            ORDER BY chunk_index
+            """,
+            (course_id, document_id),
+        )
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["source_ref"] = loads(item.get("source_ref"), {})
+            item["embedding"] = loads(item.get("embedding"), [])
+            result.append(item)
+        return result
+
+    def _ensure_notebook_schema(self) -> None:
+        for statement in SQLITE_SCHEMA:
+            if "notebook" in statement:
+                self.conn.execute(statement)
+        self.conn.commit()
+
+    def _course_title(self, course_id: str) -> str:
+        row = self.fetchone("SELECT title FROM courses WHERE id=?", (course_id,))
+        return str(row["title"]) if row and row["title"] else course_id
+
+    def _ensure_course_notebook_sources(self, *, course_id: str) -> None:
+        self._ensure_notebook_schema()
+        now = utc_now()
+        course_notebook_id = stable_id("nblm", f"course:{course_id}:official")
+        if not self.fetchone("SELECT 1 FROM notebooks WHERE id=?", (course_notebook_id,)):
+            return
+        for document in self.list_course_documents(course_id):
+            document_id = str(document["document_id"])
+            self.execute(
+                """
+                INSERT OR IGNORE INTO notebook_sources(id, notebook_id, source_id, source_kind, source_role, sync_status, open_notebook_source_id, synced_at, created_at)
+                VALUES(?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    stable_id("nbsrc", f"{course_notebook_id}:{document_id}"),
+                    course_notebook_id,
+                    document_id,
+                    "course_document",
+                    "official",
+                    "not_synced",
+                    None,
+                    None,
+                    now,
+                ),
+            )
+
+    def ensure_default_notebooks(self, *, student_id: str, course_id: str) -> list[dict[str, Any]]:
+        self._ensure_notebook_schema()
+        now = utc_now()
+        course_title = self._course_title(course_id)
+        defaults = [
+            {
+                "id": stable_id("nblm", f"course:{course_id}:official"),
+                "owner_scope": "course",
+                "owner_id": course_id,
+                "course_id": course_id,
+                "title": f"{course_title} · 课程知识库",
+                "purpose": "course_official",
+                "description": "课程级正式资料，用于学习路径、资源生成、引用校验和 NotebookLM 复习。",
+                "tags": ["课程正式资料", "Source of Truth"],
+                "rank": 10,
+                "assigned_reason": "系统根据当前课程自动分配。",
+            },
+            {
+                "id": stable_id("nblm", f"user:{student_id}:{course_id}:review"),
+                "owner_scope": "user",
+                "owner_id": student_id,
+                "course_id": course_id,
+                "title": "我的复习 Notebook",
+                "purpose": "personal_review",
+                "description": "用户上传和临时复习资料，不会自动进入课程正式知识库。",
+                "tags": ["我的上传", "复习"],
+                "rank": 40,
+                "assigned_reason": "个人复习空间。",
+            },
+        ]
+        for item in defaults:
+            self.execute(
+                """
+                INSERT OR IGNORE INTO notebooks(id, owner_scope, owner_id, course_id, title, purpose, description, tags, open_notebook_id, sync_status, created_at, updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    item["id"],
+                    item["owner_scope"],
+                    item["owner_id"],
+                    item["course_id"],
+                    item["title"],
+                    item["purpose"],
+                    item["description"],
+                    dumps(item["tags"]),
+                    None,
+                    "not_synced",
+                    now,
+                    now,
+                ),
+            )
+            self.execute(
+                """
+                INSERT OR IGNORE INTO notebook_assignments(id, notebook_id, student_id, course_id, status, rank, assigned_reason, created_at)
+                VALUES(?,?,?,?,?,?,?,?)
+                """,
+                (
+                    stable_id("nassign", f"{item['id']}:{student_id}:{course_id}"),
+                    item["id"],
+                    student_id,
+                    course_id,
+                    "active",
+                    item["rank"],
+                    item["assigned_reason"],
+                    now,
+                ),
+            )
+        self._ensure_course_notebook_sources(course_id=course_id)
+        self.conn.commit()
+        return self.list_notebooks(student_id=student_id, course_id=course_id)
+
+    def list_notebooks(self, *, student_id: str, course_id: str) -> list[dict[str, Any]]:
+        self._ensure_notebook_schema()
+        self.ensure_default_notebooks(student_id=student_id, course_id=course_id) if not self.fetchone(
+            "SELECT 1 FROM notebook_assignments WHERE student_id=? AND course_id=? LIMIT 1",
+            (student_id, course_id),
+        ) else self._ensure_course_notebook_sources(course_id=course_id)
+        rows = self.fetchall(
+            """
+            SELECT n.*, a.status AS assignment_status, a.rank, a.assigned_reason,
+                   COUNT(ns.source_id) AS source_count
+            FROM notebook_assignments a
+            JOIN notebooks n ON n.id = a.notebook_id
+            LEFT JOIN notebook_sources ns ON ns.notebook_id = n.id
+            WHERE a.student_id=? AND a.course_id=? AND a.status != 'archived'
+            GROUP BY n.id, n.owner_scope, n.owner_id, n.course_id, n.title, n.purpose, n.description, n.tags,
+                     n.open_notebook_id, n.sync_status, n.created_at, n.updated_at,
+                     a.status, a.rank, a.assigned_reason
+            ORDER BY a.rank ASC, n.updated_at DESC
+            """,
+            (student_id, course_id),
+        )
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["tags"] = loads(item.get("tags"), [])
+            result.append(item)
+        return result
+
+    def get_notebook(self, notebook_id: str, *, student_id: str | None = None, course_id: str | None = None) -> dict[str, Any] | None:
+        self._ensure_notebook_schema()
+        if student_id and course_id:
+            row = self.fetchone(
+                """
+                SELECT n.* FROM notebooks n
+                JOIN notebook_assignments a ON a.notebook_id = n.id
+                WHERE n.id=? AND a.student_id=? AND a.course_id=? AND a.status != 'archived'
+                """,
+                (notebook_id, student_id, course_id),
+            )
+        else:
+            row = self.fetchone("SELECT * FROM notebooks WHERE id=?", (notebook_id,))
+        if not row:
+            return None
+        item = dict(row)
+        item["tags"] = loads(item.get("tags"), [])
+        return item
+
+    def create_notebook(
+        self,
+        *,
+        student_id: str,
+        course_id: str,
+        title: str,
+        purpose: str = "personal_review",
+        description: str | None = None,
+        tags: list[str] | None = None,
+        owner_scope: str = "user",
+        owner_id: str | None = None,
+        rank: int = 50,
+    ) -> dict[str, Any]:
+        self._ensure_notebook_schema()
+        now = utc_now()
+        cleaned_title = (title or "我的 Notebook").strip() or "我的 Notebook"
+        notebook_id = new_id("nblm")
+        self.execute(
+            """
+            INSERT INTO notebooks(id, owner_scope, owner_id, course_id, title, purpose, description, tags, open_notebook_id, sync_status, created_at, updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                notebook_id,
+                owner_scope,
+                owner_id or student_id,
+                course_id,
+                cleaned_title,
+                purpose,
+                description or "",
+                dumps(tags or ["我的上传"]),
+                None,
+                "not_synced",
+                now,
+                now,
+            ),
+        )
+        self.execute(
+            """
+            INSERT OR IGNORE INTO notebook_assignments(id, notebook_id, student_id, course_id, status, rank, assigned_reason, created_at)
+            VALUES(?,?,?,?,?,?,?,?)
+            """,
+            (
+                stable_id("nassign", f"{notebook_id}:{student_id}:{course_id}"),
+                notebook_id,
+                student_id,
+                course_id,
+                "active",
+                rank,
+                "用户创建的个人 Notebook。",
+                now,
+            ),
+        )
+        self.conn.commit()
+        notebook = self.get_notebook(notebook_id, student_id=student_id, course_id=course_id)
+        return notebook or {"id": notebook_id, "title": cleaned_title, "purpose": purpose, "source_count": 0}
+
+    def attach_document_to_notebook(
+        self,
+        *,
+        notebook_id: str,
+        document_id: str,
+        student_id: str,
+        course_id: str,
+        source_role: str = "primary",
+        source_kind: str = "course_document",
+    ) -> dict[str, Any] | None:
+        self._ensure_notebook_schema()
+        if not self.get_notebook(notebook_id, student_id=student_id, course_id=course_id):
+            return None
+        document = self.fetchone("SELECT id FROM course_documents WHERE id=? AND course_id=?", (document_id, course_id))
+        if not document:
+            return None
+        now = utc_now()
+        source_id = stable_id("nbsrc", f"{notebook_id}:{document_id}")
+        self.execute(
+            """
+            INSERT OR IGNORE INTO notebook_sources(id, notebook_id, source_id, source_kind, source_role, sync_status, open_notebook_source_id, synced_at, created_at)
+            VALUES(?,?,?,?,?,?,?,?,?)
+            """,
+            (source_id, notebook_id, document_id, source_kind, source_role, "not_synced", None, None, now),
+        )
+        self.execute("UPDATE notebooks SET updated_at=? WHERE id=?", (now, notebook_id))
+        self.conn.commit()
+        return {
+            "id": source_id,
+            "notebook_id": notebook_id,
+            "source_id": document_id,
+            "source_kind": source_kind,
+            "source_role": source_role,
+            "sync_status": "not_synced",
+            "created_at": now,
+        }
+
+    def set_notebook_open_notebook_id(self, notebook_id: str, open_notebook_id: str, sync_status: str = "ready") -> None:
+        self._ensure_notebook_schema()
+        self.execute(
+            "UPDATE notebooks SET open_notebook_id=?, sync_status=?, updated_at=? WHERE id=?",
+            (open_notebook_id, sync_status, utc_now(), notebook_id),
+        )
+        self.conn.commit()
+
+    def mark_notebook_source_synced(self, notebook_id: str, source_id: str, open_notebook_source_id: str | None, sync_status: str) -> None:
+        self._ensure_notebook_schema()
+        self.execute(
+            """
+            UPDATE notebook_sources
+            SET open_notebook_source_id=?, sync_status=?, synced_at=?
+            WHERE notebook_id=? AND source_id=?
+            """,
+            (open_notebook_source_id, sync_status, utc_now(), notebook_id, source_id),
+        )
+        self.conn.commit()
+
+    def list_notebook_sources(self, notebook_id: str, *, student_id: str | None = None, course_id: str | None = None) -> list[dict[str, Any]]:
+        self._ensure_notebook_schema()
+        if student_id and course_id and not self.get_notebook(notebook_id, student_id=student_id, course_id=course_id):
+            return []
+        rows = self.fetchall(
+            """
+            SELECT ns.*, d.course_id, d.title, d.file_url, d.parser,
+                   d.ingest_type, d.owner_scope, d.owner_id, d.source_scope, d.original_url,
+                   d.mime_type, d.upload_status, d.metadata,
+                   d.created_at AS document_created_at
+            FROM notebook_sources ns
+            JOIN course_documents d ON d.id = ns.source_id
+            WHERE ns.notebook_id=? AND ns.source_kind='course_document'
+            ORDER BY d.created_at DESC
+            """,
+            (notebook_id,),
+        )
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["metadata"] = loads(item.get("metadata"), {})
+            chunks = self.list_document_chunks(str(item["course_id"]), str(item["source_id"]))
+            refs: list[dict[str, Any]] = []
+            for chunk in chunks[:12]:
+                source_ref = chunk.get("source_ref") if isinstance(chunk.get("source_ref"), dict) else {}
+                refs.append(
+                    {
+                        **source_ref,
+                        "document_id": item["source_id"],
+                        "chunk_id": chunk.get("chunk_id"),
+                        "title": item.get("title") or item["source_id"],
+                        "snippet": str(chunk.get("content") or "")[:360],
+                    }
+                )
+            item["id"] = item["source_id"]
+            item["summary"] = refs[0]["snippet"] if refs else ""
+            item["chunk_count"] = len(chunks)
+            item["source_refs"] = refs
+            result.append(item)
+        return result
+
+    def record_notebook_memory_event(
+        self,
+        *,
+        notebook_id: str | None,
+        student_id: str,
+        course_id: str | None,
+        event_type: str,
+        source_refs: list[dict[str, Any]] | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._ensure_notebook_schema()
+        event_id = new_id("nbevt")
+        now = utc_now()
+        self.execute(
+            """
+            INSERT INTO notebook_memory_events(id, notebook_id, student_id, course_id, event_type, source_refs, payload, created_at)
+            VALUES(?,?,?,?,?,?,?,?)
+            """,
+            (event_id, notebook_id, student_id, course_id, event_type, dumps(source_refs or []), dumps(payload or {}), now),
+        )
+        self.conn.commit()
+        return {
+            "id": event_id,
+            "notebook_id": notebook_id,
+            "student_id": student_id,
+            "course_id": course_id,
+            "event_type": event_type,
+            "source_refs": source_refs or [],
+            "payload": payload or {},
+            "created_at": now,
         }
 
     def save_app(
@@ -1532,6 +2069,111 @@ class LearningStore:
         row = self.fetchone("SELECT * FROM canvas_apps WHERE " + " AND ".join(clauses), tuple(params))
         return self._app_from_row(row) if row else None
 
+    def _artifact_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        metadata_value = row["metadata_json"] if isinstance(row, sqlite3.Row) else row.get("metadata_json")
+        return {
+            "artifact_id": row["id"],
+            "kind": row["kind"],
+            "object_key": row["object_key"],
+            "content_type": row["content_type"],
+            "sha256": row["sha256"],
+            "size_bytes": int(row["size_bytes"] or 0),
+            "title": row["title"],
+            "source_run_id": row["source_run_id"],
+            "student_id": row["student_id"],
+            "course_id": row["course_id"],
+            "conversation_id": row["conversation_id"],
+            "metadata": loads(metadata_value, {}),
+            "created_at": row["created_at"],
+        }
+
+    def save_artifact(
+        self,
+        *,
+        artifact_id: str,
+        kind: str,
+        object_key: str,
+        content_type: str,
+        sha256: str,
+        size_bytes: int,
+        title: str | None = None,
+        source_run_id: str | None = None,
+        student_id: str | None = None,
+        course_id: str | None = None,
+        conversation_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        self.execute(
+            """
+            INSERT OR REPLACE INTO artifacts(
+              id, kind, object_key, content_type, sha256, size_bytes, title, source_run_id,
+              student_id, course_id, conversation_id, metadata_json, created_at
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                artifact_id,
+                kind,
+                object_key,
+                content_type,
+                sha256,
+                int(size_bytes),
+                title,
+                source_run_id,
+                student_id,
+                course_id,
+                conversation_id,
+                dumps(metadata or {}),
+                now,
+            ),
+        )
+        row = self.fetchone("SELECT * FROM artifacts WHERE id=?", (artifact_id,))
+        return self._artifact_from_row(row) if row else {
+            "artifact_id": artifact_id,
+            "kind": kind,
+            "object_key": object_key,
+            "content_type": content_type,
+            "sha256": sha256,
+            "size_bytes": int(size_bytes),
+            "title": title,
+            "source_run_id": source_run_id,
+            "student_id": student_id,
+            "course_id": course_id,
+            "conversation_id": conversation_id,
+            "metadata": metadata or {},
+            "created_at": now,
+        }
+
+    def get_artifact(self, artifact_id: str) -> dict[str, Any] | None:
+        row = self.fetchone("SELECT * FROM artifacts WHERE id=?", (artifact_id,))
+        return self._artifact_from_row(row) if row else None
+
+    def latest_artifact_for_context(
+        self,
+        *,
+        student_id: str,
+        course_id: str | None = None,
+        conversation_id: str | None = None,
+        kinds: list[str] | None = None,
+    ) -> dict[str, Any] | None:
+        clauses = ["student_id=?"]
+        params: list[Any] = [student_id]
+        if course_id:
+            clauses.append("course_id=?")
+            params.append(course_id)
+        if conversation_id:
+            clauses.append("conversation_id=?")
+            params.append(conversation_id)
+        if kinds:
+            placeholders = ",".join("?" for _ in kinds)
+            clauses.append(f"kind IN ({placeholders})")
+            params.extend(kinds)
+        row = self.fetchone(
+            f"SELECT * FROM artifacts WHERE {' AND '.join(clauses)} ORDER BY created_at DESC LIMIT 1",
+            tuple(params),
+        )
+        return self._artifact_from_row(row) if row else None
+
     def update_app(
         self,
         app_id: str,
@@ -1579,6 +2221,21 @@ class LearningStore:
             (link.link_id, link.message_id, link.app_id, link.label, link.action, link.anchor_text, link.source_run_id, link.created_at),
         )
         return link
+
+    def create_chat_resource_link(self, message_id: str, resource_id: str, run_id: str | None = None) -> dict[str, Any]:
+        link_id = stable_id("reslink", f"{message_id}:{resource_id}:{run_id or ''}")
+        created_at = utc_now()
+        self.execute(
+            "INSERT OR REPLACE INTO chat_resource_links(id, message_id, resource_id, source_run_id, created_at) VALUES(?,?,?,?,?)",
+            (link_id, message_id, resource_id, run_id, created_at),
+        )
+        return {
+            "id": link_id,
+            "message_id": message_id,
+            "resource_id": resource_id,
+            "source_run_id": run_id,
+            "created_at": created_at,
+        }
 
     def get_chat_link(self, link_id: str) -> ChatAppLink | None:
         row = self.fetchone("SELECT * FROM chat_app_links WHERE id=?", (link_id,))
@@ -1659,7 +2316,7 @@ class LearningStore:
                 memory.source_agent,
                 memory.valid_from,
                 memory.valid_until,
-                dumps(memory.embedding or []),
+                dumps(memory.embedding or []),  # embedding 列暂未使用(记忆检索走关键词),留作未来语义检索扩展
                 dumps(memory.tags),
                 memory.version,
                 memory.created_at,
@@ -1750,9 +2407,29 @@ class LearningStore:
         limit: int = 10,
     ) -> list[EduMemoryItem]:
         memory_types = memory_types or []
-        memories = self.list_memories(student_id, course_id=course_id, knowledge_point_id=knowledge_point_id, limit=200)
+        # 修复:原来先 list_memories(limit=200) 再过滤类型,会让学生在>200条记忆时
+        # 丢失早期数据。现在把类型过滤下推到 SQL(WHERE memory_type IN (...)),
+        # 再取上限,避免截断导致的老数据不可见。
+        clauses = ["student_id = ?"]
+        params: list[Any] = [student_id]
+        if course_id:
+            clauses.append("course_id = ?")
+            params.append(course_id)
+        if knowledge_point_id:
+            clauses.append("knowledge_point_id = ?")
+            params.append(knowledge_point_id)
         if memory_types:
-            memories = [item for item in memories if item.memory_type in memory_types]
+            placeholders = ",".join(["?"] * len(memory_types))
+            clauses.append(f"memory_type IN ({placeholders})")
+            params.extend(memory_types)
+        sql = (
+            "SELECT * FROM edu_memories WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY updated_at DESC LIMIT ?"
+        )
+        params.append(500)
+        rows = self.fetchall(sql, tuple(params))
+        memories = [self._memory_from_row(row) for row in rows]
         if query:
             lowered = query.lower()
             memories = [item for item in memories if lowered in item.content.lower() or lowered in dumps(item.structured_payload).lower()]
@@ -2282,26 +2959,29 @@ class LearningStore:
             ],
             memory_evidence=memories,
             recent_runs=self.recent_runs(),
-            path_progress=(self.get_latest_path(student_id, course_id=course_id).overall_progress if self.get_latest_path(student_id, course_id=course_id) else 0),
+            path_progress=(latest_path.overall_progress if (latest_path := self.get_latest_path(student_id, course_id=course_id)) else 0),
             canvas_activity=[dict(row) for row in apps],
         )
 
     # ---- Learning Focus (current topic / objective) ----
-
-    _learning_focus: dict[str, dict[str, str]] = {}
+    # Persisted inside student_profiles.profile_json under "_learning_focus" so it survives
+    # across processes/workers and works for the Postgres backend. An instance-level dict
+    # is kept as a hot cache; the DB is the source of truth.
 
     def save_learning_focus(self, student_id: str, course_id: str, topic: str, objective: str | None = None, course_label: str | None = None) -> None:
-        key = f"{student_id}:{course_id}"
-        self._learning_focus[key] = {
+        focus = {
             "topic": topic,
             "objective": objective or "",
             "course_label": course_label or "",
             "updated_at": utc_now(),
         }
+        profile = self.get_profile(student_id, course_id=course_id)
+        profile["_learning_focus"] = focus
+        self.save_profile(student_id, profile, course_id=course_id)
 
     def get_learning_focus(self, student_id: str, course_id: str) -> dict[str, str]:
-        key = f"{student_id}:{course_id}"
-        return self._learning_focus.get(key, {})
+        focus = (self.get_profile(student_id, course_id=course_id) or {}).get("_learning_focus") or {}
+        return focus if isinstance(focus, dict) else {}
 
 @lru_cache
 def get_store() -> Any:

@@ -61,6 +61,8 @@ _HARD_MATCH_TERMS = {
     "四级", "六级", "考研", "高考", "雅思", "托福",
     "魔方", "rubik", "rubik's", "rubiks", "鲁比克",
     "内燃机", "四冲程", "奥托循环", "热机",
+    "机械振动", "简谐运动", "弹簧振子", "单摆", "人船模型", "动量守恒",
+    "振动", "振子", "守恒",
 }
 
 _EDU_NEGATIVE_TERMS = {
@@ -68,6 +70,7 @@ _EDU_NEGATIVE_TERMS = {
     "不笑算我输", "极限过审", "福利视频合集", "午夜福利",
     "致敬", "魅力谁懂", "永不过时", "悲鸣", "声音带来", "情怀",
     "minecraft", "我的世界", "游戏", "建筑教程", "内燃机车",
+    "ppt模板", "ppt制作", "ppt教程", "演示文稿", "ai工具", "aigc工具", "ai生成ppt",
 }
 
 _EDU_SIGNAL_TERMS = {
@@ -128,7 +131,10 @@ def _has_negative_signal(value: str) -> bool:
 
 def _requires_edu_signal(terms: list[str], hard_must: set[str]) -> bool:
     joined = "".join([*terms, *hard_must])
-    return any(term in joined for term in {"内燃机", "四冲程", "奥托循环", "热机"})
+    return any(
+        term in joined
+        for term in {"内燃机", "四冲程", "奥托循环", "热机", "机械振动", "简谐运动", "弹簧振子", "单摆", "人船模型", "动量守恒"}
+    )
 
 
 def _has_edu_signal(value: str) -> bool:

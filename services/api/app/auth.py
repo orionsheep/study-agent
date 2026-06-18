@@ -26,9 +26,15 @@ def verify_password(password: str, encoded: str) -> bool:
         algorithm, iterations, raw_salt, raw_digest = encoded.split("$", 3)
         if algorithm != "pbkdf2_sha256":
             return False
+        # Cap iterations on a value sourced from a (possibly attacker-controlled) stored
+        # hash. A forged hash with a huge iteration count would otherwise pin a CPU core
+        # for an extended time on every verify attempt (algorithmic DoS).
+        iteration_count = int(iterations)
+        if iteration_count <= 0 or iteration_count > PBKDF2_ITERATIONS * 16:
+            return False
         salt = base64.b64decode(raw_salt.encode("ascii"))
         expected = base64.b64decode(raw_digest.encode("ascii"))
-        actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, int(iterations))
+        actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iteration_count)
         return hmac.compare_digest(actual, expected)
     except Exception:
         return False

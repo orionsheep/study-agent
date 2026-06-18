@@ -8,4 +8,4 @@ Core flow:
 Tutor Chat -> Hermes Orchestrator boundary -> Agents/Skills -> RAG + EduMem0 + Verifier -> Canvas Apps + Dashboard
 ```
 
-The product uses deterministic local learning logic for non-external flows and real MiMo/image2/Hermes integration paths for provider readiness. Health endpoints report `blocked_*` when credentials or runtime checks are unavailable.
+The product uses deterministic local learning logic for non-external flows and real Gemini text, Gemini image, Hermes, and artifact-storage integration paths for provider readiness. Health endpoints report `blocked_*` when credentials or runtime checks are unavailable.

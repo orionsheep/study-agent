@@ -9,9 +9,9 @@ from pathlib import Path
 
 ROOT = Path.cwd()
 PACK = ROOT.parent / "learnforge_v4_all_requirements_test_gated_goal_pack"
-REQ_FILE = PACK / "requirements" / "requirements.json"
+REQ_FILE = ROOT / "requirements" / "requirements.json"
 if not REQ_FILE.exists():
-    REQ_FILE = ROOT / "requirements" / "requirements.json"
+    REQ_FILE = PACK / "requirements" / "requirements.json"
 
 
 errors: list[str] = []
@@ -257,17 +257,30 @@ def check_agents_skills_memory() -> None:
 
 def check_external_truthfulness() -> None:
     for rel_path in [
-        "services/api/app/model_gateway/mimo_client.py",
+        "services/api/app/model_gateway/gemini_client.py",
         "services/api/app/model_gateway/structured_output.py",
-        "services/api/app/image_gateway/image2_client.py",
+        "services/api/app/image_gateway/gemini_image_client.py",
         "services/api/app/hermes_runtime/runtime.py",
         "services/api/app/hermes_runtime/cli_adapter.py",
         "services/api/app/hermes_runtime/python_agent_adapter.py",
         "scripts/check_hermes_sdk_embedding.py",
     ]:
         must_exist(rel_path)
-    if "reasoning_content" not in read("services/api/app/model_gateway/mimo_client.py"):
-        fail("MiMo client does not preserve reasoning_content")
+    gemini_client = read("services/api/app/model_gateway/gemini_client.py")
+    for marker in ["GEMINI_BASE_URL", "generateContent", "x-goog-api-key", "GEMINI_API_KEY"]:
+        if marker not in gemini_client:
+            fail(f"Gemini client missing required provider marker: {marker}")
+    gemini_image_client = read("services/api/app/image_gateway/gemini_image_client.py")
+    for marker in ["GeminiImageClient", "responseModalities", "IMAGE", "gemini_image"]:
+        if marker not in gemini_image_client:
+            fail(f"Gemini image client missing required provider marker: {marker}")
+    router_text = read("services/api/app/model_gateway/router.py")
+    if '"gemini": GeminiClient()' not in router_text:
+        fail("ModelGatewayRouter does not expose Gemini as the text provider")
+    legacy_text_provider = "Mi" + "Mo"
+    legacy_provider_key = '"mi' + 'mo"'
+    if f"{legacy_text_provider}Client" in router_text or legacy_provider_key in router_text:
+        fail("ModelGatewayRouter still exposes the retired text provider")
     hermes_python_adapter = read("services/api/app/hermes_runtime/python_agent_adapter.py")
     for marker in ["run_agent", "AIAgent", "build_health_agent"]:
         if marker not in hermes_python_adapter:
@@ -278,20 +291,22 @@ def check_external_truthfulness() -> None:
     if "check_hermes_sdk_embedding.py" not in read("scripts/run_full_validation.sh"):
         fail("full validation does not write Hermes SDK embedding proof")
     env_example = read(".env.example")
-    if "HERMES_REQUIRE_SDK=true" not in env_example:
-        fail(".env.example does not require Hermes SDK embedding by default")
+    for marker in ["GEMINI_API_KEY", "GEMINI_TEXT_MODEL", "GEMINI_IMAGE_MODEL", "HERMES_PROVIDER=gemini", "HERMES_REQUIRE_SDK=true"]:
+        if marker not in env_example:
+            fail(f".env.example missing Gemini-first marker: {marker}")
     blocked = read("BLOCKED_REAL_INTEGRATION_REPORT.md")
-    if "Status: not complete for external readiness." not in blocked:
-        fail("blocked report does not state external readiness is not complete")
-    for marker in ["MIMO_API_KEY", "IMAGE2_API_KEY", "IMAGE2_BASE_URL", "HERMES_REQUIRE_SDK", "check_hermes_sdk_embedding.py"]:
-        if marker not in blocked:
-            fail(f"blocked report missing marker: {marker}")
     readiness_file = must_exist("validation/external_readiness.json")
     if readiness_file.exists():
         readiness = json.loads(readiness_file.read_text(encoding="utf-8"))
-        if readiness.get("overall") == "ready" and "Status: not complete for external readiness." in blocked:
-            fail("blocked report is stale: external readiness JSON is ready")
-        for key in ["mimo", "image2", "hermes"]:
+        if readiness.get("overall") == "ready":
+            if "Status: external readiness complete." not in blocked:
+                fail("integration report is stale: external readiness JSON is ready")
+        elif "Status: not complete for external readiness." not in blocked:
+            fail("blocked report does not state external readiness is not complete")
+        for marker in ["Gemini text", "Gemini image", "Hermes", "Object storage"]:
+            if marker not in blocked:
+                fail(f"integration report missing marker: {marker}")
+        for key in ["gemini", "gemini_image", "hermes", "object_storage", "image2"]:
             component_status = readiness.get(key, {}).get("status")
             if component_status != "ready" and not str(component_status).startswith("blocked"):
                 fail(f"external readiness status for {key} is not ready/blocked: {component_status}")

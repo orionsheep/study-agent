@@ -5,7 +5,7 @@ FORBIDDEN=(
   "mock tutor response"
   "boundary_mock_adapter"
   "fake provider"
-  "simulated MiMo"
+  "simulated Gemini"
   "simulated Hermes"
   "placeholder response"
   "TODO real integration"

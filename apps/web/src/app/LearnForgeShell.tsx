@@ -15,8 +15,10 @@ import {
   logoutAccount,
   patchApp,
   postAppEvent,
+  recordNotebookLMEvent,
   streamChatMessage,
   type ModelProvider,
+  type NotebookLMContext,
   type SessionContext
 } from "../lib/api/client";
 import { applyAgentEvent, applyTraceEvent, type ChatMessage, type TraceItem } from "../lib/events/agentEvents";
@@ -34,6 +36,43 @@ type Props = {
   sessionContext: SessionContext;
   onLogout: () => void;
 };
+
+function notebookLMContextFromPayload(payload: Record<string, unknown>): NotebookLMContext {
+  const refs = Array.isArray(payload.source_refs) ? payload.source_refs as Array<Record<string, unknown>> : undefined;
+  const learnforgeNotebookId = typeof payload.learnforge_notebook_id === "string" ? payload.learnforge_notebook_id : undefined;
+  const openNotebookId = typeof payload.open_notebook_id === "string" ? payload.open_notebook_id : undefined;
+  return {
+    notebookId: learnforgeNotebookId || (typeof payload.notebook_id === "string" ? payload.notebook_id : undefined),
+    learnforgeNotebookId,
+    openNotebookId,
+    notebookTitle: typeof payload.notebook_title === "string" ? payload.notebook_title : undefined,
+    sourceId: typeof payload.source_id === "string" ? payload.source_id : undefined,
+    sourceTitle: typeof payload.source_title === "string" ? payload.source_title : undefined,
+    sourceRefs: refs,
+    kind: typeof payload.kind === "string" ? payload.kind : undefined,
+    mode: "source",
+  };
+}
+
+function notebookLMContextLabel(context: NotebookLMContext): string {
+  return context.sourceTitle || context.notebookTitle || context.notebookId || "当前来源";
+}
+
+function notebookLMMessageWithContext(text: string, context: NotebookLMContext): string {
+  const lines = [
+    "[NotebookLM Context]",
+    context.learnforgeNotebookId ? `learnforge_notebook_id: ${context.learnforgeNotebookId}` : "",
+    context.openNotebookId ? `open_notebook_id: ${context.openNotebookId}` : "",
+    context.notebookId ? `notebook_id: ${context.notebookId}` : "",
+    context.notebookTitle ? `notebook_title: ${context.notebookTitle}` : "",
+    context.sourceId ? `source_id: ${context.sourceId}` : "",
+    context.sourceTitle ? `source_title: ${context.sourceTitle}` : "",
+    context.kind ? `task_kind: ${context.kind}` : "",
+  ].filter(Boolean);
+  const refs = context.sourceRefs?.slice(0, 12) ?? [];
+  const refsBlock = refs.length ? `\nsource_refs_json:\n${JSON.stringify(refs, null, 2)}` : "";
+  return `${lines.join("\n")}${refsBlock}\n[/NotebookLM Context]\n\n${text}`;
+}
 
 export function LearnForgeShell({ sessionContext, onLogout }: Props) {
   const [apps, setApps] = useState<CanvasApp[]>([]);
@@ -67,6 +106,18 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
   const [learningFocus, setLearningFocus] = useState(() => loadJson<{ topic: string; courseLabel: string; objective: string }>(
     "learnforge.learningFocus", { topic: "", courseLabel: "", objective: "" }
   ));
+  // English context for the right-side Hermes. When a word is selected inside the
+  // English workspace (or via the global lookup toolbar) it becomes the active
+  // english context: the TutorChat shows a chip, the composer placeholder changes,
+  // and the next send() is routed through the english_chat skill with the word
+  // injected as structured context. Clearing it returns Hermes to normal mode.
+  const [englishWord, setEnglishWord] = useState<string | null>(null);
+  const [notebookLMContext, setNotebookLMContextState] = useState<NotebookLMContext | null>(null);
+  const notebookLMContextRef = useRef<NotebookLMContext | null>(null);
+  const setNotebookLMContext = useCallback((context: NotebookLMContext | null) => {
+    notebookLMContextRef.current = context;
+    setNotebookLMContextState(context);
+  }, []);
   const shellRef = useRef<HTMLElement | null>(null);
   // #5: holds the AbortController for the in-flight chat stream so we can cancel it on
   // session switch or unmount. Without this, switching conversations left the previous
@@ -220,8 +271,12 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
     setFullscreenId((fs) => (fs === appId ? null : fs));
   }, []);
 
-  // Global word lookup: open or focus English workspace
+  // Global word lookup: open or focus English workspace AND set the word as the
+  // right-side Hermes english context in one motion, so a lookup from anywhere
+  // (selection toolbar, external link) immediately primes the tutor chat.
   const handleEnglishLookup = useCallback((word: string) => {
+    setEnglishWord(word);
+    setNotebookLMContext(null);
     const existingApp = apps.find((a) => a.app_type === "english.workspace");
     if (existingApp) {
       // Update payload and focus
@@ -246,7 +301,7 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
         }
       }).catch(() => undefined);
     }
-  }, [apps, openWindow, focusWindow, sessionContext]);
+  }, [apps, openWindow, focusWindow, sessionContext, setNotebookLMContext]);
 
   const focusAppById = useCallback((appId: string, nextState?: CanvasApp["state"]) => {
     openWindow(appId);
@@ -346,6 +401,27 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
 
   const send = async (text: string, attachments?: Array<{ name: string; preview?: string }>, skillLabel?: { key?: string; label: string; color: string; bgColor: string; borderColor: string }) => {
     const now = Date.now();
+    // English context: when a word is selected in the English workspace, route the
+    // turn through the english_chat skill (→ EnglishAgent, which has the English-tutor
+    // system prompt) and prepend the word as structured context. This reuses the exact
+    // pattern the old in-workspace AIChatPanel used, but unifies it into the main
+    // Hermes chat so reasoning/thinking/trace are all surfaced.
+    const explicitNotebookLM = skillLabel?.key === "notebooklm_chat";
+    const activeEnglishWord = englishWord && !skillLabel ? englishWord : null;
+    const activeNotebookLMContext = notebookLMContextRef.current && (explicitNotebookLM || (!skillLabel && !activeEnglishWord))
+      ? notebookLMContextRef.current
+      : null;
+    const effectiveSkillKey = skillLabel?.key ?? (activeEnglishWord ? "english_chat" : activeNotebookLMContext ? "notebooklm_chat" : undefined);
+    const effectiveMessage = activeEnglishWord
+      ? `[当前单词: ${activeEnglishWord}]\n\n${text}`
+      : activeNotebookLMContext
+        ? notebookLMMessageWithContext(text, activeNotebookLMContext)
+      : text;
+    const effectiveSkillLabel = skillLabel ?? (activeEnglishWord
+      ? { key: "english_chat", label: `英语·${activeEnglishWord}`, color: "#c4b5fd", bgColor: "rgba(139,92,246,0.14)", borderColor: "rgba(139,92,246,0.4)" }
+      : activeNotebookLMContext
+        ? { key: "notebooklm_chat", label: `NotebookLM·${notebookLMContextLabel(activeNotebookLMContext)}`, color: "#a7f3d0", bgColor: "rgba(16,185,129,0.14)", borderColor: "rgba(16,185,129,0.38)" }
+      : undefined);
     const userMessage: ChatMessage = {
       id: `user-${now}`,
       role: "user",
@@ -353,7 +429,7 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
       links: [],
       resources: [],
       attachments: attachments?.length ? attachments : undefined,
-      skillLabel: skillLabel ? skillLabel : undefined,
+      skillLabel: effectiveSkillLabel ? effectiveSkillLabel : undefined,
     };
     const initialTrace: TraceItem[] = [
       { id: `backend-send-${now}`, name: "backend", status: "running", detail: "请求已发送", raw: "backend:running:请求已发送" }
@@ -375,7 +451,7 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
       streamAbortRef.current?.abort();
       controller = new AbortController();
       streamAbortRef.current = controller;
-      await streamChatMessage(text, applyEvent, sessionContext, modelProvider, imageData, controller.signal, attachments, skillLabel?.key);
+      await streamChatMessage(effectiveMessage, applyEvent, sessionContext, modelProvider, imageData, controller.signal, attachments, effectiveSkillKey);
       const fresh = await fetchDashboard(sessionContext);
       setDashboard(fresh);
     } catch (error) {
@@ -451,20 +527,61 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
   }, [sessionContext, setActiveRun]);
 
   const onAppEvent = async (appId: string, eventType: string, payload: Record<string, unknown>) => {
+    // english.word_select is a purely client-side signal from the English workspace:
+    // a word was selected (or re-selected) inside it. Set it as the right-side Hermes
+    // english context. It is NOT recorded to the backend app_event store — it only
+    // drives UI (the context chip + skill routing on the next send()).
+    if (eventType === "english.word_select") {
+      const word = String(payload?.word ?? "").trim();
+      setEnglishWord(word || null);
+      if (word) setNotebookLMContext(null);
+      return;
+    }
+
+    if (eventType === "notebooklm.context_select") {
+      const context = notebookLMContextFromPayload(payload);
+      setNotebookLMContext(context);
+      setEnglishWord(null);
+      recordNotebookLMEvent(eventType, { app_id: appId, ...payload }, sessionContext).catch(() => undefined);
+      return;
+    }
+
+    if (eventType === "notebooklm.ask_hermes" || eventType === "notebooklm.generate_with_hermes") {
+      const context = notebookLMContextFromPayload(payload);
+      setNotebookLMContext(context);
+      setEnglishWord(null);
+      recordNotebookLMEvent(eventType, { app_id: appId, ...payload }, sessionContext).catch(() => undefined);
+      const prompt = String(payload.prompt || "请基于当前 NotebookLM 来源回答，并标注引用依据。");
+      const label = context.kind
+        ? `NotebookLM·${context.kind}`
+        : `NotebookLM·${notebookLMContextLabel(context)}`;
+      await send(prompt, undefined, {
+        key: "notebooklm_chat",
+        label,
+        color: "#a7f3d0",
+        bgColor: "rgba(16,185,129,0.14)",
+        borderColor: "rgba(16,185,129,0.38)",
+      });
+      return;
+    }
+
     setTrace((items) => [
       ...items.slice(-14),
       { id: `${appId}-${eventType}-${Date.now()}`, name: "app_event", status: "running", detail: `${appId}:${eventType}`, raw: `app_event:running:${appId}:${eventType}` }
     ]);
 
-    // Handle system module creation from Dock clicks (English workspace / Humanities notebook)
+    // Handle system module creation from Dock clicks (English workspace / NotebookLM)
     if (eventType === "system_module.create") {
-      const moduleType = payload.app_type as string;
-      const existingApp = appsRef.current.find((a) => a.app_type === moduleType);
+      const requestedModuleType = payload.app_type as string;
+      const moduleType = requestedModuleType === "humanities.notebook" ? "notebooklm.workspace" : requestedModuleType;
+      const existingApp = appsRef.current.find((a) =>
+        a.app_type === moduleType || (moduleType === "notebooklm.workspace" && a.app_type === "humanities.notebook")
+      );
       if (existingApp) {
         openWindow(existingApp.app_id);
         focusWindow(existingApp.app_id);
       } else {
-        const title = moduleType === "english.workspace" ? "英语工作区" : "文科笔记本";
+        const title = moduleType === "english.workspace" ? "英语工作区" : "NotebookLM";
         try {
           const newApp = await createCanvasApp({
             app_type: moduleType,
@@ -625,6 +742,10 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
         onSummarize={async () => { await send("请把本轮学习总结到笔记 App"); }}
         onOpenLink={(link: ChatAppLink, rect: DOMRect) => { open(link, rect).catch(() => undefined); }}
         onAddResourceToCanvas={addResourceToCanvas}
+        englishWord={englishWord}
+        onClearEnglishWord={() => setEnglishWord(null)}
+        notebookLMContext={notebookLMContext}
+        onClearNotebookLMContext={() => setNotebookLMContext(null)}
       />
       <AppLinkFlightLayer flight={flight} />
       </main>

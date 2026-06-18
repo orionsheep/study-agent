@@ -77,6 +77,16 @@ async def get_fission_graph(student_id: str, word: str, depth: int = 2) -> dict[
 
 # ── Word List ───────────────────────────────────────────────────────────────
 
+# The "考试考纲" entry returned by EFW is a directory of CSV files (初中/高中/
+# CET4/CET6/考研/托福/SAT). EFW's /api/words only does free-text search and returns
+# bare strings; it cannot list the contents of a directory-backed library. So when a
+# caller asks for the exam library, we route through /api/library-words instead,
+# which reads the actual CSV and — crucially — can return each word WITH its
+# chineseData (collins stars, definition, phonetic) when includeDefinitions=true.
+# That's what the word list needs to render Collins stars + meanings per row.
+_EXAM_LIBRARY_CSV = "考试考纲/3-CET4-顺序.csv"  # 7508 words, the canonical exam set
+
+
 async def get_word_list(
     student_id: str,
     library_id: str | None = None,
@@ -84,12 +94,33 @@ async def get_word_list(
     limit: int = 100,
     offset: int = 0,
 ) -> dict[str, Any]:
-    """Get a list of words (with optional search and library filter)."""
-    params: dict[str, Any] = {"limit": limit, "offset": offset}
-    if library_id:
-        params["libraryId"] = library_id
+    """Get a list of words (with optional search and library filter).
+
+    For the exam library we use /api/library-words so the response carries per-word
+    chineseData (collins / definition / phonetic). Free-text search still uses the
+    lightweight /api/words endpoint.
+    """
+    # Library browse (考试考纲) — return rich word objects via library-words.
+    is_exam_library = library_id in {"考试考纲", "exam", "考试考纲/3-CET4-顺序.csv"}
+    if is_exam_library and not search:
+        params: dict[str, Any] = {
+            "path": _EXAM_LIBRARY_CSV,
+            "groupIndex": str(offset // max(limit, 1)),
+            "groupSize": str(limit),
+            "includeDefinitions": "true",
+        }
+        data = await _efw_request("GET", "/api/library-words", student_id, params=params)
+        # Normalize: EFW returns a bare array of word objects; expose as {words, total}.
+        words = data if isinstance(data, list) else data.get("words", [])
+        return {"words": words, "total": len(words)}
+
+    # Free-text search — EFW's /api/words, optionally enriched.
+    params = {}
     if search:
-        params["search"] = search
+        params["query"] = search
+        params["includeDefinitions"] = "true"
+    if library_id and not is_exam_library:
+        params["libraryId"] = library_id
     return await _efw_request(
         "GET",
         "/api/words",
@@ -146,6 +177,57 @@ async def submit_quiz_result(
 
 # ── User Library ────────────────────────────────────────────────────────────
 
+async def get_libraries(student_id: str, path: str | None = None) -> dict[str, Any]:
+    """Get libraries (system + user). Supports path parameter for file system browsing."""
+    params = {}
+    if path is not None:
+        params["path"] = path
+    return await _efw_request(
+        "GET",
+        "/api/libraries",
+        student_id,
+        params=params,
+    )
+
+def _resolve_library_path(path: str) -> str:
+    """Map a workspace library path to the concrete CSV EFW should read.
+
+    The workspace only exposes 考试考纲 (a directory of CSVs). EFW's library-words /
+    library-groups endpoints need an actual .csv file, so we point the directory at
+    its canonical contents (CET4-顺序, the primary exam word set).
+    """
+    normalized = path.strip().rstrip("/")
+    if normalized in {"", "考试考纲", "exam"}:
+        return _EXAM_LIBRARY_CSV
+    return path
+
+
+async def get_library_words(student_id: str, path: str, group_index: int | None = None, group_size: int = 100, include_definitions: bool = False) -> dict[str, Any]:
+    """Get words from a library file."""
+    csv_path = _resolve_library_path(path)
+    params: dict[str, Any] = {"path": csv_path, "groupSize": group_size}
+    if group_index is not None:
+        params["groupIndex"] = group_index
+    if include_definitions:
+        params["includeDefinitions"] = "true"
+    return await _efw_request(
+        "GET",
+        "/api/library-words",
+        student_id,
+        params=params,
+    )
+
+async def get_library_groups(student_id: str, path: str, group_size: int = 100) -> dict[str, Any]:
+    """Get groups for a library file."""
+    csv_path = _resolve_library_path(path)
+    params = {"path": csv_path, "groupSize": group_size}
+    return await _efw_request(
+        "GET",
+        "/api/library-groups",
+        student_id,
+        params=params,
+    )
+
 async def get_user_libraries(student_id: str) -> dict[str, Any]:
     """Get the user's word libraries."""
     return await _efw_request(
@@ -189,11 +271,19 @@ async def update_study_plan(student_id: str, daily_goal: int) -> dict[str, Any]:
 # ── Health Check ────────────────────────────────────────────────────────────
 
 async def health_check() -> dict[str, Any]:
-    """Check if the english-word-fission backend is reachable."""
+    """Check if the english-word-fission backend is reachable.
+
+    EFW has no dedicated /api/health route, so we probe /api/libraries instead —
+    a lightweight read-only endpoint that exists on every install. A 2xx response
+    (even an empty list) means the backend is up and the DB is reachable.
+    """
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{EFW_BASE_URL}/api/health")
+            response = await client.get(
+                f"{EFW_BASE_URL}/api/libraries",
+                headers={"X-User-Id": "health-check"} if EFW_API_KEY else {},
+            )
             response.raise_for_status()
-            return {"status": "ok", "data": response.json()}
+            return {"status": "ok", "reachable": True}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "reachable": False, "message": str(e)}

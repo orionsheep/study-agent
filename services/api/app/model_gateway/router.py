@@ -4,14 +4,12 @@ import asyncio
 
 from app.core.config import get_settings
 from app.model_gateway.gemini_client import GeminiClient
-from app.model_gateway.mimo_client import MiMoClient
 
 
 class ModelGatewayRouter:
     def __init__(self) -> None:
         self.settings = get_settings()
         self.providers = {
-            "mimo": MiMoClient(),
             "gemini": GeminiClient(),
         }
         self.primary_name = self.normalize_provider(self.settings.model_provider)
@@ -24,10 +22,6 @@ class ModelGatewayRouter:
             "google": "gemini",
             "gemini-3.1": "gemini",
             "gemini-3.1-pro": "gemini",
-            "xiaomi": "mimo",
-            "mi": "mimo",
-            "mimo-v2.5": "mimo",
-            "mimo-v2.5-pro": "mimo",
         }
         resolved = aliases.get(cleaned, cleaned)
         if resolved in self.providers:

@@ -10,13 +10,15 @@ def test_health_and_system_status_are_truthful():
     health = client.get("/health").json()
     assert health["components"]["backend"]["status"] == "ready"
     assert health["components"]["database"]["status"] == "ready"
-    assert health["components"]["mimo"]["status"].startswith("blocked") or health["components"]["mimo"]["status"] == "ready"
-    assert health["components"]["gemini"]["status"].startswith("blocked") or health["components"]["gemini"]["status"] == "ready"
-    assert set(health["components"]["model_providers"]) == {"mimo", "gemini"}
-    assert health["components"]["hermes"]["status"].startswith("blocked") or health["components"]["hermes"]["status"] == "ready"
-    assert health["components"]["image2"]["status"].startswith("blocked") or health["components"]["image2"]["status"] == "ready"
-    if not any(status["status"] == "ready" for status in health["components"]["model_providers"].values()):
-        assert health["status"] != "ready"
+
+    system_status = client.get("/api/system/status").json()
+    assert system_status["gemini"]["status"].startswith("blocked") or system_status["gemini"]["status"] == "ready"
+    assert "gemini" in system_status["model_providers"]
+    assert system_status["hermes"]["status"].startswith("blocked") or system_status["hermes"]["status"] == "ready"
+    assert system_status["gemini_image"]["status"].startswith("blocked") or system_status["gemini_image"]["status"] == "ready"
+    assert system_status["image2"]["status"].startswith("blocked") or system_status["image2"]["status"] == "ready"
+    if not any(status["status"] == "ready" for status in system_status["model_providers"].values()):
+        assert system_status["overall"] != "ready"
 
 
 def test_required_api_routes_exist():
@@ -47,5 +49,13 @@ def test_required_api_routes_exist():
         "/api/memory/{student_id}",
         "/api/memory/search",
         "/api/images/generate",
+        "/api/notebooklm/status",
+        "/api/notebooklm/bootstrap",
+        "/api/notebooklm/sources",
+        "/api/notebooklm/sources/sync",
+        "/api/notebooklm/retrieve",
+        "/api/notebooklm/transform",
+        "/api/notebooklm/publish",
+        "/api/notebooklm/events",
     }
     assert required.issubset(paths)

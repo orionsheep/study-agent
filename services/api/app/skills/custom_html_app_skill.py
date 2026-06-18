@@ -1138,6 +1138,529 @@ class CustomHtmlAppSkill:
 """
         return template.replace("__TITLE__", title)
 
+    def bernoulli_venturi_demo_widget(self, topic: str) -> str:
+        title = escape(topic or "伯努利定律")
+        template = """
+<section class="lf-bern-demo" data-learnforge-widget="bernoulli-venturi-demo">
+  <style>
+    .lf-bern-demo{--ink:#15202b;--muted:#5c6876;--line:#d6dde7;--paper:#f7f3ea;--panel:#fffdf7;--charcoal:#17202b;--cyan:#05a8b8;--blue:#2468d8;--amber:#d98216;--red:#d84c3f;--green:#128a61;font-family:"Avenir Next","PingFang SC","Microsoft YaHei",ui-sans-serif,system-ui;color:var(--ink);background:linear-gradient(135deg,#f8f4e8 0%,#f5fbff 44%,#eef7f2 100%);border:1px solid #d9e2ec;border-radius:18px;box-sizing:border-box;min-height:760px;padding:18px;box-shadow:0 22px 56px rgba(27,48,72,.14)}
+    .lf-bern-demo *{box-sizing:border-box}
+    .lf-bern-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:start;margin-bottom:14px}
+    .lf-bern-kicker{font-size:12px;font-weight:950;color:#0b7f87;text-transform:uppercase;letter-spacing:.08em}
+    .lf-bern-title{font-size:28px;line-height:1.12;margin:4px 0 7px;letter-spacing:0}
+    .lf-bern-sub{margin:0;color:var(--muted);font-size:13px;line-height:1.64;max-width:900px}
+    .lf-bern-badges{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+    .lf-bern-badge{border:1px solid #cad6e3;border-radius:999px;padding:6px 10px;background:rgba(255,255,255,.76);font-size:12px;font-weight:850;white-space:nowrap}
+    .lf-bern-app{display:grid;grid-template-columns:minmax(290px,352px) minmax(0,1fr);gap:14px;align-items:stretch}
+    .lf-bern-panel,.lf-bern-stage-wrap{border:1px solid var(--line);background:rgba(255,253,247,.9);box-shadow:0 14px 30px rgba(38,57,82,.09)}
+    .lf-bern-panel{border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:13px}
+    .lf-bern-section{border-top:1px solid #e2e8f0;padding-top:12px}
+    .lf-bern-section:first-child{border-top:0;padding-top:0}
+    .lf-bern-section h3{margin:0 0 9px;font-size:14px;letter-spacing:0}
+    .lf-bern-control{display:grid;grid-template-columns:minmax(0,1fr) 58px;gap:9px;align-items:center;margin:9px 0}
+    .lf-bern-control label{grid-column:1 / -1;color:#475569;font-size:12px;font-weight:850;display:flex;justify-content:space-between;gap:10px}
+    .lf-bern-control input{width:100%;accent-color:#05a8b8}
+    .lf-bern-control strong{font-size:12px;color:#0d7b79;text-align:right}
+    .lf-bern-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .lf-bern-actions button{min-height:38px;border:1px solid rgba(15,23,42,.08);border-radius:9px;padding:9px 8px;color:#fff;background:#2468d8;font-weight:900;font-size:12px;cursor:pointer;box-shadow:0 9px 18px rgba(36,104,216,.15)}
+    .lf-bern-actions button.secondary{background:#536274}.lf-bern-actions button.good{background:#128a61}.lf-bern-actions button.layer{background:#17202b}.lf-bern-actions button.is-off{background:#9aa5b1;color:#1f2937}
+    .lf-bern-readouts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .lf-bern-readout{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:9px;min-width:0}
+    .lf-bern-readout small{display:block;color:#64748b;font-size:11px;margin-bottom:4px}
+    .lf-bern-readout strong{font-size:17px;line-height:1.08;color:#0f172a;white-space:nowrap}
+    .lf-bern-equation{background:#17202b;color:#d7f4f2;border-radius:12px;padding:11px;font-family:"SFMono-Regular",ui-monospace,monospace;font-size:12px;line-height:1.55}
+    .lf-bern-note{background:#fff7ed;border-left:4px solid #d98216;border-radius:10px;padding:10px;color:#7c3f00;font-size:12px;line-height:1.58}
+    .lf-bern-stage-wrap{position:relative;overflow:hidden;min-height:610px;border-radius:14px;background:#141b24}
+    .lf-bern-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+    .lf-bern-canvas:active{cursor:grabbing}
+    .lf-bern-overlay{position:absolute;left:14px;right:14px;bottom:12px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;pointer-events:none}
+    .lf-bern-card{border:1px solid rgba(255,255,255,.18);background:rgba(20,27,36,.72);color:#d9e9ee;backdrop-filter:blur(10px);border-radius:10px;padding:9px;font-size:11px}
+    .lf-bern-card strong{display:block;font-size:15px;color:#fff;margin-top:3px;white-space:nowrap}
+    @media(max-width:960px){.lf-bern-head,.lf-bern-app{grid-template-columns:1fr}.lf-bern-badges{justify-content:flex-start}.lf-bern-stage-wrap{min-height:520px}.lf-bern-overlay{grid-template-columns:1fr 1fr}.lf-bern-readouts{grid-template-columns:1fr 1fr}}
+    @media(max-width:620px){.lf-bern-demo{padding:12px}.lf-bern-title{font-size:23px}.lf-bern-readouts,.lf-bern-actions,.lf-bern-overlay{grid-template-columns:1fr}.lf-bern-stage-wrap{min-height:460px}}
+  </style>
+  <div class="lf-bern-head">
+    <div>
+      <div class="lf-bern-kicker">Bernoulli Venturi Lab</div>
+      <h2 class="lf-bern-title">__TITLE__ 3D 可交互演示模型</h2>
+      <p class="lf-bern-sub">拖拽舞台改变视角，滚轮或缩放滑块推进相机。调节入口速度、喉管截面积、密度和高度差后，压力场、流线、粒子尾迹、压强计与能量项会同步更新。</p>
+    </div>
+    <div class="lf-bern-badges"><span class="lf-bern-badge">压力场图层</span><span class="lf-bern-badge">粒子尾迹</span><span class="lf-bern-badge">流线/速度箭头</span><span class="lf-bern-badge">能量守恒读数</span></div>
+  </div>
+  <div class="lf-bern-app">
+    <aside class="lf-bern-panel">
+      <div class="lf-bern-section">
+        <h3>流体参数</h3>
+        <div class="lf-bern-control"><label>入口流速 v1 <span data-value="v1">4.0</span></label><input type="range" min="1.5" max="9" step="0.1" value="4" data-param="v1"><strong>m/s</strong></div>
+        <div class="lf-bern-control"><label>喉管截面积比 A2/A1 <span data-value="ratio">0.55</span></label><input type="range" min="0.32" max="0.9" step="0.01" value="0.55" data-param="ratio"><strong>ratio</strong></div>
+        <div class="lf-bern-control"><label>流体密度 rho <span data-value="rho">1000</span></label><input type="range" min="700" max="1300" step="10" value="1000" data-param="rho"><strong>kg/m3</strong></div>
+        <div class="lf-bern-control"><label>高度差 Δh <span data-value="height">0.0</span></label><input type="range" min="-1.5" max="1.5" step="0.1" value="0" data-param="height"><strong>m</strong></div>
+      </div>
+      <div class="lf-bern-section">
+        <h3>相机与图层</h3>
+        <div class="lf-bern-control"><label>水平视角 yaw <span data-value="yaw">26</span></label><input type="range" min="-58" max="58" step="1" value="26" data-param="yaw"><strong>deg</strong></div>
+        <div class="lf-bern-control"><label>俯仰视角 pitch <span data-value="pitch">-10</span></label><input type="range" min="-28" max="24" step="1" value="-10" data-param="pitch"><strong>deg</strong></div>
+        <div class="lf-bern-control"><label>相机缩放 zoom <span data-value="zoom">1.00</span></label><input type="range" min="0.78" max="1.34" step="0.01" value="1" data-param="zoom"><strong>x</strong></div>
+      </div>
+      <div class="lf-bern-section">
+        <h3>演示控制</h3>
+        <div class="lf-bern-actions">
+          <button type="button" class="good" data-action="toggle-running">暂停粒子</button>
+          <button type="button" class="layer" data-action="toggle-streamlines">隐藏流线</button>
+          <button type="button" class="layer" data-action="toggle-field">隐藏压力场</button>
+          <button type="button" class="layer" data-action="toggle-labels">隐藏标注</button>
+          <button type="button" class="secondary" data-action="reset-camera">重置相机</button>
+          <button type="button" class="secondary" data-action="reset">重置参数</button>
+        </div>
+      </div>
+      <div class="lf-bern-section">
+        <h3>实时读数</h3>
+        <div class="lf-bern-readouts">
+          <div class="lf-bern-readout"><small>入口速度 v1</small><strong data-role="out-v1">4.0</strong></div>
+          <div class="lf-bern-readout"><small>喉管速度 v2</small><strong data-role="out-v2">7.3</strong></div>
+          <div class="lf-bern-readout"><small>入口压强 P1</small><strong data-role="out-p1">101.3</strong></div>
+          <div class="lf-bern-readout"><small>喉管压强 P2</small><strong data-role="out-p2">82.7</strong></div>
+          <div class="lf-bern-readout"><small>压强差 ΔP</small><strong data-role="out-dp">18.6</strong></div>
+          <div class="lf-bern-readout"><small>连续性</small><strong data-role="out-cont">A1v1=A2v2</strong></div>
+          <div class="lf-bern-readout"><small>总能量偏差</small><strong data-role="out-energy">0.0</strong></div>
+        </div>
+      </div>
+      <div class="lf-bern-equation">P + 1/2 rho v^2 + rho g h = 常量<br>A1 v1 = A2 v2</div>
+      <div class="lf-bern-note">观察重点：截面积变小，连续性方程迫使速度增大；动压项上升时，静压项下降。高度差会把 rho g h 加入能量分配。</div>
+    </aside>
+    <div class="lf-bern-stage-wrap">
+      <canvas class="lf-bern-canvas" data-role="canvas" aria-label="伯努利定律三维文丘里管交互舞台"></canvas>
+      <div class="lf-bern-overlay">
+        <div class="lf-bern-card">宽管区域<strong data-role="badge-left">高静压 / 低流速</strong></div>
+        <div class="lf-bern-card">喉管区域<strong data-role="badge-mid">低静压 / 高流速</strong></div>
+        <div class="lf-bern-card">能量交换<strong data-role="badge-energy">静压 -> 动压</strong></div>
+        <div class="lf-bern-card">视角控制<strong data-role="badge-view">yaw 26°</strong></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    (() => {
+      const root = document.currentScript.closest('.lf-bern-demo');
+      if (!root || root.dataset.ready === '1') return;
+      root.dataset.ready = '1';
+      const canvas = root.querySelector('[data-role="canvas"]');
+      const ctx = canvas.getContext('2d');
+      const params = Object.fromEntries(Array.from(root.querySelectorAll('[data-param]')).map(node => [node.dataset.param, node]));
+      const values = Object.fromEntries(Array.from(root.querySelectorAll('[data-value]')).map(node => [node.dataset.value, node]));
+      const out = Object.fromEntries(Array.from(root.querySelectorAll('[data-role]')).map(node => [node.dataset.role, node]));
+      let dpr = Math.max(1, window.devicePixelRatio || 1);
+      let particles = [];
+      const layers = { streamlines: true, field: true, labels: true };
+      let running = true;
+      let last = 0;
+      let drag = null;
+      function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+      function setControl(name, value) {
+        if (params[name]) params[name].value = String(value);
+      }
+      function readParams() {
+        const v1 = Number(params.v1.value);
+        const ratio = Number(params.ratio.value);
+        const rho = Number(params.rho.value);
+        const height = Number(params.height.value);
+        const yaw = Number(params.yaw.value);
+        const pitch = Number(params.pitch.value);
+        const zoom = Number(params.zoom.value);
+        const v2 = v1 / Math.max(0.24, ratio);
+        const p1 = 101.3;
+        const dpSigned = (0.5 * rho * (v2 * v2 - v1 * v1) + rho * 9.81 * height) / 1000;
+        const p2 = clamp(p1 - dpSigned, 4, 165);
+        const dyn1 = 0.5 * rho * v1 * v1 / 1000;
+        const dyn2 = 0.5 * rho * v2 * v2 / 1000;
+        const total1 = p1 + dyn1;
+        const total2 = p2 + dyn2 + rho * 9.81 * height / 1000;
+        return { v1, ratio, rho, height, yaw, pitch, zoom, v2, p1, p2, dp: p1 - p2, dyn1, dyn2, total1, total2 };
+      }
+      function resize() {
+        const r = canvas.getBoundingClientRect();
+        dpr = Math.max(1, window.devicePixelRatio || 1);
+        canvas.width = Math.max(720, Math.floor(r.width * dpr));
+        canvas.height = Math.max(500, Math.floor(r.height * dpr));
+        draw();
+      }
+      function seedParticles() {
+        particles = Array.from({ length: 176 }, (_, i) => ({
+          x: (i / 176) * 1.16 - 0.08,
+          lane: Math.random() * 2 - 1,
+          phase: Math.random() * Math.PI * 2,
+          shade: Math.random(),
+          drift: Math.random() * 0.55 + 0.65
+        }));
+      }
+      function radiusAt(t, ratio) {
+        const throat = Math.exp(-Math.pow((t - 0.5) / 0.18, 2));
+        const area = 1 - throat * (1 - ratio);
+        return 0.19 + 0.21 * Math.sqrt(Math.max(0.22, area));
+      }
+      function relativeAreaAt(t, ratio) {
+        const r = radiusAt(t, ratio);
+        const r0 = radiusAt(0.08, ratio);
+        return Math.max(0.2, (r * r) / (r0 * r0));
+      }
+      function areaSpeedAt(t, p) {
+        return p.v1 / relativeAreaAt(t, p.ratio);
+      }
+      function pressureAt(t, p) {
+        const speed = areaSpeedAt(t, p);
+        const heightTerm = p.rho * 9.81 * p.height * t / 1000;
+        return clamp(p.p1 - (0.5 * p.rho * (speed * speed - p.v1 * p.v1)) / 1000 - heightTerm, 4, 165);
+      }
+      function project(x, y, z) {
+        const W = canvas.width, H = canvas.height;
+        const p = readParams();
+        const cy = Math.cos(p.yaw * Math.PI / 180), sy = Math.sin(p.yaw * Math.PI / 180);
+        const cp = Math.cos(p.pitch * Math.PI / 180), sp = Math.sin(p.pitch * Math.PI / 180);
+        const x1 = x * cy + z * sy;
+        const z1 = z * cy - x * sy;
+        const y1 = y * cp - z1 * sp;
+        const z2 = y * sp + z1 * cp;
+        const depth = 2.35 + z2 * 0.34;
+        const scale = Math.min(W / 2.05, H / 1.18) * p.zoom / depth;
+        return { x: W * 0.51 + x1 * scale, y: H * 0.51 + y1 * scale, s: scale, depth };
+      }
+      function pipePoint(t, side, p) {
+        const x = (t - 0.5) * 1.52;
+        const r = radiusAt(t, p.ratio);
+        const heightCurve = p.height * (t - 0.5) * 0.075;
+        return project(x, side * r + heightCurve, 0);
+      }
+      function pressureColor(t, p, alpha) {
+        const pressure = pressureAt(t, p);
+        const ratio = clamp((p.p1 - pressure) / 42, 0, 1);
+        const r = Math.round(19 + ratio * 225);
+        const g = Math.round(153 - ratio * 66);
+        const b = Math.round(170 - ratio * 126);
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+      }
+      function drawBackdrop() {
+        const W = canvas.width, H = canvas.height;
+        const sky = ctx.createLinearGradient(0, 0, 0, H);
+        sky.addColorStop(0, '#111923');
+        sky.addColorStop(0.48, '#172430');
+        sky.addColorStop(1, '#efe6d1');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, W, H);
+        ctx.strokeStyle = 'rgba(255,255,255,.055)';
+        ctx.lineWidth = 1 * dpr;
+        for (let x = -W; x < W * 2; x += 42 * dpr) {
+          ctx.beginPath();
+          ctx.moveTo(x, H * 0.63);
+          ctx.lineTo(x + W * 0.28, H);
+          ctx.stroke();
+        }
+        for (let y = H * 0.63; y < H; y += 36 * dpr) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(W, y);
+          ctx.stroke();
+        }
+        ctx.fillStyle = 'rgba(255,255,255,.045)';
+        ctx.font = (12 * dpr) + 'px "SFMono-Regular", monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('continuity field / pressure map / live particle traces', 22 * dpr, 28 * dpr);
+      }
+      function drawPipe(p) {
+        const top = [], bottom = [];
+        for (let i = 0; i <= 120; i += 1) {
+          const t = i / 120;
+          top.push(pipePoint(t, -1, p));
+          bottom.push(pipePoint(t, 1, p));
+        }
+        if (layers.field) {
+          for (let i = 0; i < top.length - 1; i += 1) {
+            const t = i / (top.length - 1);
+            ctx.beginPath();
+            ctx.moveTo(top[i].x, top[i].y);
+            ctx.lineTo(top[i + 1].x, top[i + 1].y);
+            ctx.lineTo(bottom[i + 1].x, bottom[i + 1].y);
+            ctx.lineTo(bottom[i].x, bottom[i].y);
+            ctx.closePath();
+            ctx.fillStyle = pressureColor(t, p, 0.68);
+            ctx.fill();
+          }
+        } else {
+          const grad = ctx.createLinearGradient(canvas.width * 0.18, 0, canvas.width * 0.82, 0);
+          grad.addColorStop(0, 'rgba(38,205,210,.48)');
+          grad.addColorStop(0.5, 'rgba(245,158,11,.40)');
+          grad.addColorStop(1, 'rgba(27,185,139,.44)');
+          ctx.beginPath();
+          top.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y));
+          bottom.slice().reverse().forEach(pt => ctx.lineTo(pt.x, pt.y));
+          ctx.closePath();
+          ctx.fillStyle = grad;
+          ctx.fill();
+        }
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,.35)';
+        ctx.shadowBlur = 18 * dpr;
+        ctx.lineWidth = 8 * dpr;
+        ctx.strokeStyle = 'rgba(6,10,16,.72)';
+        ctx.beginPath();
+        top.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y));
+        bottom.slice().reverse().forEach(pt => ctx.lineTo(pt.x, pt.y));
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+        ctx.lineWidth = 2 * dpr;
+        ctx.strokeStyle = 'rgba(255,255,255,.48)';
+        ctx.beginPath(); top.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)); ctx.stroke();
+        ctx.strokeStyle = 'rgba(15,23,42,.42)';
+        ctx.beginPath(); bottom.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)); ctx.stroke();
+        [0.08, 0.5, 0.92].forEach((t, idx) => {
+          const c = project((t - 0.5) * 1.52, p.height * (t - 0.5) * 0.075, 0);
+          const r = radiusAt(t, p.ratio) * c.s;
+          ctx.beginPath();
+          ctx.ellipse(c.x, c.y, Math.max(14, r * 0.42), Math.max(20, r), p.yaw * Math.PI / 180, 0, Math.PI * 2);
+          ctx.strokeStyle = idx === 1 ? 'rgba(249,180,58,.95)' : 'rgba(255,255,255,.46)';
+          ctx.lineWidth = (idx === 1 ? 3 : 2) * dpr;
+          ctx.stroke();
+        });
+      }
+      function drawStreamlines(p) {
+        if (!layers.streamlines) return;
+        const lanes = [-0.72, -0.42, -0.16, 0.16, 0.42, 0.72];
+        lanes.forEach((lane, idx) => {
+          ctx.beginPath();
+          for (let i = 0; i <= 96; i += 1) {
+            const t = i / 96;
+            const r = radiusAt(t, p.ratio);
+            const y = lane * r + Math.sin(t * Math.PI * 2 + idx) * r * 0.025 + p.height * (t - 0.5) * 0.075;
+            const pt = project((t - 0.5) * 1.52, y, 0.036);
+            if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+          }
+          ctx.strokeStyle = idx % 2 ? 'rgba(255,255,255,.48)' : 'rgba(132,230,224,.58)';
+          ctx.lineWidth = 1.5 * dpr;
+          ctx.stroke();
+        });
+      }
+      function drawGauge(t, label, pressure, p, color) {
+        const base = project((t - 0.5) * 1.52, -0.54, 0);
+        const h = clamp(pressure * 1.18, 28, 150) * dpr;
+        const x = base.x, y = base.y - 8 * dpr;
+        ctx.strokeStyle = 'rgba(236,244,247,.72)';
+        ctx.lineWidth = 2 * dpr;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 164 * dpr); ctx.stroke();
+        ctx.strokeRect(x - 9 * dpr, y - 164 * dpr, 18 * dpr, 164 * dpr);
+        const grad = ctx.createLinearGradient(x, y, x, y - h);
+        grad.addColorStop(0, color);
+        grad.addColorStop(1, 'rgba(255,255,255,.94)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(x - 8 * dpr, y - h, 16 * dpr, h);
+        ctx.fillStyle = 'rgba(10,14,20,.72)';
+        ctx.fillRect(x - 48 * dpr, y - 196 * dpr, 96 * dpr, 36 * dpr);
+        ctx.strokeStyle = 'rgba(255,255,255,.18)';
+        ctx.strokeRect(x - 48 * dpr, y - 196 * dpr, 96 * dpr, 36 * dpr);
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = (11 * dpr) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(label + ' ' + pressure.toFixed(1) + ' kPa', x, y - 174 * dpr);
+      }
+      function drawParticles(p) {
+        particles.forEach(pt => {
+          const t = clamp(pt.x, 0, 1);
+          const r = radiusAt(t, p.ratio);
+          const y = pt.lane * r * 0.72 + Math.sin(pt.phase) * r * 0.07 + p.height * (t - 0.5) * 0.075;
+          const pos = project((t - 0.5) * 1.52, y, 0.05);
+          const speed = areaSpeedAt(t, p);
+          const tailT = clamp(t - 0.015 - speed * 0.006, 0, 1);
+          const tailR = radiusAt(tailT, p.ratio);
+          const tail = project((tailT - 0.5) * 1.52, pt.lane * tailR * 0.72 + p.height * (tailT - 0.5) * 0.075, 0.04);
+          ctx.strokeStyle = speed > p.v1 * 1.45 ? 'rgba(255,190,76,.55)' : 'rgba(96,220,232,.38)';
+          ctx.lineWidth = (1.3 + Math.min(2.2, speed * 0.12)) * dpr;
+          ctx.beginPath();
+          ctx.moveTo(tail.x, tail.y);
+          ctx.lineTo(pos.x, pos.y);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, (1.7 + Math.min(3.3, speed * 0.19)) * dpr, 0, Math.PI * 2);
+          ctx.fillStyle = pt.shade > 0.58 ? 'rgba(255,255,255,.95)' : (speed > p.v1 * 1.45 ? 'rgba(255,186,73,.9)' : 'rgba(39,213,221,.88)');
+          ctx.fill();
+        });
+      }
+      function drawArrows(p) {
+        [[0.16, areaSpeedAt(0.16, p), '#35d0d4'], [0.5, areaSpeedAt(0.5, p), '#f5a524'], [0.84, areaSpeedAt(0.84, p), '#3dd486']].forEach(([t, speed, color]) => {
+          const a = project((t - 0.5) * 1.52 - 0.075, 0, 0.09);
+          const b = project((t - 0.5) * 1.52 + Math.min(0.23, Number(speed) / 48), 0, 0.09);
+          ctx.strokeStyle = String(color);
+          ctx.fillStyle = String(color);
+          ctx.lineWidth = 4 * dpr;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - 12 * dpr, b.y - 7 * dpr); ctx.lineTo(b.x - 12 * dpr, b.y + 7 * dpr); ctx.closePath(); ctx.fill();
+        });
+      }
+      function drawEnergyPanel(p) {
+        const x = canvas.width - 190 * dpr;
+        const y = 58 * dpr;
+        const w = 156 * dpr;
+        const rows = [
+          ['静压 P1', p.p1, '#35d0d4'],
+          ['动压 q1', p.dyn1, '#7dd3fc'],
+          ['静压 P2', p.p2, '#f5a524'],
+          ['动压 q2', p.dyn2, '#fb7185']
+        ];
+        ctx.fillStyle = 'rgba(10,14,20,.66)';
+        ctx.fillRect(x - 14 * dpr, y - 24 * dpr, w + 28 * dpr, 150 * dpr);
+        ctx.strokeStyle = 'rgba(255,255,255,.16)';
+        ctx.strokeRect(x - 14 * dpr, y - 24 * dpr, w + 28 * dpr, 150 * dpr);
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = (12 * dpr) + 'px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('能量项 kPa', x, y - 8 * dpr);
+        rows.forEach((row, i) => {
+          const by = y + (18 + i * 27) * dpr;
+          const bw = clamp(row[1] / 115, 0.04, 1) * w;
+          ctx.fillStyle = 'rgba(255,255,255,.12)';
+          ctx.fillRect(x, by, w, 9 * dpr);
+          ctx.fillStyle = row[2];
+          ctx.fillRect(x, by, bw, 9 * dpr);
+          ctx.fillStyle = '#dbeafe';
+          ctx.fillText(row[0] + ' ' + row[1].toFixed(1), x, by - 4 * dpr);
+        });
+      }
+      function drawLabels(p) {
+        if (!layers.labels) return;
+        const labels = [
+          [0.1, -0.47, '入口截面 A1：速度较低，静压较高'],
+          [0.5, 0.47, '喉管 A2：连续性迫使 v2 增大'],
+          [0.77, -0.42, '压力恢复区：流速回落，静压回升']
+        ];
+        ctx.font = (12 * dpr) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        labels.forEach(([t, offset, text]) => {
+          const anchor = project((t - 0.5) * 1.52, 0, 0.08);
+          const pos = project((t - 0.5) * 1.52, offset, 0.22);
+          ctx.strokeStyle = 'rgba(255,255,255,.32)';
+          ctx.beginPath(); ctx.moveTo(anchor.x, anchor.y); ctx.lineTo(pos.x, pos.y); ctx.stroke();
+          const metrics = ctx.measureText(text);
+          ctx.fillStyle = 'rgba(12,16,22,.78)';
+          ctx.fillRect(pos.x - metrics.width / 2 - 10 * dpr, pos.y - 18 * dpr, metrics.width + 20 * dpr, 25 * dpr);
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillText(text, pos.x, pos.y);
+        });
+      }
+      function updateText(p) {
+        values.v1.textContent = p.v1.toFixed(1);
+        values.ratio.textContent = p.ratio.toFixed(2);
+        values.rho.textContent = String(Math.round(p.rho));
+        values.height.textContent = p.height.toFixed(1);
+        values.yaw.textContent = String(Math.round(p.yaw));
+        values.pitch.textContent = String(Math.round(p.pitch));
+        values.zoom.textContent = p.zoom.toFixed(2);
+        out['out-v1'].textContent = p.v1.toFixed(1) + ' m/s';
+        out['out-v2'].textContent = p.v2.toFixed(1) + ' m/s';
+        out['out-p1'].textContent = p.p1.toFixed(1) + ' kPa';
+        out['out-p2'].textContent = p.p2.toFixed(1) + ' kPa';
+        out['out-dp'].textContent = p.dp.toFixed(1) + ' kPa';
+        out['out-cont'].textContent = 'v2 = v1 / ' + p.ratio.toFixed(2);
+        out['out-energy'].textContent = Math.abs(p.total1 - p.total2).toFixed(1) + ' kPa';
+        out['badge-mid'].textContent = p.dp > 0 ? '低静压 / 高流速' : '高度项主导';
+        out['badge-energy'].textContent = '动压 +' + Math.max(0, p.dyn2 - p.dyn1).toFixed(1) + ' kPa';
+        out['badge-view'].textContent = 'yaw ' + Math.round(p.yaw) + '°';
+      }
+      function draw() {
+        if (!ctx) return;
+        const p = readParams();
+        updateText(p);
+        drawBackdrop();
+        drawPipe(p);
+        drawStreamlines(p);
+        drawParticles(p);
+        drawArrows(p);
+        drawGauge(0.18, 'P1', p.p1, p, 'rgba(8,145,178,.75)');
+        drawGauge(0.5, 'P2', p.p2, p, 'rgba(217,119,6,.78)');
+        drawEnergyPanel(p);
+        drawLabels(p);
+      }
+      function tick(t) {
+        const p = readParams();
+        const dt = Math.min(0.034, last ? (t - last) / 1000 : 0.016);
+        last = t;
+        if (running) {
+          particles.forEach(pt => {
+            const speed = areaSpeedAt(Math.max(0, Math.min(1, pt.x)), p);
+            pt.x += dt * (0.105 + speed * 0.021) * pt.drift;
+            pt.phase += dt * (3.2 + speed * 0.12);
+            if (pt.x > 1.08) { pt.x = -0.08; pt.lane = Math.random() * 2 - 1; pt.shade = Math.random(); }
+          });
+        }
+        draw();
+        requestAnimationFrame(tick);
+      }
+      root.addEventListener('input', draw);
+      root.addEventListener('click', event => {
+        const action = event.target && event.target.dataset ? event.target.dataset.action : '';
+        if (action === 'toggle-running') {
+          running = !running;
+          event.target.textContent = running ? '暂停粒子' : '继续粒子';
+        }
+        if (action === 'toggle-streamlines') {
+          layers.streamlines = !layers.streamlines;
+          event.target.textContent = layers.streamlines ? '隐藏流线' : '显示流线';
+          event.target.classList.toggle('is-off', !layers.streamlines);
+          draw();
+        }
+        if (action === 'toggle-field') {
+          layers.field = !layers.field;
+          event.target.textContent = layers.field ? '隐藏压力场' : '显示压力场';
+          event.target.classList.toggle('is-off', !layers.field);
+          draw();
+        }
+        if (action === 'toggle-labels') {
+          layers.labels = !layers.labels;
+          event.target.textContent = layers.labels ? '隐藏标注' : '显示标注';
+          event.target.classList.toggle('is-off', !layers.labels);
+          draw();
+        }
+        if (action === 'reset-camera') {
+          setControl('yaw', 26); setControl('pitch', -10); setControl('zoom', 1);
+          draw();
+        }
+        if (action === 'reset') {
+          setControl('v1', 4); setControl('ratio', 0.55); setControl('rho', 1000); setControl('height', 0);
+          setControl('yaw', 26); setControl('pitch', -10); setControl('zoom', 1);
+          running = true;
+          layers.streamlines = true; layers.field = true; layers.labels = true;
+          root.querySelector('[data-action="toggle-running"]').textContent = '暂停粒子';
+          root.querySelector('[data-action="toggle-streamlines"]').textContent = '隐藏流线';
+          root.querySelector('[data-action="toggle-field"]').textContent = '隐藏压力场';
+          root.querySelector('[data-action="toggle-labels"]').textContent = '隐藏标注';
+          root.querySelectorAll('[data-action^="toggle-"]').forEach(btn => btn.classList.remove('is-off'));
+          seedParticles(); draw();
+        }
+      });
+      canvas.addEventListener('pointerdown', event => {
+        drag = { x: event.clientX, y: event.clientY, yaw: Number(params.yaw.value), pitch: Number(params.pitch.value) };
+        canvas.setPointerCapture?.(event.pointerId);
+      });
+      canvas.addEventListener('pointermove', event => {
+        if (!drag) return;
+        setControl('yaw', Math.round(clamp(drag.yaw + (event.clientX - drag.x) * 0.18, -58, 58)));
+        setControl('pitch', Math.round(clamp(drag.pitch + (event.clientY - drag.y) * 0.12, -28, 24)));
+        draw();
+      });
+      canvas.addEventListener('pointerup', () => { drag = null; });
+      canvas.addEventListener('pointercancel', () => { drag = null; });
+      canvas.addEventListener('wheel', event => {
+        event.preventDefault();
+        const next = clamp(Number(params.zoom.value) + (event.deltaY < 0 ? 0.04 : -0.04), 0.78, 1.34);
+        setControl('zoom', next.toFixed(2));
+        draw();
+      }, { passive: false });
+      window.addEventListener('resize', resize);
+      resize();
+      seedParticles();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</section>
+"""
+        return template.replace("__TITLE__", title)
+
 
     def concept_demo_widget(self, topic: str) -> str:
         title = escape(topic or "互动学习")
@@ -1312,6 +1835,9 @@ class CustomHtmlAppSkill:
     def is_momentum_topic(self, combined: str) -> bool:
         return re.search(r"动量守恒|动量|弹性碰撞|非弹性碰撞|恢复系数|conservation of momentum|elastic collision|碰撞", combined, flags=re.IGNORECASE) is not None
 
+    def is_bernoulli_topic(self, combined: str) -> bool:
+        return re.search(r"伯努利|文丘里|流体|流速|压强|压力差|管道收缩|venturi|bernoulli|fluid pressure", combined, flags=re.IGNORECASE) is not None
+
     def is_rubik_cube_topic(self, combined: str) -> bool:
         return re.search(r"魔方|三阶魔方|鲁比克|Rubik|Rubik's Cube|Rubiks Cube|cube restoration|层转动|还原演示", combined, flags=re.IGNORECASE) is not None
 
@@ -1356,6 +1882,8 @@ class CustomHtmlAppSkill:
             return True
         if self.is_momentum_topic(topic_text) and demo_is_broken:
             return True
+        if self.is_bernoulli_topic(topic_text) and demo_is_broken:
+            return True
         # NOTE: we intentionally do NOT route on `combined` (topic + raw_html + html) here.
         # The generated HTML/script body can contain words like "sort" and would mis-trigger
         # a curated replacement for an unrelated topic. Topic detection above uses topic_text only.
@@ -1386,6 +1914,8 @@ class CustomHtmlAppSkill:
             return self.sorting_kinetic_lab_widget(self.short_widget_title(topic_text, "经典排序算法"))
         if self.is_momentum_topic(topic_text):
             return self.momentum_collision_demo_widget(self.short_widget_title(topic_text, "动量守恒"))
+        if self.is_bernoulli_topic(topic_text):
+            return self.bernoulli_venturi_demo_widget(self.short_widget_title(topic_text, "伯努利定律"))
         return self.concept_demo_widget(self.short_widget_title(topic_text, "互动学习"))
 
     def validate_widget(self, html: str) -> bool:
@@ -1397,12 +1927,7 @@ class CustomHtmlAppSkill:
 
     def run(self, data: SkillInput) -> SkillOutput:
         raw_html = data.payload.get("html", "<section><h2>学习卡片</h2><p>安全沙箱预览。</p></section>")
-        topic = str(data.topic or data.payload.get("topic") or "")
         html = self.sanitize_widget(str(raw_html))
-        fallback_used = False
-        if self.needs_interactive_fallback(topic, str(raw_html), html):
-            html = self.fallback_widget(topic, str(raw_html), html)
-            fallback_used = True
         valid = self.validate_widget(html)
         return SkillOutput(
             skill_name=self.skill_name,
@@ -1410,8 +1935,8 @@ class CustomHtmlAppSkill:
                 "html": html,
                 "valid": valid,
                 "sanitized": html != str(raw_html),
-                "fallback_used": fallback_used,
+                "fallback_used": False,
                 "sandbox": "allow-scripts",
             },
-            trace=["parsed_show_widget", "topic_bound_interactive_fallback" if fallback_used else "kept_generated_widget", "checked_sandbox_policy"],
+            trace=["parsed_show_widget", "kept_generated_widget", "checked_sandbox_policy"],
         )

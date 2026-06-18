@@ -14,6 +14,10 @@ REQUIRED_TABLES = [
     "courses",
     "course_documents",
     "document_chunks",
+    "notebooks",
+    "notebook_sources",
+    "notebook_assignments",
+    "notebook_memory_events",
     "knowledge_points",
     "knowledge_edges",
     "learning_paths",
@@ -22,7 +26,9 @@ REQUIRED_TABLES = [
     "resource_versions",
     "canvas_apps",
     "chat_app_links",
+    "chat_resource_links",
     "chat_messages",
+    "artifacts",
     "app_events",
     "quiz_questions",
     "quiz_submissions",
@@ -176,6 +182,14 @@ SQLITE_SCHEMA = [
       title TEXT NOT NULL,
       file_url TEXT,
       parser TEXT,
+      ingest_type TEXT NOT NULL DEFAULT 'course_seed',
+      owner_scope TEXT NOT NULL DEFAULT 'course',
+      owner_id TEXT,
+      source_scope TEXT NOT NULL DEFAULT 'course_official',
+      original_url TEXT,
+      mime_type TEXT,
+      upload_status TEXT NOT NULL DEFAULT 'ready',
+      metadata TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL
     )
     """,
@@ -188,6 +202,61 @@ SQLITE_SCHEMA = [
       content TEXT NOT NULL,
       source_ref TEXT NOT NULL,
       embedding TEXT,
+      created_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS notebooks (
+      id TEXT PRIMARY KEY,
+      owner_scope TEXT NOT NULL,
+      owner_id TEXT NOT NULL,
+      course_id TEXT,
+      title TEXT NOT NULL,
+      purpose TEXT NOT NULL,
+      description TEXT,
+      tags TEXT NOT NULL,
+      open_notebook_id TEXT,
+      sync_status TEXT NOT NULL DEFAULT 'not_synced',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS notebook_sources (
+      id TEXT PRIMARY KEY,
+      notebook_id TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      source_kind TEXT NOT NULL DEFAULT 'course_document',
+      source_role TEXT NOT NULL DEFAULT 'primary',
+      sync_status TEXT NOT NULL DEFAULT 'not_synced',
+      open_notebook_source_id TEXT,
+      synced_at TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE(notebook_id, source_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS notebook_assignments (
+      id TEXT PRIMARY KEY,
+      notebook_id TEXT NOT NULL,
+      student_id TEXT NOT NULL,
+      course_id TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      rank INTEGER NOT NULL DEFAULT 100,
+      assigned_reason TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE(notebook_id, student_id, course_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS notebook_memory_events (
+      id TEXT PRIMARY KEY,
+      notebook_id TEXT,
+      student_id TEXT NOT NULL,
+      course_id TEXT,
+      event_type TEXT NOT NULL,
+      source_refs TEXT NOT NULL,
+      payload TEXT NOT NULL,
       created_at TEXT NOT NULL
     )
     """,
@@ -297,6 +366,15 @@ SQLITE_SCHEMA = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS chat_resource_links (
+      id TEXT PRIMARY KEY,
+      message_id TEXT NOT NULL,
+      resource_id TEXT NOT NULL,
+      source_run_id TEXT,
+      created_at TEXT NOT NULL
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS chat_messages (
       id TEXT PRIMARY KEY,
       student_id TEXT NOT NULL,
@@ -305,6 +383,23 @@ SQLITE_SCHEMA = [
       role TEXT NOT NULL,
       text TEXT NOT NULL,
       metadata TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS artifacts (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      object_key TEXT NOT NULL,
+      content_type TEXT NOT NULL,
+      sha256 TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      title TEXT,
+      source_run_id TEXT,
+      student_id TEXT,
+      course_id TEXT,
+      conversation_id TEXT,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL
     )
     """,
@@ -413,6 +508,8 @@ SQLITE_SCHEMA = [
     "CREATE INDEX IF NOT EXISTS idx_edu_memories_source_event ON edu_memories(student_id, source_event_id)",
     "CREATE INDEX IF NOT EXISTS idx_mastery_student_course_kp ON mastery_records(student_id, course_id, knowledge_point_id)",
     "CREATE INDEX IF NOT EXISTS idx_resources_student_course ON resources(student_id, course_id)",
+    "CREATE INDEX IF NOT EXISTS idx_chat_resource_links_message ON chat_resource_links(message_id)",
+    "CREATE INDEX IF NOT EXISTS idx_chat_resource_links_run ON chat_resource_links(source_run_id)",
     "CREATE INDEX IF NOT EXISTS idx_canvas_apps_student_updated ON canvas_apps(student_id, updated_at)",
     "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_student_accounts_user ON student_accounts(user_id)",

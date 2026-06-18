@@ -1,0 +1,15 @@
+
+> @learnforge/web@0.1.0 dev
+> vite --host 127.0.0.1 --port 3200
+
+
+  VITE v6.4.3  ready in 78 ms
+
+  ➜  Local:   http://127.0.0.1:3200/
+npm error Lifecycle script `dev` failed with error:
+npm error code 143
+npm error path /Users/mychanging/Downloads/learnforge-v2-product/apps/web
+npm error workspace @learnforge/web@0.1.0
+npm error location /Users/mychanging/Downloads/learnforge-v2-product/apps/web
+npm error command failed
+npm error command sh -c vite --host 127.0.0.1 --port 3200

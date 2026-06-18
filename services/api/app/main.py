@@ -30,6 +30,7 @@ from app.hermes_runtime.task_executor import HermesTaskExecutor
 from app.image_gateway.router import ImageGatewayRouter
 from app.model_gateway.errors import ModelGatewayError, ProviderBlocked
 from app.model_gateway.router import ModelGatewayRouter
+from app.notebooklm_service import OpenNotebookBridge
 from app.onboarding import extract_dimensions_with_llm, fetch_url_source, infer_profile_from_sources, parse_profile_upload, write_profile_memories
 from app.rag.knowledge_graph import KnowledgeGraphBuilder
 from app.rag.chunker import TextChunker
@@ -249,6 +250,11 @@ app.add_middleware(
 from app.routes.english_routes import router as english_router
 app.include_router(english_router)
 
+# Register NotebookLM/Open Notebook bridge routes. Open Notebook is a background
+# source engine only; LearnForge Hermes remains the only visible answer channel.
+from app.routes.notebooklm_routes import router as notebooklm_router
+app.include_router(notebooklm_router)
+
 LOGGER = getLogger("learnforge.api")
 
 # Patterns scrubbed from exception text before it is surfaced to the client, since raw
@@ -386,6 +392,10 @@ async def system_status() -> dict[str, Any]:
         hermes_payload["status"] = "blocked_cli_fallback_in_production"
         hermes_payload["reason"] = "Production requires Hermes SDK embedded mode; CLI one-shot fallback is blocked."
     object_storage_status = ObjectStorage().status()
+    try:
+        notebooklm_status = await OpenNotebookBridge().status()
+    except Exception as exc:
+        notebooklm_status = {"status": "blocked_bridge_error", "reason": _sanitize_exception_for_client(exc)}
     database_status = "ready" if store.schema_ready() else "blocked_schema_missing"
     text_model_ready = any(status.status == "ready" for status in model_provider_statuses.values())
     # Overall is gated on text model + at least one image provider + hermes.
@@ -405,6 +415,7 @@ async def system_status() -> dict[str, Any]:
         "gemini_image": gemini_image_status.model_dump(),
         "edumem0": {"status": "ready", "reason": "EduMem0 store and policies initialized."},
         "rag": {"status": "ready", "reason": "Seed course chunks and source_refs are available."},
+        "notebooklm": notebooklm_status,
     }
 
 

@@ -79,9 +79,9 @@
       "requirement_id": "HERMES-001",
       "status": "pass",
       "evidence": [
-        "services/api/app/model_gateway/mimo_client.py",
+        "services/api/app/model_gateway/gemini_client.py",
         "services/api/app/hermes_runtime/runtime.py",
-        "services/api/app/image_gateway/image2_client.py",
+        "services/api/app/image_gateway/gemini_image_client.py",
         "services/api/tests/test_gateway_status.py"
       ],
       "tests": [
@@ -93,9 +93,9 @@
       "requirement_id": "HERMES-002",
       "status": "pass",
       "evidence": [
-        "services/api/app/model_gateway/mimo_client.py",
+        "services/api/app/model_gateway/gemini_client.py",
         "services/api/app/hermes_runtime/runtime.py",
-        "services/api/app/image_gateway/image2_client.py",
+        "services/api/app/image_gateway/gemini_image_client.py",
         "services/api/tests/test_gateway_status.py"
       ],
       "tests": [
@@ -104,46 +104,46 @@
       "notes": "Hermes Skill files implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
     },
     {
-      "requirement_id": "MIMO-001",
+      "requirement_id": "GEMINI-001",
       "status": "pass",
       "evidence": [
-        "services/api/app/model_gateway/mimo_client.py",
+        "services/api/app/model_gateway/gemini_client.py",
         "services/api/app/hermes_runtime/runtime.py",
-        "services/api/app/image_gateway/image2_client.py",
+        "services/api/app/image_gateway/gemini_image_client.py",
         "services/api/tests/test_gateway_status.py"
       ],
       "tests": [
         "pytest services/api/tests/test_gateway_status.py services/api/tests/test_hermes_runtime_status.py"
       ],
-      "notes": "MiMo ModelGateway real client implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+      "notes": "Gemini ModelGateway real client implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
     },
     {
-      "requirement_id": "MIMO-002",
+      "requirement_id": "GEMINI-002",
       "status": "pass",
       "evidence": [
-        "services/api/app/model_gateway/mimo_client.py",
+        "services/api/app/model_gateway/gemini_client.py",
         "services/api/app/hermes_runtime/runtime.py",
-        "services/api/app/image_gateway/image2_client.py",
+        "services/api/app/image_gateway/gemini_image_client.py",
         "services/api/tests/test_gateway_status.py"
       ],
       "tests": [
         "pytest services/api/tests/test_gateway_status.py services/api/tests/test_hermes_runtime_status.py"
       ],
-      "notes": "MiMo reasoning_content compatibility implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+      "notes": "Gemini reasoning/text compatibility implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
     },
     {
-      "requirement_id": "IMAGE2-001",
+      "requirement_id": "GEMINI-IMAGE-001",
       "status": "pass",
       "evidence": [
-        "services/api/app/model_gateway/mimo_client.py",
+        "services/api/app/model_gateway/gemini_client.py",
         "services/api/app/hermes_runtime/runtime.py",
-        "services/api/app/image_gateway/image2_client.py",
+        "services/api/app/image_gateway/gemini_image_client.py",
         "services/api/tests/test_gateway_status.py"
       ],
       "tests": [
         "pytest services/api/tests/test_gateway_status.py services/api/tests/test_hermes_runtime_status.py"
       ],
-      "notes": "image2 ImageGateway real client implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
+      "notes": "Gemini ImageGateway real client implemented and covered by validation gates. External readiness requirements pass as real integration paths with truthful ready/blocked status."
     },
     {
       "requirement_id": "AGENT-001",

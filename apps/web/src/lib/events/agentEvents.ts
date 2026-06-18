@@ -12,6 +12,7 @@ export type ChatMessage = {
   links: ChatAppLink[];
   resources: LearningResource[];
   attachments?: ChatAttachment[];
+  skillLabel?: { label: string; color: string; bgColor: string; borderColor: string };
 };
 
 export type TraceItem = {
@@ -38,6 +39,11 @@ export type EventApplyResult = {
   messages: ChatMessage[];
   trace: TraceItem[];
   backgroundTasks: BackgroundTask[];
+  // 记忆系统是否在本轮被激活过 —— 让 UI 能提示用户"它在记住你"。
+  memoryActive?: boolean;
+  // Hermes 实时状态 —— SDK callback 透传过来的思考/状态文本。
+  reasoningText?: string;
+  currentThinking?: string;
 };
 
 export function upsertApp(apps: CanvasApp[], app: CanvasApp): CanvasApp[] {
@@ -69,18 +75,27 @@ export function attachLink(messages: ChatMessage[], link: ChatAppLink): ChatMess
 }
 
 export function attachResource(messages: ChatMessage[], resource: LearningResource, messageId?: string): ChatMessage[] {
+  // Dedup: if this resource is already attached to ANY message, skip.
+  if (messages.some((m) => m.resources.some((r) => r.resource_id === resource.resource_id))) {
+    return messages;
+  }
+
   const target = messageId
     ? messages.find((message) => message.id === messageId)
     : [...messages].reverse().find((message) => message.role === "assistant");
-  if (!target) {
-    return messageId
-      ? [...messages, { id: messageId, role: "assistant", text: "", links: [], resources: [resource] }]
-      : messages;
+
+  if (target) {
+    return messages.map((message) =>
+      message.id === target.id ? { ...message, resources: [...message.resources, resource] } : message
+    );
   }
-  if (target.resources.some((item) => item.resource_id === resource.resource_id)) return messages;
-  return messages.map((message) =>
-    message.id === target.id ? { ...message, resources: [...message.resources, resource] } : message
-  );
+
+  // No target message found — create a placeholder so the resource is never silently dropped.
+  // When a later assistant.delta arrives with the same messageId, appendAssistantDelta will
+  // find this placeholder and append text to it. If messageId is unknown, use a generated id
+  // that is unlikely to collide with backend-generated message ids.
+  const placeholderId = messageId || `resource-placeholder-${resource.resource_id}`;
+  return [...messages, { id: placeholderId, role: "assistant", text: "", links: [], resources: [resource] }];
 }
 
 function pushTrace(trace: TraceItem[], item: Omit<TraceItem, "id" | "raw">): TraceItem[] {
@@ -100,7 +115,8 @@ export function applyTraceEvent(trace: TraceItem[], event: AgentStreamEvent): Tr
     case "run.step":
       return pushTrace(trace, { name: event.step_name, status: event.status, detail: event.detail ?? "" });
     case "memory.update":
-      return pushTrace(trace, { name: "memory", status: "completed", detail: event.summary });
+      // 用户可见的记忆反馈:让"它在记住你"这件事被感知到。
+      return pushTrace(trace, { name: "memory", status: "completed", detail: `已记住:${event.summary}` });
     case "app.create":
       return pushTrace(trace, { name: "app_create", status: "completed", detail: `${event.app.title} · ${event.app.app_type}` });
     case "app.update":
@@ -146,11 +162,38 @@ export function applyAgentEvent(state: EventApplyResult, event: AgentStreamEvent
     }
     case "dashboard.update":
       return { ...state, dashboard: event.dashboard };
-    case "run.step":
     case "memory.update":
+      // 标记记忆已激活,TopBar 会展示"记忆已就绪"提示。
+      return { ...state, trace: applyTraceEvent(state.trace, event), memoryActive: true };
+    case "run.step":
     case "path.update":
     case "verifier.result":
       return { ...state, trace: applyTraceEvent(state.trace, event) };
+    // ── Hermes SDK callback 透传的实时状态 ──
+    case "hermes.reasoning": {
+      // 累积 LLM 思考过程文本(类似 assistant.delta 的拼接)
+      const prev = state.reasoningText ?? "";
+      return { ...state, reasoningText: (prev + (event.text || "")).slice(-4000) };
+    }
+    case "hermes.thinking":
+      // "正在做什么"的状态文字(如 🔍 搜索中...)
+      return { ...state, currentThinking: event.text || "" };
+    case "hermes.status":
+      return { ...state, currentThinking: event.text || "" };
+    case "hermes.tool_call": {
+      // 工具调用作为 trace step 展示
+      const toolNames = (event.tools || []).join(", ") || `迭代 ${event.iteration}`;
+      return {
+        ...state,
+        trace: applyTraceEvent(state.trace, {
+          type: "run.step",
+          run_id: event.run_id,
+          step_name: "hermes_tool",
+          status: "running",
+          detail: `工具调用: ${toolNames}`,
+        } as AgentStreamEvent),
+      };
+    }
     case "background.task_started":
       return {
         ...state,

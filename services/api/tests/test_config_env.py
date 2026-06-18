@@ -9,18 +9,19 @@ def test_load_dotenv_file_reads_local_values_without_overriding(monkeypatch, tmp
         "\n".join(
             [
                 "# local development secrets",
-                "MIMO_API_KEY=local-key",
-                'MIMO_BASE_URL="https://local.example/v1"',
-                "IMAGE2_BASE_URL=https://image.example/v1",
+                "GEMINI_API_KEY=local-key",
+                'GEMINI_TEXT_MODEL="gemini-local-test"',
+                "GEMINI_IMAGE_MODEL=gemini-local-image",
             ]
         ),
         encoding="utf-8",
     )
-    monkeypatch.delenv("MIMO_API_KEY", raising=False)
-    monkeypatch.setenv("MIMO_BASE_URL", "https://already-set.example/v1")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_IMAGE_MODEL", raising=False)
+    monkeypatch.setenv("GEMINI_TEXT_MODEL", "gemini-existing-test")
 
     load_dotenv_file(env_file)
 
-    assert os.environ["MIMO_API_KEY"] == "local-key"
-    assert os.environ["MIMO_BASE_URL"] == "https://already-set.example/v1"
-    assert os.environ["IMAGE2_BASE_URL"] == "https://image.example/v1"
+    assert os.environ["GEMINI_API_KEY"] == "local-key"
+    assert os.environ["GEMINI_TEXT_MODEL"] == "gemini-existing-test"
+    assert os.environ["GEMINI_IMAGE_MODEL"] == "gemini-local-image"

@@ -13,6 +13,7 @@ def preference_memory(
         course_id=course_id,
         knowledge_point_id=knowledge_point_id,
         memory_type="resource_preference",
+        source_event_id=f"edumem0:{student_id}:preference:{knowledge_point_id or preference}",
         content=f"学习资源偏好：{preference}，反馈：{sentiment}",
         structured_payload={"preference": preference, "sentiment": sentiment},
         confidence=0.68,

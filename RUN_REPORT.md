@@ -5,7 +5,7 @@ Project: `/Users/mychanging/Downloads/learnforge-v2-product`
 Implemented:
 
 - FastAPI backend with required routes and SSE `AgentStreamEvent` streaming.
-- MiMo, image2, and Hermes real integration paths with truthful status.
+- Gemini text, Gemini Image, Hermes, and artifact-storage real integration paths with truthful status. image2 is retained only as optional compatibility.
 - EduMem0 persistent memory with confidence, evidence, conflict, and decay policies.
 - RAG seed course, source_refs, knowledge graph, safety/verifier gates.
 - Required agents, skills, Hermes `SKILL.md` files, App Protocol schemas.
@@ -18,14 +18,15 @@ Implemented:
 Local readiness:
 
 - Backend and local product flows are runnable.
-- External provider readiness is still not complete because image2 credentials are intentionally not configured. MiMo is ready through the local `.env` credential, and Hermes is ready through embedded SDK mode. See `BLOCKED_REAL_INTEGRATION_REPORT.md`.
+- External provider readiness is complete for required Gemini-first components. Optional image2 credentials are intentionally not configured and are not required for readiness. Hermes is ready through embedded SDK mode. See `BLOCKED_REAL_INTEGRATION_REPORT.md`.
 - Current `/api/system/status` proof:
   - `overall`: `blocked_external`
   - `database`: `ready`
   - `edumem0`: `ready`
   - `rag`: `ready`
-  - `mimo`: `ready`
-  - `image2`: `blocked_missing_credentials`
+  - `gemini`: `ready`
+  - `gemini_image`: `ready`
+  - `image2_optional`: `blocked_missing_credentials`
   - `hermes`: `ready`
 
 Validation command:

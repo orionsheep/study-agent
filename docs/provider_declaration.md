@@ -1,9 +1,9 @@
 # Provider Declaration
 
-MiMo is the primary text/reasoning provider through `ModelGatewayRouter` and `MiMoClient`. The client reads `MIMO_API_KEY`, `MIMO_BASE_URL`, `MIMO_TEXT_MODEL`, `MIMO_FAST_MODEL`, and `MIMO_USE_THINKING`, and sends the official `api-key` request header. `MIMO_BASE_URL` can point at the MiMo pay-as-you-go API or the Token Plan API.
+Gemini is the text/reasoning provider through `ModelGatewayRouter` and `GeminiClient`. The client reads `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL`, `GEMINI_TEXT_FALLBACK_MODEL`, `GEMINI_TIMEOUT_SECONDS`, and `GEMINI_MAX_TOKENS`, and sends requests to Google Gemini `generateContent` with the official `x-goog-api-key` header.
 
-image2 is the image provider through `ImageGatewayRouter` and `Image2Client`. The client reads `IMAGE2_API_KEY`, `IMAGE2_BASE_URL`, and `IMAGE2_MODEL`.
+Gemini Image is the image provider through `ImageGatewayRouter` and `GeminiImageClient`. The client reads `GEMINI_API_KEY`, `GEMINI_IMAGE_MODEL`, and `GEMINI_IMAGE_FALLBACK_MODEL`, then returns real inline image assets from Gemini. The older image2 adapter is retained only as optional compatibility status and is not part of required readiness.
 
-Hermes is the orchestration runtime target. The runtime embeds the Hermes SDK through `run_agent.AIAgent` inside the FastAPI process, writes provider config for MiMo, and syncs Hermes `SKILL.md` files. The CLI adapter is retained for diagnostics or explicit fallback, but SDK embedding is required by default through `HERMES_REQUIRE_SDK=true`.
+Hermes is the orchestration runtime target. The runtime embeds the Hermes SDK through `run_agent.AIAgent` inside the FastAPI process, writes Gemini provider config, and syncs Hermes `SKILL.md` files. The CLI adapter is retained for diagnostics or explicit fallback, but SDK embedding is required by default through `HERMES_REQUIRE_SDK=true`.
 
 This repository never stores real provider credentials.

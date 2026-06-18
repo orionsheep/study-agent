@@ -5,6 +5,7 @@ def spatial_memory(student_id: str, layout: dict) -> EduMemoryItem:
     return EduMemoryItem(
         student_id=student_id,
         memory_type="spatial_layout",
+        source_event_id=f"edumem0:{student_id}:spatial_layout",
         content="画布布局已保存。",
         structured_payload={"layout": layout},
         confidence=0.78,

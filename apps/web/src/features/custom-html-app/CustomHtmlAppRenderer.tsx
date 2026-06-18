@@ -10,6 +10,7 @@ type Props = {
   forceDeckBridge?: boolean;
   artifactKind?: string;
   sessionContext?: SessionContext;
+  onEvent?: (eventType: string, payload: Record<string, unknown>) => void;
 };
 
 const MIN_WIDGET_HEIGHT = 220;
@@ -179,6 +180,27 @@ function learnForgeBridgeScript(widgetId: string, enableDeckBridge: boolean) {
     send({ type: 'widget:error', message: String(event.reason && event.reason.message || event.reason || 'unhandled rejection') });
   });
   installLearnForgeRuntime();
+  // ── English word selection bridge ───────────────────────────
+  function installEnglishWordSelection() {
+    const isEnglishWord = (text) => /^[a-zA-Z]+$/.test(text) && text.length >= 2 && text.length <= 20;
+    document.addEventListener('mouseup', () => {
+      const selection = window.getSelection();
+      if (!selection) return;
+      const text = selection.toString().trim();
+      if (isEnglishWord(text)) {
+        send({ type: 'english:lookup', word: text });
+      }
+    });
+    document.addEventListener('dblclick', () => {
+      const selection = window.getSelection();
+      if (!selection) return;
+      const text = selection.toString().trim();
+      if (isEnglishWord(text)) {
+        send({ type: 'english:lookup', word: text });
+      }
+    });
+  }
+  installEnglishWordSelection();
   let deckInstallAttempts = 0;
   let deckInstalled = false;
   function installDeckRuntime() {
@@ -360,6 +382,27 @@ function learnForgeDocumentBridgeScript(widgetId: string, enableDeckBridge: bool
   window.addEventListener('unhandledrejection', (event) => {
     send({ type: 'widget:error', message: String(event.reason && event.reason.message || event.reason || 'unhandled rejection') });
   });
+  // ── English word selection bridge ───────────────────────────
+  function installEnglishWordSelection() {
+    const isEnglishWord = (text) => /^[a-zA-Z]+$/.test(text) && text.length >= 2 && text.length <= 20;
+    document.addEventListener('mouseup', () => {
+      const selection = window.getSelection();
+      if (!selection) return;
+      const text = selection.toString().trim();
+      if (isEnglishWord(text)) {
+        send({ type: 'english:lookup', word: text });
+      }
+    });
+    document.addEventListener('dblclick', () => {
+      const selection = window.getSelection();
+      if (!selection) return;
+      const text = selection.toString().trim();
+      if (isEnglishWord(text)) {
+        send({ type: 'english:lookup', word: text });
+      }
+    });
+  }
+  installEnglishWordSelection();
   let deckInstallAttempts = 0;
   let deckInstalled = false;
   function installDeckRuntime() {
@@ -660,7 +703,7 @@ function receiverPage(theme: "light" | "dark", widgetId: string, html: string, f
   </style>${mathRuntime}${learnForgeBridgeScript(widgetId, enableDeckBridge)}</head><body><div id="widget-root">${source}</div>${learnForgeRuntimeHideStyle()}</body></html>`;
 }
 
-export function CustomHtmlAppRenderer({ code, codeUrl, theme, mode = "inline", forceDeckBridge = false, artifactKind, sessionContext = DEFAULT_SESSION_CONTEXT }: Props) {
+export function CustomHtmlAppRenderer({ code, codeUrl, theme, mode = "inline", forceDeckBridge = false, artifactKind, sessionContext = DEFAULT_SESSION_CONTEXT, onEvent }: Props) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [remoteCode, setRemoteCode] = useState<string | null>(null);
   const [remoteError, setRemoteError] = useState<string | null>(null);
@@ -725,12 +768,16 @@ export function CustomHtmlAppRenderer({ code, codeUrl, theme, mode = "inline", f
       if (message.type === "widget:error") {
         setHeight((current) => Math.max(current, 220));
       }
+      // English word lookup from iframe selection
+      if (message.type === "english:lookup" && message.word && onEvent) {
+        onEvent("english:lookup", { word: message.word });
+      }
     };
     window.addEventListener("message", handler);
     return () => {
       window.removeEventListener("message", handler);
     };
-  }, [widgetId]);
+  }, [widgetId, onEvent]);
 
   return (
     <iframe

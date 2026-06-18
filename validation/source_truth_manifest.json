@@ -1,6 +1,6 @@
 {
   "pack_root": "/Users/mychanging/Downloads/learnforge_v4_all_requirements_test_gated_goal_pack",
-  "generated_at": "2026-06-04T04:52:38+00:00",
+  "generated_at": "2026-06-17T03:54:24+00:00",
   "excluded": [
     ".DS_Store"
   ],
@@ -15,9 +15,18 @@
       ]
     },
     {
+      "path": ".omx/logs/omx-2026-06-04.jsonl",
+      "sha256": "a691fc746d47f049fd23f5b59e8402789e5ce3defd8d54bb4e73f45182c829fb",
+      "size_bytes": 884,
+      "role": "pack operational metadata",
+      "product_evidence": [
+        "RUN_REPORT.md"
+      ]
+    },
+    {
       "path": ".omx/state/native-stop-state.json",
-      "sha256": "9b82d0fc504aa532f7a22508993c68b0cb614aa022c1c6f9eff430b322e574f9",
-      "size_bytes": 1964,
+      "sha256": "9031c0fb5cf98a5eee3bef6308131d0bcf66fd62dd2823404a2ad82e7aaf6788",
+      "size_bytes": 14286,
       "role": "pack operational metadata",
       "product_evidence": [
         "RUN_REPORT.md"
@@ -25,7 +34,7 @@
     },
     {
       "path": ".omx/state/session.json",
-      "sha256": "bdd2ab80abc0dfc83ef21ee4fbeaf8ed8c80589544484173cf09232d792ff452",
+      "sha256": "558c30f427b54589d6ed68334cb5a2357919cdcf92f73aed72f5b1a8a61344c2",
       "size_bytes": 297,
       "role": "pack operational metadata",
       "product_evidence": [
@@ -162,8 +171,8 @@
       "role": "requirements source document",
       "product_evidence": [
         "services/api/app/hermes_runtime",
-        "services/api/app/model_gateway/mimo_client.py",
-        "services/api/app/image_gateway/image2_client.py"
+        "services/api/app/model_gateway/gemini_client.py",
+        "services/api/app/image_gateway/gemini_image_client.py"
       ]
     },
     {

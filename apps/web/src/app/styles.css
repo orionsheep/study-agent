@@ -1,3 +1,9 @@
+/* Indeterminate word-list loading bar (English workspace). */
+@keyframes lf-wordload {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
 /* ---- Reset only — theme tokens defined in the Claude Design block below ---- */
 * {
   box-sizing: border-box;
@@ -199,7 +205,8 @@ button {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 20; /* above canvas-world (which is z-index:auto in the viewport) */
+  /* z-index is set inline (dynamic: 60 when a native window is focused, 5 otherwise)
+     so the layer sinks below canvas-world when focus moves to a regular window. */
 }
 
 .native-app-layer .native-window-frame {

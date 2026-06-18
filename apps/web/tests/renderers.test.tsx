@@ -18,6 +18,23 @@ vi.mock("../src/lib/api/client", async () => {
   const actual = await vi.importActual<typeof import("../src/lib/api/client")>("../src/lib/api/client");
   return {
     ...actual,
+    fetchNotebookLMStatus: vi.fn(async () => ({ status: "ready", provider: "open_notebook", embed_url: "http://localhost:8502?embed=learnforge&mode=sources" })),
+    fetchNotebookLMNotebooks: vi.fn(async () => [
+      { id: "nblm-course", title: "人工智能导论 · 课程知识库", purpose: "course_official", owner_scope: "course", owner_id: "ai-course", source_count: 1, tags: ["课程正式资料"] },
+      { id: "nblm-personal", title: "我的复习 Notebook", purpose: "personal_review", owner_scope: "user", owner_id: "demo-student", source_count: 1, tags: ["我的上传"] },
+    ]),
+    bootstrapNotebookLM: vi.fn(async (_context, notebookId?: string) => ({ status: "ready", notebook_id: `open-${notebookId || "course"}`, learnforge_notebook_id: notebookId, embed_url: "http://localhost:8502?embed=learnforge&mode=sources" })),
+    fetchNotebookLMNotebookSources: vi.fn(async (notebookId: string) => ({
+      notebook: { id: notebookId, title: "我的复习 Notebook", purpose: "personal_review", owner_scope: "user", owner_id: "demo-student", source_count: 1 },
+      sources: [
+        { id: "src-one", title: "第一章讲义", summary: "导论片段", chunk_count: 1, source_refs: [{ document_id: "src-one", chunk_id: "chunk-one", title: "第一章讲义", snippet: "导论片段" }], source_scope: "personal_notebook", ingest_type: "text", sync_status: "ready" },
+      ],
+    })),
+    createNotebookLMNotebook: vi.fn(async () => ({ id: "nblm-new", title: "新的复习 Notebook", purpose: "personal_review", owner_scope: "user", owner_id: "demo-student", source_count: 0 })),
+    syncNotebookLMNotebook: vi.fn(async () => ({ status: "ready", synced: [], blocked: [] })),
+    addNotebookLMLinkSource: vi.fn(async () => ({ status: "ready" })),
+    addNotebookLMTextSource: vi.fn(async () => ({ status: "ready" })),
+    uploadNotebookLMFileSource: vi.fn(async () => ({ status: "ready" })),
     patchApp: vi.fn(async (_appId: string, patch: Record<string, unknown>) => ({
       app_id: _appId,
       app_type: "dashboard.learning",
@@ -253,6 +270,52 @@ describe("component behavior", () => {
     restorePointerRuntime();
   });
 
+  it("renders NotebookLM inside the transformed canvas world so it follows pan and zoom", async () => {
+    const notebookApp: CanvasApp = {
+      ...app,
+      app_id: "app-notebooklm-canvas",
+      app_type: "notebooklm.workspace",
+      title: "NotebookLM",
+      position: { x: 420, y: 260 },
+      size: { width: 900, height: 620 },
+    };
+    const viewport: CanvasViewport = { x: -30, y: -20, scale: 0.72 };
+    const { host, cleanup } = render(
+      <SpatialCanvas
+        apps={[notebookApp]}
+        dashboard={dashboard}
+        viewport={viewport}
+        setViewport={() => undefined}
+        setApps={() => undefined}
+        openWindowIds={["app-notebooklm-canvas"]}
+        focusedId="app-notebooklm-canvas"
+        fullscreenId={null}
+        zOrder={["app-notebooklm-canvas"]}
+        openWindow={() => undefined}
+        closeWindow={() => undefined}
+        focusWindow={() => undefined}
+        toggleFullscreen={() => undefined}
+        deleteApp={() => undefined}
+        onAppEvent={() => undefined}
+        sessionContext={DEFAULT_SESSION_CONTEXT}
+      />
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const world = host.querySelector(".canvas-world") as HTMLElement;
+    const nativeLayer = host.querySelector(".native-app-layer") as HTMLElement;
+    const frame = host.querySelector('[data-window-frame="app-notebooklm-canvas"]') as HTMLElement;
+
+    expect(frame).toBeTruthy();
+    expect(world.contains(frame)).toBe(true);
+    expect(nativeLayer.contains(frame)).toBe(false);
+    expect(frame.classList.contains("native-window-frame")).toBe(false);
+    cleanup();
+  });
+
   it("renders dashboard memory evidence", () => {
     const { host, cleanup } = render(<NativeAppRenderer app={app} dashboard={dashboard} onEvent={() => undefined} onFocusApp={() => undefined} sessionContext={DEFAULT_SESSION_CONTEXT} />);
     expect(host.textContent).toContain("偏好图解和代码");
@@ -269,6 +332,47 @@ describe("component behavior", () => {
     expect(host.querySelector("[data-testid='profile-dashboard']")).toBeTruthy();
     expect(host.textContent).toContain("画像覆盖");
     expect(host.textContent).toContain("证据链");
+    cleanup();
+  });
+
+  it("renders NotebookLM as a two-column source workbench with uploads in a secondary view", async () => {
+    const notebookApp: CanvasApp = {
+      ...app,
+      app_id: "app-notebooklm-test",
+      app_type: "notebooklm.workspace",
+      title: "NotebookLM",
+    };
+    const { host, cleanup } = render(
+      <NativeAppRenderer app={notebookApp} dashboard={dashboard} onEvent={() => undefined} onFocusApp={() => undefined} sessionContext={DEFAULT_SESSION_CONTEXT} />
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector("[data-testid='notebooklm-workspace']")).toBeTruthy();
+    expect(host.querySelector("[data-testid='notebooklm-notebooks']")).toBeTruthy();
+    expect(host.querySelector("[data-testid='notebooklm-sources']")).toBeTruthy();
+    expect(host.querySelector(".nblm-actions")).toBeFalsy();
+    expect(host.textContent).toContain("课程知识库");
+    expect(host.textContent).toContain("我的 Notebook");
+    expect(host.textContent).toContain("生成");
+    expect(host.querySelector("[data-testid='notebooklm-source-manager']")).toBeFalsy();
+    expect(host.querySelector("[data-testid='notebooklm-generate-menu']")).toBeFalsy();
+    expect(host.textContent).not.toContain("上传文件");
+    expect(host.textContent).not.toContain("添加链接");
+    expect(host.textContent).not.toContain("粘贴文本");
+
+    act(() => (host.querySelector("[data-testid='notebooklm-manage-sources']") as HTMLButtonElement).click());
+    expect(host.querySelector("[data-testid='notebooklm-source-manager']")).toBeTruthy();
+    expect(host.textContent).toContain("上传文件");
+    expect(host.textContent).toContain("添加链接");
+    expect(host.textContent).toContain("粘贴文本");
+
+    act(() => (host.querySelector("[data-testid='notebooklm-generate-button']") as HTMLButtonElement).click());
+    expect(host.querySelector("[data-testid='notebooklm-generate-menu']")).toBeTruthy();
+    expect(host.textContent).toContain("学习指南");
+    expect(host.querySelector(".chat-composer")).toBeFalsy();
     cleanup();
   });
 

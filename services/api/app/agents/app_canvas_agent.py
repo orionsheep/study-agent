@@ -14,6 +14,7 @@ ICON_BY_APP_TYPE = {
     "video.script": "Film",
     "video.player": "Film",
     "notes.session": "NotebookPen",
+    "notebooklm.workspace": "BookOpen",
 }
 
 SIZE_BY_APP_TYPE = {
@@ -22,6 +23,12 @@ SIZE_BY_APP_TYPE = {
     "video.script": (420, 310),
     "video.player": (720, 520),
     "notes.session": (430, 320),
+    # Workspace-class apps are heavy, multi-pane tools. The generic 420×300 default
+    # left almost no usable area after the window chrome, so give them a real working
+    # canvas the moment they're created.
+    "english.workspace": (1080, 760),
+    "notebooklm.workspace": (1180, 780),
+    "humanities.notebook": (1080, 760),
 }
 
 ACTIONS_BY_APP_TYPE = {
@@ -30,6 +37,7 @@ ACTIONS_BY_APP_TYPE = {
     "video.script": [{"label": "查看分镜", "action": "video_script.view"}, {"label": "让导师解说", "action": "tutor.explain"}],
     "video.player": [{"label": "切换视频", "action": "video.select"}, {"label": "让导师总结视频", "action": "tutor.explain"}],
     "notes.session": [{"label": "保存笔记", "action": "notes.save"}, {"label": "让导师总结", "action": "tutor.explain"}],
+    "notebooklm.workspace": [{"label": "同步来源", "action": "notebooklm.sources.sync"}, {"label": "用来源问 Hermes", "action": "notebooklm.ask_hermes"}],
 }
 
 

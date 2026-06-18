@@ -22,6 +22,8 @@ from app.main import system_status  # noqa: E402
 
 OUT_JSON = ROOT / "validation" / "external_readiness.json"
 BLOCKED_REPORT = ROOT / "BLOCKED_REAL_INTEGRATION_REPORT.md"
+REQUIRED_COMPONENTS = ["gemini", "gemini_image", "hermes", "object_storage"]
+OPTIONAL_COMPONENTS = ["image2"]
 
 
 def blocker_line(name: str, component: dict[str, object]) -> str:
@@ -34,12 +36,14 @@ def blocker_line(name: str, component: dict[str, object]) -> str:
 
 def next_commands(status: dict[str, object]) -> str:
     lines = ["test -f .env || cp .env.example .env"]
-    if status["mimo"]["status"] == "ready":
-        lines.append("# MiMo is currently ready; keep MIMO_API_KEY and MIMO_BASE_URL in local .env for future checks.")
+    if status["gemini"]["status"] == "ready":
+        lines.append("# Gemini text is currently ready; keep GEMINI_API_KEY and GEMINI_TEXT_MODEL in local .env.")
     else:
-        lines.append("# Add a real MIMO_API_KEY and MIMO_BASE_URL to local .env.")
-    if status["image2"]["status"] != "ready":
-        lines.append("# Add IMAGE2_API_KEY and IMAGE2_BASE_URL when image2 should be enabled.")
+        lines.append("# Add a real GEMINI_API_KEY and GEMINI_TEXT_MODEL to local .env.")
+    if status["gemini_image"]["status"] == "ready":
+        lines.append("# Gemini image is currently ready; keep GEMINI_IMAGE_MODEL in local .env.")
+    else:
+        lines.append("# Configure GEMINI_IMAGE_MODEL/GEMINI_IMAGE_FALLBACK_MODEL for image generation.")
     hermes_mode = status["hermes"].get("integration_mode")
     if status["hermes"]["status"] == "ready" and hermes_mode == "sdk_embedded":
         lines.append("# Hermes SDK is currently ready; keep hermes-agent installed in the API venv or set HERMES_SDK_PATH.")
@@ -61,18 +65,50 @@ def next_commands(status: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
+def write_ready_report(status: dict[str, object]) -> None:
+    generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    content = f"""# Real Integration Report
+
+Status: external readiness complete.
+
+Generated: `{generated_at}`
+
+The product currently proves the required Gemini-first external integrations ready.
+
+Current `/api/system/status` proof:
+
+- `overall`: `{status["overall"]}`
+- `database`: `{status["database"]["status"]}`
+- `edumem0`: `{status["edumem0"]["status"]}`
+- `rag`: `{status["rag"]["status"]}`
+
+Required external components:
+
+{blocker_line("Gemini text", status["gemini"])}
+{blocker_line("Gemini image", status["gemini_image"])}
+{blocker_line("Hermes", status["hermes"])}
+{blocker_line("Object storage", status["object_storage"])}
+
+Optional compatibility components:
+
+{blocker_line("image2", status.get("image2", {"status": "blocked_not_configured", "reason": "Optional image2 provider is not part of Gemini-first readiness."}))}
+"""
+    BLOCKED_REPORT.write_text(content, encoding="utf-8")
+
+
 def write_blocked_report(status: dict[str, object]) -> None:
     generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    mimo = status["mimo"]
-    image2 = status["image2"]
+    gemini = status["gemini"]
+    gemini_image = status["gemini_image"]
     hermes = status["hermes"]
+    object_storage = status["object_storage"]
     content = f"""# Blocked Real Integration Report
 
 Status: not complete for external readiness.
 
 Generated: `{generated_at}`
 
-The product implements real integration paths, but this machine does not currently prove all external providers ready.
+The product implements real Gemini-first integration paths, but this machine does not currently prove all required external components ready.
 
 Current `/api/system/status` proof:
 
@@ -83,9 +119,14 @@ Current `/api/system/status` proof:
 
 External blockers:
 
-{blocker_line("MiMo", mimo)}
-{blocker_line("image2", image2)}
+{blocker_line("Gemini text", gemini)}
+{blocker_line("Gemini image", gemini_image)}
 {blocker_line("Hermes", hermes)}
+{blocker_line("Object storage", object_storage)}
+
+Optional compatibility components:
+
+{blocker_line("image2", status.get("image2", {"status": "blocked_not_configured", "reason": "Optional image2 provider is not part of Gemini-first readiness."}))}
 
 Next commands:
 
@@ -93,7 +134,7 @@ Next commands:
 {next_commands(status)}
 ```
 
-Do not mark the goal complete until `/api/system/status` reports MiMo, image2, and Hermes ready or the user provides a runtime environment where those checks can succeed.
+Do not mark the goal complete until `/api/system/status` reports Gemini text, Gemini image, Hermes, and object storage ready or the user provides a runtime environment where those checks can succeed.
 """
     BLOCKED_REPORT.write_text(content, encoding="utf-8")
 
@@ -102,11 +143,13 @@ def validate_status(status: dict[str, object], require_external_ready: bool) -> 
     errors: list[str] = []
     if status.get("database", {}).get("status") != "ready":
         errors.append("database is not ready")
-    for name in ["mimo", "image2", "hermes"]:
+    for name in [*REQUIRED_COMPONENTS, *OPTIONAL_COMPONENTS]:
         component = status.get(name, {})
         component_status = str(component.get("status", "unknown"))
         if component_status != "ready" and not component_status.startswith("blocked"):
             errors.append(f"{name} returned non-ready/non-blocked status: {component_status}")
+        if name in OPTIONAL_COMPONENTS:
+            continue
         if require_external_ready and component_status != "ready":
             errors.append(f"{name} is not externally ready: {component_status}")
     if require_external_ready and status.get("overall") != "ready":
@@ -114,16 +157,44 @@ def validate_status(status: dict[str, object], require_external_ready: bool) -> 
     return errors
 
 
+def normalize_external_blockers(status: dict[str, object]) -> dict[str, object]:
+    normalized = dict(status)
+    has_required_external_blocker = False
+    for name in [*REQUIRED_COMPONENTS, *OPTIONAL_COMPONENTS]:
+        component = normalized.get(name)
+        if not isinstance(component, dict):
+            normalized[name] = {"status": "blocked_unknown", "reason": "Component did not report readiness details."}
+            if name in REQUIRED_COMPONENTS:
+                has_required_external_blocker = True
+            continue
+        component_status = str(component.get("status", "unknown"))
+        if component_status != "ready" and not component_status.startswith("blocked"):
+            normalized[name] = {
+                **component,
+                "status": f"blocked_{component_status or 'unknown'}",
+                "reason": component.get("reason") or f"Component returned non-ready status {component_status}.",
+            }
+            if name in REQUIRED_COMPONENTS:
+                has_required_external_blocker = True
+        elif component_status.startswith("blocked") and name in REQUIRED_COMPONENTS:
+            has_required_external_blocker = True
+    if has_required_external_blocker:
+        normalized["overall"] = "blocked_external"
+    return normalized
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Write LearnForge external readiness proof.")
-    parser.add_argument("--require-external-ready", action="store_true", help="Fail if MiMo, image2, or Hermes are blocked.")
+    parser.add_argument("--require-external-ready", action="store_true", help="Fail if Gemini text, Gemini image, Hermes, or object storage are blocked.")
     args = parser.parse_args()
 
-    status = asyncio.run(system_status())
+    status = normalize_external_blockers(asyncio.run(system_status()))
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     OUT_JSON.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
     if status.get("overall") != "ready":
         write_blocked_report(status)
+    else:
+        write_ready_report(status)
 
     errors = validate_status(status, args.require_external_ready)
     if errors:
@@ -134,9 +205,11 @@ def main() -> int:
 
     summary = {
         "overall": status["overall"],
-        "mimo": status["mimo"]["status"],
-        "image2": status["image2"]["status"],
+        "gemini": status["gemini"]["status"],
+        "gemini_image": status["gemini_image"]["status"],
         "hermes": status["hermes"]["status"],
+        "object_storage": status["object_storage"]["status"],
+        "image2_optional": status.get("image2", {}).get("status"),
         "hermes_adapter": status["hermes"].get("adapter"),
         "hermes_integration_mode": status["hermes"].get("integration_mode"),
     }

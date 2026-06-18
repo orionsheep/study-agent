@@ -457,6 +457,48 @@ class HermesTaskExecutor:
                 compact[key] = cls._truncate_text(item[key], text_limit) if isinstance(item[key], str) else item[key]
         return compact or {"_": cls._truncate_text(item, text_limit)}
 
+    def _prompt_recent_messages(
+        self,
+        context: TutorTurnContext,
+        *,
+        limit: int = 10,
+        text_limit: int = 600,
+    ) -> list[dict[str, Any]]:
+        window = (context.recent_messages or [])[-limit:]
+        return [self._compact_item(message, text_limit=text_limit) for message in window]
+
+    def _persisted_user_message(
+        self,
+        context: TutorTurnContext,
+        *,
+        plan: AgentPlan | None = None,
+        image_artifacts: list[dict[str, Any]] | None = None,
+    ) -> str:
+        lines = [f"用户原话: {str(context.message or '').strip()}"]
+        attachment_names = [
+            str(item.get("name") or "").strip()
+            for item in (context.attachments or [])
+            if isinstance(item, dict) and str(item.get("name") or "").strip()
+        ]
+        if attachment_names:
+            lines.append("用户上传附件: " + "、".join(attachment_names[:8]))
+        source_material = str((plan.payload.get("source_material") if plan else "") or "").strip()
+        if source_material and source_material != str(context.message or "").strip():
+            lines.append(f"绑定源材料: {self._truncate_text(source_material, 800)}")
+        if image_artifacts:
+            artifact_refs = []
+            for artifact in image_artifacts[:4]:
+                artifact_id = str(artifact.get("artifact_id") or "").strip()
+                metadata = artifact.get("metadata") if isinstance(artifact.get("metadata"), dict) else {}
+                public_url = str(metadata.get("public_url") or "").strip()
+                if artifact_id and public_url:
+                    artifact_refs.append(f"{artifact_id} -> {public_url}")
+                elif artifact_id:
+                    artifact_refs.append(artifact_id)
+            if artifact_refs:
+                lines.append("图片Artifacts: " + "; ".join(artifact_refs))
+        return "\n".join(line for line in lines if line).strip()
+
     def build_resource_bundle_prompt(
         self, plan: AgentPlan, context: TutorTurnContext, rag_context: dict[str, Any], image_analysis: str = ""
     ) -> str:
@@ -473,6 +515,12 @@ class HermesTaskExecutor:
             "course_id": context.course_id,
             "conversation_id": context.conversation_id,
             "user_message": context.message,
+            "requested_skill": context.requested_skill,
+            "attachments": [
+                {"name": str(item.get("name") or "").strip()}
+                for item in (context.attachments or [])
+                if isinstance(item, dict) and str(item.get("name") or "").strip()
+            ],
             "task_type": plan.task_type,
             "capability": plan.payload.get("capability", "resource_bundle"),
             "capability_contract": plan.payload.get("capability_contract", {}),
@@ -480,7 +528,7 @@ class HermesTaskExecutor:
             "source_material": plan.payload.get("source_material") or context.message,
             "context_source": plan.payload.get("context_source"),
             "last_assistant_answer": self._truncate_text(context.last_assistant_answer, 2000),
-            "recent_messages": [self._compact_item(m, text_limit=1200) for m in context.recent_messages[-10:]],
+            "recent_messages": self._prompt_recent_messages(context, limit=10, text_limit=1200),
             "recent_apps": [self._compact_item(a) for a in context.recent_apps[-6:]],
             "recent_resources": [self._compact_item(r) for r in context.recent_resources[-6:]],
             "profile": self._truncate_text(json.dumps(context.profile, ensure_ascii=False), 1200) if context.profile else "",
@@ -726,6 +774,8 @@ class HermesTaskExecutor:
                     inner_parsed = json.loads(inner_cleaned)
                     if isinstance(inner_parsed, dict) and any(k in inner_parsed for k in ("apps", "resources", "summary")):
                         data = inner_parsed
+                    elif isinstance(inner_parsed, str) and inner_parsed.strip():
+                        data = {**data, "text_response": inner_parsed.strip(), "summary": data.get("summary") or "Hermes 回复"}
                 except json.JSONDecodeError:
                     candidate = self._extract_json_object(inner_cleaned)
                     if candidate:
@@ -734,7 +784,9 @@ class HermesTaskExecutor:
                             if isinstance(inner_parsed, dict) and any(k in inner_parsed for k in ("apps", "resources", "summary")):
                                 data = inner_parsed
                         except json.JSONDecodeError:
-                            pass
+                            data = {**data, "text_response": inner_cleaned.strip(), "summary": data.get("summary") or "Hermes 回复"}
+                    elif inner_cleaned.strip():
+                        data = {**data, "text_response": inner_cleaned.strip(), "summary": data.get("summary") or "Hermes 回复"}
         result = HermesTaskResult.model_validate({**data, "raw_text": text})
         return result
 
@@ -945,7 +997,11 @@ class HermesTaskExecutor:
                         provider,
                         model,
                         run_id=run_id,
-                        persist_user_message=prompt,
+                        persist_user_message=self._persisted_user_message(
+                            context,
+                            plan=plan,
+                            image_artifacts=image_artifacts,
+                        ),
                         student_id=context.student_id, conversation_id=context.conversation_id,
                     )
                 else:
@@ -1343,20 +1399,25 @@ class HermesTaskExecutor:
             "后端只负责会话/SSE/存储/画布发布/产物验收。"
         )
 
-        # ── Pre-decided capability (background task after user consent) ──
+        # ── System prompt override (e.g. for english_chat) ──
+        system_prompt_override = str(plan.payload.get("system_prompt_override") or "").strip()
+        if system_prompt_override:
+            parts.append(f"\n## 📋 角色覆盖\n{system_prompt_override}\n")
+
+        # ── Capability locked by validator/runtime contract ──
         plan_capability = str(plan.payload.get("capability") or "")
         route_source = str(plan.payload.get("route_source") or "")
         pre_decided = (
             plan_capability
             and plan_capability != "hermes_decides"
             and plan_capability != "answer_only"
-            and route_source in ("user_approved",)
+            and route_source in ("validator_locked_retry", "capability_locked")
         )
         if pre_decided:
             parts.append(f"""
-## 🎯 本轮 Capability 已由用户确认 —— 勿重新决策！
+## 🎯 本轮 Capability 已被运行时锁定 —— 勿重新决策！
 
-用户已在前端点击「确认生成」按钮。你的 **唯一任务** 是生成 **{plan_capability}** 产物。
+运行时验证器已经把本轮任务锁定为 **{plan_capability}**。你的 **唯一任务** 是生成对应产物。
 
 - capability 已锁定为 `{plan_capability}`，不可更改为 answer_only 或其他任何类型
 - 主题：**{plan.payload.get("topic", context.message)}**
@@ -1407,9 +1468,11 @@ class HermesTaskExecutor:
             answer_limit = 500 if priority_context else 2000
             parts.append(f"- 上轮回复（可能作为上下文参考）: {self._truncate_text(context.last_assistant_answer, answer_limit)}")
         if context.recent_messages:
-            msg_window = context.recent_messages[-4:] if priority_context else context.recent_messages[-10:]
-            text_lim = 400 if priority_context else 1200
-            parts.append(f"- 近期对话: {json.dumps([self._compact_item(m, text_limit=text_lim) for m in msg_window], ensure_ascii=False)}")
+            message_limit = 4 if priority_context else 12
+            text_lim = 400 if priority_context else 900
+            parts.append(
+                f"- 近期对话: {json.dumps(self._prompt_recent_messages(context, limit=message_limit, text_limit=text_lim), ensure_ascii=False)}"
+            )
         if artifact_context:
             parts.append(
                 "\n## 🧷 当前绑定 Artifact 上下文（优先级高于课程 RAG/历史对话）\n"
@@ -1670,38 +1733,71 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
         return parts
 
     @staticmethod
-    def has_explicit_artifact_request(message: str) -> bool:
-        """Check if user EXPLICITLY asks for an artifact (report, PPT, app, diagram, etc).
+    def explicit_requested_capability(message: str) -> str:
+        """Return a strong explicit artifact capability request, or empty string.
 
-        BLACKLIST MODE: The default is answer_only. This function is the ONLY escape hatch.
-        Only return True when the user unambiguously demands a generated artifact.
+        This is intentionally narrow and only fires for unambiguous generation/search
+        intents. It is used as a post-Hermes validator, not a primary router.
         """
-        text = str(message or "").lower()
-        # ── Strong artifact keywords ──
-        # These terms indicate the user genuinely wants a generated artifact.
-        # Be conservative: false negatives (missing a real request) are better than
-        # false positives (generating junk for a casual question).
-        artifact_terms = [
-            # PPT / slides
-            "ppt", "幻灯片", "课件", "演示文稿", "slide", "slides", "deck",
-            "做一个演示", "生成一个演示", "做个ppt", "生成ppt", "给我做个ppt",
-            # Video search
-            "搜索视频", "找视频", "推荐视频", "b站搜", "哔哩搜", "bilibili搜",
-            "搜一下视频", "帮我找视频",
-            # Image generation
-            "生成图片", "画图", "示意图", "图解", "生成一张图", "帮我画",
-            # Interactive
-            "动态模型", "可交互模型", "交互模型", "互动模型", "交互演示",
-            "做个交互", "生成一个交互", "交互式",
-            # Mind-map / exercises
-            "思维导图", "脑图", "练习题", "出题", "测验", "代码实验",
-            "整理成笔记", "笔记 app",
-            # Explicit report request — MUST be an explicit ask, not casual mention
-            "生成报告", "html报告", "html 报告", "出一份报告", "写一份报告",
-            "给我报告", "生成一份报告", "出个报告", "详细分析报告",
-            "做个报告", "创建报告", "生成html", "生成 html",
-        ]
-        return any(term in text for term in artifact_terms)
+        text = str(message or "").strip()
+        lowered = text.lower()
+        if not lowered:
+            return ""
+        interactive_correction = any(
+            term in lowered
+            for term in [
+                "不是ppt", "不是 ppt", "不要ppt", "不要 ppt", "不是幻灯片", "不要幻灯片",
+                "不是幻灯", "不要幻灯", "我要交互模型", "我要可交互模型",
+            ]
+        )
+        ppt_correction = any(
+            term in lowered
+            for term in [
+                "不是交互模型", "不是可交互模型", "不要交互模型", "不要可交互模型",
+                "我要ppt", "我要 ppt", "我要的是ppt", "我要的是 ppt", "我要幻灯片",
+            ]
+        )
+        if interactive_correction and not ppt_correction:
+            return "interactive_demo"
+        if ppt_correction:
+            return "ppt"
+        if any(term in lowered for term in ["ppt", "幻灯片", "课件", "演示文稿", "slide", "slides", "deck", "讲义"]):
+            return "ppt"
+        if (
+            "视频" in text
+            and any(term in text for term in ["搜", "搜索", "找", "推荐", "B站", "b站", "哔哩", "bilibili"])
+        ) or any(term in lowered for term in ["video search", "search video", "bilibili", "b站搜"]):
+            return "video_search"
+        if any(term in text for term in ["思维导图", "脑图"]):
+            return "mindmap"
+        if any(term in text for term in ["练习题", "出题", "测验", "题库", "刷题"]):
+            return "quiz"
+        if any(term in text for term in ["代码实验", "代码演示", "编程实验"]) or (
+            "代码" in text and any(term in text for term in ["生成", "演示", "实验", "写一个"])
+        ):
+            return "code_lab"
+        if (
+            any(term in text for term in ["交互", "互动", "可交互", "动态演示", "交互演示", "仿真", "模拟器", "3D", "三维", "演示", "动画"])
+            and any(term in text for term in ["模型", "演示", "模拟", "生成", "做一个", "做个", "创建"])
+        ) or any(term in lowered for term in ["interactive demo", "interactive model", "dynamic model"]):
+            return "interactive_demo"
+        if any(term in text for term in ["示意图", "图解", "配图"]) or (
+            any(term in text for term in ["图片", "图像", "画图", "画一张图", "出图"])
+            and any(term in text for term in ["生成", "画", "做", "出", "给我"])
+        ):
+            return "image_explanation"
+        if any(term in lowered for term in ["html report", "html报告"]) or any(
+            term in text for term in ["生成报告", "分析报告", "HTML 报告", "html 报告", "出一份报告", "写一份报告", "创建报告"]
+        ):
+            return "detailed_analysis"
+        if any(term in text for term in ["整理成笔记", "整理到笔记", "记笔记", "笔记 app", "笔记App"]):
+            return "notes"
+        return ""
+
+    @classmethod
+    def has_explicit_artifact_request(cls, message: str) -> bool:
+        """Check if user EXPLICITLY asks for an artifact/search result."""
+        return bool(cls.explicit_requested_capability(message))
 
     @classmethod
     def should_force_answer_only_guard(cls, context: TutorTurnContext) -> bool:
@@ -1744,7 +1840,7 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
                 f"用户消息: {context.message}",
                 f"学生画像: {self._truncate_text(json.dumps(context.profile or {}, ensure_ascii=False), 1200)}",
                 f"学生记忆: {self._truncate_text(json.dumps(context.student_memories[-12:] if context.student_memories else [], ensure_ascii=False), 1800)}",
-                f"近期对话: {self._truncate_text(json.dumps(context.recent_messages[-10:] if context.recent_messages else [], ensure_ascii=False), 2400)}",
+                f"近期对话: {self._truncate_text(json.dumps(self._prompt_recent_messages(context, limit=12, text_limit=700), ensure_ascii=False), 2400)}",
                 f"上轮回复: {self._truncate_text(context.last_assistant_answer or '', 1600)}",
                 f"课程参考: {self._truncate_text(str(rag_context.get('context') or ''), 1800)}",
                 "如果没有足够历史内容，就诚实说明你能看到的上下文有限，并基于现有记忆回答。",
@@ -1781,7 +1877,7 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
                     provider,
                     model,
                     run_id=run_id,
-                    persist_user_message=prompt,
+                    persist_user_message=self._persisted_user_message(context),
                     student_id=context.student_id, conversation_id=context.conversation_id,
                 )
             else:
@@ -2037,7 +2133,11 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
                     provider,
                     model,
                     run_id=run_id,
-                    persist_user_message=prompt,
+                    persist_user_message=self._persisted_user_message(
+                        context,
+                        plan=plan,
+                        image_artifacts=image_artifacts,
+                    ),
                     student_id=context.student_id, conversation_id=context.conversation_id,
                 )
             else:
@@ -2121,7 +2221,11 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
                     model,
                     on_stderr_line=on_stderr_line,
                     run_id=run_id,
-                    persist_user_message=prompt,
+                    persist_user_message=self._persisted_user_message(
+                        context,
+                        plan=plan,
+                        image_artifacts=image_artifacts,
+                    ),
                     student_id=context.student_id, conversation_id=context.conversation_id,
                     on_hermes_event=on_hermes_event,
                 )
@@ -2194,7 +2298,7 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
                     merged.raw_html = str(merged.raw_html or "") or html_content_sentinel
                 if not merged.raw_html and sentinel_html_is_stub and not has_json_apps:
                     merged.raw_html = html_content_sentinel
-                merged.text_response = merged.text_response or "✅ 分析完成！报告已生成并推送到画布。"
+                merged.text_response = merged.text_response or self.generated_artifact_message(merged.capability or declared_capability)
                 merged.summary = merged.summary or assistant_text or "详细分析完成"
                 return merged
 
@@ -2204,7 +2308,7 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
                 mode="background",
                 summary=assistant_text or "详细分析完成",
                 raw_html=html_content_sentinel,
-                text_response="✅ 分析完成！报告已生成并推送到画布。",
+                text_response=self.generated_artifact_message(declared_capability or "detailed_analysis"),
                 raw_text=output,
                 trace=[f"{declared_capability or 'detailed_analysis'}_html_generated", "raw_html_extracted_from_chat"],
             )
@@ -2229,12 +2333,12 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
                 assistant_text, html_content = self._extract_html_output(result.text_response)
                 if html_content:
                     result.raw_html = html_content
-                    result.text_response = "✅ 分析完成！报告已生成并推送到画布。"
+                    result.text_response = self.generated_artifact_message(result.capability or "detailed_analysis")
                     result.summary = assistant_text or result.summary or "详细分析完成"
                     result.capability = result.capability or "detailed_analysis"
             if self._wants_html_report(plan, context) and not result.raw_html and not result.apps and not result.resources and result.text_response:
                 result.raw_html = self._html_report_fallback_from_text(result.text_response, title=str(plan.payload.get("topic") or "学习报告"))
-                result.text_response = "✅ 分析完成！报告已生成并推送到画布。"
+                result.text_response = self.generated_artifact_message("detailed_analysis")
                 result.summary = result.summary or "详细分析完成"
                 result.capability = "detailed_analysis"
                 result.mode = "background"
@@ -2251,7 +2355,7 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
                     mode="background",
                     summary="详细分析完成",
                     raw_html=self._html_report_fallback_from_text(clean_output, title=str(plan.payload.get("topic") or "学习报告")),
-                    text_response="✅ 分析完成！报告已生成并推送到画布。",
+                    text_response=self.generated_artifact_message("detailed_analysis"),
                     raw_text=output,
                     trace=["text_fallback_wrapped_as_html"],
                 )
@@ -2528,3 +2632,14 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
         except Exception:
             pass
         return None
+    @staticmethod
+    def generated_artifact_message(capability: str | None) -> str:
+        normalized = str(capability or "").strip().lower()
+        labels = {
+            "ppt": "✅ PPT 已生成并推送到画布。",
+            "interactive_demo": "✅ 交互演示已生成并推送到画布。",
+            "image_explanation": "✅ 图片已生成并推送到画布。",
+            "custom_infographic": "✅ 信息图已生成并推送到画布。",
+            "detailed_analysis": "✅ 分析完成！报告已生成并推送到画布。",
+        }
+        return labels.get(normalized, "✅ 产物已生成并推送到画布。")

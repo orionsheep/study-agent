@@ -76,30 +76,30 @@
       ]
     },
     {
-      "id": "MIMO-001",
-      "title": "MiMo ModelGateway real client",
+      "id": "GEMINI-001",
+      "title": "Gemini ModelGateway real client",
       "category": "external",
-      "acceptance": "MiMo client implements OpenAI-compatible requests, streaming, structured output, and real readiness validation if credentials exist.",
+      "acceptance": "Gemini client implements generateContent requests, streaming-compatible text responses, structured output, and real readiness validation if credentials exist.",
       "tests": [
-        "pytest services/api/tests/test_mimo_gateway.py"
+        "pytest services/api/tests/test_gateway_status.py"
       ]
     },
     {
-      "id": "MIMO-002",
-      "title": "MiMo reasoning_content compatibility",
+      "id": "GEMINI-002",
+      "title": "Gemini reasoning/text compatibility",
       "category": "external",
-      "acceptance": "Provider-specific reasoning_content is preserved when thinking mode is enabled.",
+      "acceptance": "Gemini text responses are normalized for ModelGateway consumers without exposing provider-specific reasoning_content behavior.",
       "tests": [
-        "pytest services/api/tests/test_mimo_reasoning_content.py"
+        "pytest services/api/tests/test_gateway_status.py"
       ]
     },
     {
-      "id": "IMAGE2-001",
-      "title": "image2 ImageGateway real client",
+      "id": "GEMINI-IMAGE-001",
+      "title": "Gemini ImageGateway real client",
       "category": "external",
-      "acceptance": "image2 client reads env config, generates/stores image assets when credentials exist, blocked otherwise.",
+      "acceptance": "Gemini image client reads env config, generates/stores image assets when credentials exist, and reports truthful blocked status otherwise. image2 is optional compatibility only.",
       "tests": [
-        "pytest services/api/tests/test_image2_gateway.py"
+        "pytest services/api/tests/test_gateway_status.py"
       ]
     },
     {
@@ -250,7 +250,7 @@
       "id": "SKILL-006",
       "title": "Image Generation Skill",
       "category": "skill",
-      "acceptance": "Plans image prompt through MiMo and calls image2 when credentials available, with overlay labels and safety.",
+      "acceptance": "Plans image prompt through Hermes/Gemini and calls Gemini Image when credentials available, with overlay labels and safety.",
       "tests": [
         "pytest services/api/tests/test_image_generation_skill.py"
       ]
@@ -795,7 +795,7 @@
       "id": "API-006",
       "title": "Image generation API",
       "category": "backend-api",
-      "acceptance": "Image generation API routes through image2 gateway or returns blocked status without fake success.",
+      "acceptance": "Image generation API routes through Gemini Image gateway or returns blocked status without fake success.",
       "tests": [
         "pytest services/api/tests/test_image_api.py"
       ]
@@ -912,7 +912,7 @@
       "id": "REPORT-004",
       "title": "Provider declaration",
       "category": "docs",
-      "acceptance": "docs/provider_declaration.md declares MiMo, image2, Hermes, Mem0/EduMem0, optional fallback providers and credential handling.",
+      "acceptance": "docs/provider_declaration.md declares Gemini text, Gemini Image, Hermes, Mem0/EduMem0, optional compatibility providers, and credential handling.",
       "tests": [
         "scripts/verify_provider_declaration"
       ]
