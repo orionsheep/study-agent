@@ -119,6 +119,22 @@ def test_requested_skill_button_locks_detailed_explanation_generation():
     assert plan.payload["expected_artifact_kind"] == "html_report"
 
 
+def test_requested_notebooklm_chat_stays_visible_hermes_answer_channel():
+    agent = UnifiedOrchestrator()
+    plan = agent.plan_turn(TutorTurnContext(message="基于当前来源解释这一章", requested_skill="notebooklm_chat"))
+
+    assert plan.task_type == "unified_hermes"
+    assert plan.payload["capability"] == "notebooklm_chat"
+    assert plan.payload["requested_skill"] == "notebooklm_chat"
+    assert plan.payload["requires_canvas"] is False
+    assert plan.payload["expected_app_types"] == []
+    override = plan.payload["system_prompt_override"]
+    # Open Notebook 只在后台检索、自己不直接回答 —— 这个不变量必须保留
+    assert "后台" in override and "检索资料" in override
+    # 必须明确要求不编造引用 / 诚实优先
+    assert "诚实" in override and "编造" in override
+
+
 def test_explicit_detailed_explanation_request_generates_html_report():
     agent = UnifiedOrchestrator()
     plan = agent.plan_turn(TutorTurnContext(message="基于动量守恒生成详细讲解"))

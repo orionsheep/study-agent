@@ -26,6 +26,8 @@ from app.hermes_runtime.task_executor import HermesTaskExecutor as RuntimeHermes
 from app.model_gateway.base import ChatMessage
 from app.model_gateway.errors import ModelGatewayError, ProviderBlocked
 from app.model_gateway.router import ModelGatewayRouter
+from app.notebooklm_context import NotebookContextResolver
+from app.notebooklm_service import OpenNotebookBridge
 from app.rag.retriever import CourseRetriever
 from app.schemas.app_protocol import (
     AppCreateEvent,
@@ -509,6 +511,36 @@ class OrchestratorAgent:
         if clarification_plan:
             return clarification_plan
 
+        requested_skill = str(context.requested_skill or "").strip().lower()
+
+        # English chat: route through Hermes as a pure text answer (no canvas artifacts)
+        if requested_skill == "english_chat":
+            return AgentPlan(
+                task_type="english_chat",
+                steps=["intent_detect", "hermes_runtime"],
+                payload={
+                    "capability": "english_chat",
+                    "topic": "英语学习",
+                    "source_material": context.message,
+                    "context_source": "current_message",
+                    "requires_canvas": False,
+                    "expected_app_types": [],
+                    "expected_resource_types": [],
+                    "original_message": context.message,
+                    "requested_skill": "english_chat",
+                    "system_prompt_override": (
+                        "You are an expert English learning assistant integrated into a study platform. "
+                        "The student is using the English Workspace module. "
+                        "If the student mentions a specific word, help them understand it deeply: "
+                        "pronunciation, etymology, usage, collocations, synonyms, antonyms, and example sentences. "
+                        "If the student asks about grammar, provide clear explanations with examples. "
+                        "If the student asks for practice, provide exercises or corrections. "
+                        "Always respond in the language the student uses (Chinese if they write in Chinese, English if they write in English). "
+                        "Be encouraging, clear, and pedagogically sound. Use markdown formatting for readability."
+                    ),
+                },
+            )
+
         skill_prompts = {
             "demo": "请生成一个可交互的演示模型，让我能动手操作理解",
             "interactive": "请生成一个可交互的演示模型，让我能动手操作理解",
@@ -520,6 +552,41 @@ class OrchestratorAgent:
             "html_explanation": "请生成详细讲解，做成可在画布打开的 HTML 讲解报告",
         }
         requested_skill = str(context.requested_skill or "").strip().lower()
+        if requested_skill == "notebooklm_chat":
+            return AgentPlan(
+                task_type="unified_hermes",
+                steps=["intent_detect", "hermes_runtime", "canvas_materializer", "artifact_verifier"],
+                payload={
+                    "topic": context.message,
+                    "source_material": context.message,
+                    "context_source": "notebooklm_sources",
+                    "capability": "notebooklm_chat",
+                    "requires_canvas": False,
+                    "expected_app_types": [],
+                    "expected_resource_types": [],
+                    "original_message": context.message,
+                    "requested_skill": "notebooklm_chat",
+                    "route_source": "notebooklm_context",
+                    "system_prompt_override": (
+                        "你是 LearnForge 的 NotebookLM 学习伙伴，专门陪学生吃透他们上传进来的学习资料"
+                        "（讲义、课本、论文、网页、视频文稿等）。你身后有一个来源引擎（Open Notebook），"
+                        "它只在后台默默检索资料、自己不说话；所有回答都由你在右侧对话框里给出，"
+                        "学生不必、也不该跑到别处去找答案。\n\n"
+                        "回答原则：\n"
+                        "• 有据可依：尽量基于提供的 NotebookLM 来源作答，并顺手标注出处，"
+                        "比如在句末加【来源：资料标题】，让学生能回头核对。\n"
+                        "• 诚实优先：如果来源引擎暂时不可用，或这些资料里确实查不到相关证据，"
+                        "就坦诚地说「当前这些资料里没有直接相关的内容」，绝不凭空编造引用或硬凑答案。\n"
+                        "• 循循善诱：语气温暖、鼓励、有耐心，像一位真正读过这些资料的学长；"
+                        "把道理讲通俗，需要时给例子、做对比、理清思路。\n"
+                        "• 聚焦学习：把每个问题当成帮学生学懂的机会，回答简洁、不跑题、不说教。\n"
+                        "• 尊重边界：除非学生明确说「帮我生成学习卡片／测验／PPT／笔记」这类可以发布的东西，"
+                        "否则不要主动往画布里创建内容。\n"
+                        "• 跟随语言：学生用中文你就用中文，用英文你就用英文，自然切换。\n"
+                        "• 用 Markdown 排版，让回答清爽好读。"
+                    ),
+                },
+            )
         intent_message = context.message
         if requested_skill in skill_prompts:
             intent_message = f"{skill_prompts[requested_skill]}\n{context.message}".strip()
@@ -4077,6 +4144,66 @@ class UnifiedOrchestrator(OrchestratorAgent):
             "html_explanation": "请生成详细讲解，做成可在画布打开的 HTML 讲解报告",
         }
         requested_skill = str(context.requested_skill or "").strip().lower()
+        if requested_skill == "english_chat":
+            return AgentPlan(
+                task_type="unified_hermes",
+                steps=["intent_detect", "hermes_runtime", "canvas_materializer", "artifact_verifier"],
+                payload={
+                    "capability": "english_chat",
+                    "topic": "英语学习",
+                    "source_material": context.message,
+                    "context_source": "current_message",
+                    "requires_canvas": False,
+                    "expected_app_types": [],
+                    "expected_resource_types": [],
+                    "original_message": context.message,
+                    "requested_skill": "english_chat",
+                    "route_source": "english_context",
+                    "system_prompt_override": (
+                        "You are an expert English learning assistant integrated into a study platform. "
+                        "The student is using the English Workspace module. "
+                        "If the student mentions a specific word, help them understand it deeply: pronunciation, etymology, usage, "
+                        "collocations, synonyms, antonyms, and example sentences. If the student asks about grammar, provide clear "
+                        "explanations with examples. If the student asks for practice, provide exercises or corrections. "
+                        "Always respond in the language the student uses and keep the answer pedagogically sound."
+                    ),
+                },
+            )
+        if requested_skill == "notebooklm_chat":
+            return AgentPlan(
+                task_type="unified_hermes",
+                steps=["intent_detect", "hermes_runtime", "canvas_materializer", "artifact_verifier"],
+                payload={
+                    "topic": context.message,
+                    "source_material": context.message,
+                    "context_source": "notebooklm_sources",
+                    "capability": "notebooklm_chat",
+                    "requires_canvas": False,
+                    "expected_app_types": [],
+                    "expected_resource_types": [],
+                    "original_message": context.message,
+                    "requested_skill": "notebooklm_chat",
+                    "route_source": "notebooklm_context",
+                    "system_prompt_override": (
+                        "你是 LearnForge 的 NotebookLM 学习伙伴，专门陪学生吃透他们上传进来的学习资料"
+                        "（讲义、课本、论文、网页、视频文稿等）。你身后有一个来源引擎（Open Notebook），"
+                        "它只在后台默默检索资料、自己不说话；所有回答都由你在右侧对话框里给出，"
+                        "学生不必、也不该跑到别处去找答案。\n\n"
+                        "回答原则：\n"
+                        "• 有据可依：尽量基于提供的 NotebookLM 来源作答，并顺手标注出处，"
+                        "比如在句末加【来源：资料标题】，让学生能回头核对。\n"
+                        "• 诚实优先：如果来源引擎暂时不可用，或这些资料里确实查不到相关证据，"
+                        "就坦诚地说「当前这些资料里没有直接相关的内容」，绝不凭空编造引用或硬凑答案。\n"
+                        "• 循循善诱：语气温暖、鼓励、有耐心，像一位真正读过这些资料的学长；"
+                        "把道理讲通俗，需要时给例子、做对比、理清思路。\n"
+                        "• 聚焦学习：把每个问题当成帮学生学懂的机会，回答简洁、不跑题、不说教。\n"
+                        "• 尊重边界：除非学生明确说「帮我生成学习卡片／测验／PPT／笔记」这类可以发布的东西，"
+                        "否则不要主动往画布里创建内容。\n"
+                        "• 跟随语言：学生用中文你就用中文，用英文你就用英文，自然切换。\n"
+                        "• 用 Markdown 排版，让回答清爽好读。"
+                    ),
+                },
+            )
         intent_message = context.message
         if requested_skill in skill_prompts:
             intent_message = f"{skill_prompts[requested_skill]}\n{context.message}".strip()
@@ -4284,6 +4411,44 @@ class UnifiedOrchestrator(OrchestratorAgent):
                 }],
                 "artifact_context": artifact_context,
                 "context_priority": "recent_artifact",
+            }
+        elif str(plan.payload.get("capability") or "") == "notebooklm_chat":
+            notebook_context = NotebookContextResolver().resolve(
+                student_id=context.student_id,
+                course_id=context.course_id,
+                message=context.message,
+            )
+            notebook_result = await OpenNotebookBridge().retrieve(
+                student_id=context.student_id,
+                course_id=context.course_id,
+                query=str(notebook_context.get("query") or context.message),
+                source_ids=[str(item) for item in notebook_context.get("source_ids", [])],
+                limit=8,
+                learnforge_notebook_id=notebook_context.get("learnforge_notebook_id") if isinstance(notebook_context.get("learnforge_notebook_id"), str) else None,
+            )
+            notebook_chunks = notebook_result.get("chunks") if isinstance(notebook_result.get("chunks"), list) else []
+            notebook_refs = notebook_result.get("citations") if isinstance(notebook_result.get("citations"), list) else []
+            if not notebook_refs and notebook_context.get("source_refs"):
+                notebook_refs = notebook_context.get("source_refs") if isinstance(notebook_context.get("source_refs"), list) else []
+            context_lines: list[str] = []
+            for index, chunk in enumerate(notebook_chunks[:8], start=1):
+                if isinstance(chunk, dict):
+                    title = str(chunk.get("title") or chunk.get("source_title") or chunk.get("document_title") or f"Source {index}")
+                    body = str(chunk.get("content") or chunk.get("text") or chunk.get("snippet") or "")[:1600]
+                    context_lines.append(f"[{index}] {title}\n{body}".strip())
+                else:
+                    context_lines.append(f"[{index}] {str(chunk)[:1600]}")
+            rag_context = {
+                "context": "\n\n".join(line for line in context_lines if line),
+                "source_refs": notebook_refs,
+                "notebooklm": notebook_result,
+                "notebook_context": notebook_context,
+                "context_priority": "notebooklm_open_notebook",
+                "retrieval_policy": "open_notebook_retrieve_only_no_visible_answer",
+                "retrieval_note": (
+                    "Open Notebook is only a background source engine. If status is not ready "
+                    "or no chunks are returned, Hermes must say the NotebookLM source engine has no usable evidence."
+                ),
             }
         else:
             rag_context = CourseRetriever().context_with_refs(topic, course_id=context.course_id)
