@@ -12,6 +12,11 @@ export type SessionContext = {
 
 export type ModelProvider = "gemini";
 export type ChatAttachmentPayload = { name: string; preview?: string };
+export type ChatContextPayload = {
+  active_context?: "english" | "notebooklm" | "general";
+  english_word?: string;
+  notebooklm?: NotebookLMContext;
+};
 export type NotebookLMContext = {
   notebookId?: string;
   learnforgeNotebookId?: string;
@@ -373,20 +378,20 @@ export async function submitQuiz(questionId: string, answer: unknown, context = 
   }, context);
 }
 
-export async function sendChatMessage(message: string, context = DEFAULT_SESSION_CONTEXT, modelProvider: ModelProvider = "gemini", imageData?: string[], attachments?: ChatAttachmentPayload[], requestedSkill?: string): Promise<{ events: AgentStreamEvent[]; assistant_text: string }> {
+export async function sendChatMessage(message: string, context = DEFAULT_SESSION_CONTEXT, modelProvider: ModelProvider = "gemini", imageData?: string[], attachments?: ChatAttachmentPayload[], requestedSkill?: string, contextPayload?: ChatContextPayload): Promise<{ events: AgentStreamEvent[]; assistant_text: string }> {
   return jsonFetch("/api/chat/message", {
     method: "POST",
-    body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, conversation_id: context.conversationId, model_provider: modelProvider, message, image_data: imageData ?? null, attachments: attachments ?? null, requested_skill: requestedSkill ?? null })
+    body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, conversation_id: context.conversationId, model_provider: modelProvider, message, image_data: imageData ?? null, attachments: attachments ?? null, requested_skill: requestedSkill ?? null, context_payload: contextPayload ?? null })
   }, context);
 }
 
-export async function streamChatMessage(message: string, onEvent: (event: AgentStreamEvent) => void, context = DEFAULT_SESSION_CONTEXT, modelProvider: ModelProvider = "gemini", imageData?: string[], signal?: AbortSignal, attachments?: ChatAttachmentPayload[], requestedSkill?: string): Promise<void> {
+export async function streamChatMessage(message: string, onEvent: (event: AgentStreamEvent) => void, context = DEFAULT_SESSION_CONTEXT, modelProvider: ModelProvider = "gemini", imageData?: string[], signal?: AbortSignal, attachments?: ChatAttachmentPayload[], requestedSkill?: string, contextPayload?: ChatContextPayload): Promise<void> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE}/api/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...sessionHeaders(context) },
-      body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, conversation_id: context.conversationId, model_provider: modelProvider, message, image_data: imageData ?? null, attachments: attachments ?? null, requested_skill: requestedSkill ?? null }),
+      body: JSON.stringify({ student_id: context.studentId, course_id: context.courseId, conversation_id: context.conversationId, model_provider: modelProvider, message, image_data: imageData ?? null, attachments: attachments ?? null, requested_skill: requestedSkill ?? null, context_payload: contextPayload ?? null }),
       signal,
     });
   } catch (error) {

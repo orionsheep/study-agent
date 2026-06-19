@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.core.session import SessionHeaders, get_session_headers, resolve_session_context
 from app.edumem0.client import EduMem0Client
-from app.notebooklm_service import OpenNotebookBridge, publish_notebooklm_output
+from app.notebooklm_service import OpenNotebookBridge, publish_notebooklm_output, sanitize_notebook_sources
 from app.schemas.app_protocol import AppEvent
 from app.database.store import get_store
 
@@ -147,7 +147,8 @@ async def notebooklm_notebook_sources(
     notebook = get_store().get_notebook(notebook_id, student_id=ctx.student_id, course_id=ctx.course_id)
     if not notebook:
         raise HTTPException(status_code=404, detail={"code": "NOTEBOOK_NOT_FOUND", "message": "notebook not found"})
-    return {"notebook": notebook, "sources": get_store().list_notebook_sources(notebook_id, student_id=ctx.student_id, course_id=ctx.course_id)}
+    await OpenNotebookBridge().repair_notebook_sources(student_id=ctx.student_id, course_id=ctx.course_id, learnforge_notebook_id=notebook_id)
+    return {"notebook": notebook, "sources": sanitize_notebook_sources(get_store().list_notebook_sources(notebook_id, student_id=ctx.student_id, course_id=ctx.course_id))}
 
 
 @router.post("/notebooks/{notebook_id}/sync")
@@ -233,7 +234,9 @@ async def notebooklm_sources(
     notebooks = store.ensure_default_notebooks(student_id=ctx.student_id, course_id=ctx.course_id)
     course_notebook = next((item for item in notebooks if item.get("purpose") == "course_official"), None)
     if course_notebook:
-        return {"sources": store.list_notebook_sources(str(course_notebook["id"]), student_id=ctx.student_id, course_id=ctx.course_id)}
+        notebook_id = str(course_notebook["id"])
+        await OpenNotebookBridge().repair_notebook_sources(student_id=ctx.student_id, course_id=ctx.course_id, learnforge_notebook_id=notebook_id)
+        return {"sources": sanitize_notebook_sources(store.list_notebook_sources(notebook_id, student_id=ctx.student_id, course_id=ctx.course_id))}
     sources: list[dict[str, Any]] = []
     for document in store.list_course_documents(ctx.course_id):
         document_id = str(document["document_id"])
@@ -259,7 +262,7 @@ async def notebooklm_sources(
                 "source_refs": refs,
             }
         )
-    return {"sources": sources}
+    return {"sources": sanitize_notebook_sources(sources)}
 
 
 @router.post("/retrieve")

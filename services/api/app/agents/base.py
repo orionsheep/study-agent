@@ -11,6 +11,7 @@ class TutorTurnContext(BaseModel):
     conversation_id: str = "demo-conversation"
     message: str
     requested_skill: str | None = None
+    context_payload: dict[str, Any] = Field(default_factory=dict)
     attachments: list[dict[str, Any]] = Field(default_factory=list)
     model_provider: str | None = None
     recent_messages: list[dict[str, Any]] = Field(default_factory=list)

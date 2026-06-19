@@ -27,7 +27,29 @@ vi.mock("../src/lib/api/client", async () => {
     fetchNotebookLMNotebookSources: vi.fn(async (notebookId: string) => ({
       notebook: { id: notebookId, title: "我的复习 Notebook", purpose: "personal_review", owner_scope: "user", owner_id: "demo-student", source_count: 1 },
       sources: [
-        { id: "src-one", title: "第一章讲义", summary: "导论片段", chunk_count: 1, source_refs: [{ document_id: "src-one", chunk_id: "chunk-one", title: "第一章讲义", snippet: "导论片段" }], source_scope: "personal_notebook", ingest_type: "text", sync_status: "ready" },
+        {
+          id: "src-one",
+          title: "第一章讲义",
+          summary: "导论片段",
+          chunk_count: 1,
+          source_refs: [
+            { document_id: "src-one", chunk_id: "chunk-one", title: "第一章讲义", snippet: "导论片段" },
+            { document_id: "src-one", chunk_id: "chunk-bad", title: "第一章讲义", snippet: "%PDF-1.7 1 0 obj <</Type/Pages>> endobj" },
+          ],
+          source_scope: "personal_notebook",
+          ingest_type: "text",
+          sync_status: "ready",
+        },
+        {
+          id: "src-bad",
+          title: "解析失败的 PDF",
+          summary: "%PDF-1.7 1 0 obj <</Type/Page/Resources<</Font/F0>>>> endobj",
+          chunk_count: 1,
+          source_refs: [{ document_id: "src-bad", chunk_id: "chunk-pdf", title: "解析失败的 PDF", snippet: "%PDF-1.7 2 0 obj <</XObject>> endobj" }],
+          source_scope: "personal_notebook",
+          ingest_type: "file_upload",
+          sync_status: "blocked_parser_limited",
+        },
       ],
     })),
     createNotebookLMNotebook: vi.fn(async () => ({ id: "nblm-new", title: "新的复习 Notebook", purpose: "personal_review", owner_scope: "user", owner_id: "demo-student", source_count: 0 })),
@@ -357,6 +379,10 @@ describe("component behavior", () => {
     expect(host.textContent).toContain("课程知识库");
     expect(host.textContent).toContain("我的 Notebook");
     expect(host.textContent).toContain("生成");
+    expect(host.textContent).toContain("引用到对话");
+    expect(host.textContent).not.toContain("Open Notebook 已连接");
+    expect(host.textContent).not.toContain("%PDF-1.7");
+    expect(host.textContent).not.toContain("endobj");
     expect(host.querySelector("[data-testid='notebooklm-source-manager']")).toBeFalsy();
     expect(host.querySelector("[data-testid='notebooklm-generate-menu']")).toBeFalsy();
     expect(host.textContent).not.toContain("上传文件");
@@ -373,6 +399,76 @@ describe("component behavior", () => {
     expect(host.querySelector("[data-testid='notebooklm-generate-menu']")).toBeTruthy();
     expect(host.textContent).toContain("学习指南");
     expect(host.querySelector(".chat-composer")).toBeFalsy();
+    cleanup();
+  });
+
+  it("binds NotebookLM sources to chat context without auto-generating", async () => {
+    const notebookApp: CanvasApp = {
+      ...app,
+      app_id: "app-notebooklm-events",
+      app_type: "notebooklm.workspace",
+      title: "NotebookLM",
+    };
+    const onEvent = vi.fn(() => undefined);
+    const { host, cleanup } = render(
+      <NativeAppRenderer app={notebookApp} dashboard={dashboard} onEvent={onEvent} onFocusApp={() => undefined} sessionContext={DEFAULT_SESSION_CONTEXT} />
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    onEvent.mockClear();
+    const firstSource = host.querySelector("[data-testid='notebooklm-sources'] .nblm-source-card") as HTMLButtonElement | null;
+    await act(async () => {
+      firstSource?.click();
+      await Promise.resolve();
+    });
+
+    expect(onEvent).toHaveBeenCalledWith(
+      "app-notebooklm-events",
+      "notebooklm.context_select",
+      expect.objectContaining({
+        focus_chat: true,
+        source_id: "src-one",
+        source_refs: [expect.objectContaining({ chunk_id: "chunk-one", snippet: "导论片段" })],
+      }),
+    );
+    expect(onEvent).not.toHaveBeenCalledWith("app-notebooklm-events", "notebooklm.generate_with_hermes", expect.anything());
+
+    onEvent.mockClear();
+    const citeButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.includes("引用到对话")) as HTMLButtonElement | undefined;
+    await act(async () => {
+      citeButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(onEvent).toHaveBeenCalledWith(
+      "app-notebooklm-events",
+      "notebooklm.context_select",
+      expect.objectContaining({ focus_chat: true, source_id: "src-one" }),
+    );
+    expect(onEvent).not.toHaveBeenCalledWith("app-notebooklm-events", "notebooklm.generate_with_hermes", expect.anything());
+
+    onEvent.mockClear();
+    act(() => (host.querySelector("[data-testid='notebooklm-generate-button']") as HTMLButtonElement).click());
+    const studyGuideButton = Array.from(host.querySelectorAll("[data-testid='notebooklm-generate-menu'] button")).find((button) =>
+      button.textContent?.includes("学习指南"),
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      studyGuideButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(onEvent).toHaveBeenCalledWith(
+      "app-notebooklm-events",
+      "notebooklm.generate_with_hermes",
+      expect.objectContaining({
+        kind: "study_guide",
+        source_id: "src-one",
+        source_refs: [expect.objectContaining({ chunk_id: "chunk-one" })],
+      }),
+    );
     cleanup();
   });
 
@@ -639,6 +735,32 @@ describe("component behavior", () => {
         prompt: "请生成详细讲解，做成可在画布打开的 HTML 讲解报告",
       }),
     );
+    cleanup();
+  });
+
+  it("focuses the composer textarea when a focus request arrives", () => {
+    const baseProps = {
+      input: "",
+      onInputChange: () => undefined,
+      onSubmit: () => undefined,
+      isStreaming: false,
+      attachments: [],
+      onAddFiles: () => undefined,
+      onRemoveAttachment: () => undefined,
+      listening: false,
+      onToggleVoice: () => undefined,
+      imageInputRef: React.createRef<HTMLInputElement>(),
+      fileInputRef: React.createRef<HTMLInputElement>(),
+      waveCanvasRef: React.createRef<HTMLCanvasElement>(),
+      onSummarize: () => undefined,
+    };
+    const { host, rerender, cleanup } = render(<ChatComposer {...baseProps} focusRequestId={0} />);
+    const textarea = host.querySelector("textarea") as HTMLTextAreaElement | null;
+    textarea?.blur();
+
+    rerender(<ChatComposer {...baseProps} focusRequestId={1} />);
+
+    expect(document.activeElement).toBe(textarea);
     cleanup();
   });
 

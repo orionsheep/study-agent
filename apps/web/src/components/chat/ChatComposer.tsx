@@ -34,6 +34,7 @@ export type ChatComposerProps = {
   activeSkill?: SkillInfo | null;
   onActiveSkillChange?: (skill: SkillInfo | null) => void;
   onSummarize?: () => void | Promise<void>;
+  focusRequestId?: number;
 };
 
 /* ── Skill definition (internal) ── */
@@ -135,10 +136,12 @@ export function ChatComposer({
   activeSkill,
   onActiveSkillChange,
   onSummarize,
+  focusRequestId,
 }: ChatComposerProps) {
   const hasContent = input.trim().length > 0 || attachments.length > 0 || !!activeSkill;
   const [skillsOpen, setSkillsOpen] = useState(false);
   const skillsRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   /* Click outside to close dropdown */
   useEffect(() => {
@@ -150,6 +153,11 @@ export function ChatComposer({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (focusRequestId === undefined || listening) return;
+    textareaRef.current?.focus();
+  }, [focusRequestId, listening]);
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -245,6 +253,7 @@ export function ChatComposer({
       ) : (
         <div className="composer-input-wrap">
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(event) => onInputChange(event.target.value)}
             onKeyDown={(event) => {

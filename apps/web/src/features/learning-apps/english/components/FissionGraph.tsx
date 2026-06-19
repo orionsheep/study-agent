@@ -373,7 +373,10 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
           nodeVal={(node: any) => (node.level === 0 ? 12 : 4)}
           nodePointerAreaPaint={(node: any, color, ctx) => {
             if (!showLevel2 && node.level === 2) return;
-            const size = node.level === 0 ? 12 : 4;
+            // The hit area must be comfortably grabbable even after zoomToFit shrinks a
+            // large (100+ node) graph. A 4px radius becomes sub-pixel when zoomed out,
+            // making peripheral nodes effectively unclickable — hence the generous size.
+            const size = node.level === 0 ? 14 : (node.level === 1 ? 10 : 8);
             ctx.fillStyle = color;
             ctx.beginPath();
             ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false);

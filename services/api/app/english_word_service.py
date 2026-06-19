@@ -281,9 +281,14 @@ async def health_check() -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
                 f"{EFW_BASE_URL}/api/libraries",
-                headers={"X-User-Id": "health-check"} if EFW_API_KEY else {},
+                headers={"X-User-Id": "health-check"},
             )
             response.raise_for_status()
-            return {"status": "ok", "reachable": True}
+            return {"status": "ok", "reachable": True, "base_url": EFW_BASE_URL}
     except Exception as e:
-        return {"status": "error", "reachable": False, "message": str(e)}
+        return {
+            "status": "error",
+            "reachable": False,
+            "base_url": EFW_BASE_URL,
+            "message": str(e) or repr(e),
+        }

@@ -4,13 +4,16 @@ from types import SimpleNamespace
 from app.agents.base import AgentPlan, TutorTurnContext
 from app.agents.orchestrator_agent import OrchestratorAgent, UnifiedOrchestrator
 from app.canvas.materializer import CanvasMaterializer, detailed_analysis_context_mismatch, normalize_html_artifact_text, wrap_detailed_analysis_report
+from app.core.session import SessionHeaders
 from app.agents.planner_agent import PlannerAgent, PlannerAgentInput
 from app.agents.profile_agent import ProfileAgent, ProfileAgentInput
 from app.agents.resource_bundle_agent import ResourceBundleAgent, ResourceBundleAgentInput
 from app.hermes_runtime.task_executor import HermesTaskExecutor, HermesTaskResult
 from app.image_gateway.base import ImageResult
 from app.image_gateway.prompt_planner import ImagePromptPlanner
+from app.main import ChatRequest, build_tutor_context
 from app.model_gateway.errors import ModelGatewayError
+from app.notebooklm_context import NotebookContextResolver
 from app.schemas.app_protocol import CanvasApp, CanvasPosition, CanvasSize, EduMemoryItem, LearningResource
 from app.skills.base import SkillInput
 from app.skills.registry import SkillRegistry
@@ -133,6 +136,124 @@ def test_requested_notebooklm_chat_stays_visible_hermes_answer_channel():
     assert "后台" in override and "检索资料" in override
     # 必须明确要求不编造引用 / 诚实优先
     assert "诚实" in override and "编造" in override
+
+
+def test_chat_request_context_payload_enters_tutor_context():
+    payload = {
+        "active_context": "notebooklm",
+        "notebooklm": {
+            "notebookId": "nblm-context-test",
+            "notebookTitle": "课程知识库",
+            "sourceId": "source-context-test",
+            "sourceTitle": "第一章讲义",
+            "sourceRefs": [{"document_id": "source-context-test", "chunk_id": "chunk-one", "snippet": "导论片段"}],
+        },
+    }
+
+    context = build_tutor_context(
+        ChatRequest(
+            student_id="ctx-payload-student",
+            course_id="ai-course",
+            conversation_id="ctx-payload-conversation",
+            message="请解释当前来源",
+            requested_skill="notebooklm_chat",
+            context_payload=payload,
+        ),
+        SessionHeaders(
+            x_student_id="ctx-payload-student",
+            x_course_id="ai-course",
+            x_conversation_id="ctx-payload-conversation",
+        ),
+    )
+
+    assert context.context_payload == payload
+    assert context.requested_skill == "notebooklm_chat"
+
+
+def test_notebooklm_context_resolver_prefers_structured_payload_over_text_blocks():
+    resolver = NotebookContextResolver()
+
+    parsed = resolver.parse_context_payload(
+        {
+            "active_context": "notebooklm",
+            "notebooklm": {
+                "learnforgeNotebookId": "nblm-structured",
+                "openNotebookId": "open-nblm-structured",
+                "notebookTitle": "结构化 Notebook",
+                "sourceId": "source-structured",
+                "sourceTitle": "结构化来源",
+                "kind": "study_guide",
+                "sourceRefs": [{"document_id": "source-structured", "chunk_id": "chunk-structured", "snippet": "真实片段"}],
+            },
+        },
+        "[NotebookLM Context]\nsource_id: stale\n[/NotebookLM Context]\n请生成学习指南",
+    )
+
+    assert parsed
+    assert parsed["query"] == "请生成学习指南"
+    assert parsed["metadata"]["learnforge_notebook_id"] == "nblm-structured"
+    assert parsed["metadata"]["source_id"] == "source-structured"
+    assert parsed["metadata"]["task_kind"] == "study_guide"
+    assert parsed["source_refs"][0]["chunk_id"] == "chunk-structured"
+
+
+def test_notebooklm_context_pack_downweights_closed_english_history():
+    executor = HermesTaskExecutor()
+    context = TutorTurnContext(
+        message="请根据当前 Notebook 来源解释这一章。",
+        requested_skill="notebooklm_chat",
+        context_payload={
+            "active_context": "notebooklm",
+            "notebooklm": {"notebookTitle": "课程知识库", "sourceTitle": "第一章讲义"},
+        },
+        recent_messages=[
+            {
+                "role": "user",
+                "text": "[当前单词: migrate]\n\n这个词怎么用？",
+                "metadata": {
+                    "requested_skill": "english_chat",
+                    "context_payload": {"active_context": "english", "english_word": "migrate"},
+                },
+            },
+            {"role": "assistant", "text": "migrate 表示迁移。", "metadata": {"capability": "english_chat"}},
+            {
+                "role": "user",
+                "text": "请解释这份讲义的核心观点。",
+                "metadata": {"requested_skill": "notebooklm_chat", "context_payload": {"active_context": "notebooklm"}},
+            },
+        ],
+    )
+
+    recent = executor._prompt_recent_messages(context, limit=3, text_limit=600)
+    packed = executor._context_priority_pack(
+        context,
+        {
+            "context_priority": "notebooklm_open_notebook",
+            "source_refs": [{"document_id": "source-one", "chunk_id": "chunk-one", "snippet": "真实 Notebook 片段"}],
+        },
+    )
+
+    assert "[当前单词:" not in str(recent)
+    assert recent[0]["context_scope"] == "english"
+    assert recent[0]["context_weight"] == "low_inactive_english"
+    assert recent[-1]["context_scope"] == "notebooklm"
+    assert packed["active_context"] == "notebooklm"
+    assert packed["priority_order"][0] == "current_user_request"
+    assert packed["grounding_source_refs"][0]["chunk_id"] == "chunk-one"
+    assert "older English" in " ".join(packed["rules"]) or "Older English" in " ".join(packed["rules"])
+
+
+def test_notebooklm_source_refs_do_not_fallback_to_conversation_refs():
+    agent = UnifiedOrchestrator()
+    plan = AgentPlan(
+        task_type="unified_hermes",
+        steps=["hermes_runtime"],
+        payload={"capability": "notebooklm_chat", "topic": "当前来源"},
+    )
+
+    refs = agent.source_refs_for_plan(plan, TutorTurnContext(message="请解释当前来源", requested_skill="notebooklm_chat"), [])
+
+    assert refs == []
 
 
 def test_explicit_detailed_explanation_request_generates_html_report():

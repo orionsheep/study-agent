@@ -457,6 +457,43 @@ class HermesTaskExecutor:
                 compact[key] = cls._truncate_text(item[key], text_limit) if isinstance(item[key], str) else item[key]
         return compact or {"_": cls._truncate_text(item, text_limit)}
 
+    @staticmethod
+    def _strip_transient_context_markers(text: str) -> str:
+        cleaned = re.sub(r"\[NotebookLM Context\][\s\S]*?\[/NotebookLM Context\]\s*", "", str(text or ""), flags=re.I)
+        cleaned = re.sub(r"^\s*\[当前单词:\s*[^\]]+\]\s*", "", cleaned)
+        return cleaned.strip()
+
+    @staticmethod
+    def _active_context_name(context: TutorTurnContext) -> str:
+        payload = context.context_payload if isinstance(context.context_payload, dict) else {}
+        active = str(payload.get("active_context") or "").strip().lower()
+        if active in {"english", "notebooklm"}:
+            return active
+        if context.requested_skill == "english_chat":
+            return "english"
+        if context.requested_skill == "notebooklm_chat":
+            return "notebooklm"
+        return "general"
+
+    @staticmethod
+    def _message_context_scope(message: dict[str, Any]) -> str:
+        metadata = message.get("metadata") if isinstance(message.get("metadata"), dict) else {}
+        payload = metadata.get("context_payload") if isinstance(metadata.get("context_payload"), dict) else {}
+        active = str(payload.get("active_context") or "").strip().lower()
+        if active in {"english", "notebooklm"}:
+            return active
+        requested = str(metadata.get("requested_skill") or "").strip().lower()
+        if requested == "english_chat":
+            return "english"
+        if requested == "notebooklm_chat":
+            return "notebooklm"
+        text = str(message.get("text") or "")
+        if "[当前单词:" in text:
+            return "english"
+        if "[NotebookLM Context]" in text:
+            return "notebooklm"
+        return "general"
+
     def _prompt_recent_messages(
         self,
         context: TutorTurnContext,
@@ -465,7 +502,68 @@ class HermesTaskExecutor:
         text_limit: int = 600,
     ) -> list[dict[str, Any]]:
         window = (context.recent_messages or [])[-limit:]
-        return [self._compact_item(message, text_limit=text_limit) for message in window]
+        active_context = self._active_context_name(context)
+        packed: list[dict[str, Any]] = []
+        for message in window:
+            if not isinstance(message, dict):
+                packed.append(self._compact_item(message, text_limit=text_limit))
+                continue
+            scope = self._message_context_scope(message)
+            scoped_limit = text_limit
+            weight = "normal"
+            if active_context == "notebooklm" and scope == "english":
+                scoped_limit = min(160, text_limit)
+                weight = "low_inactive_english"
+            elif active_context == "english" and scope == "notebooklm":
+                scoped_limit = min(180, text_limit)
+                weight = "low_inactive_notebooklm"
+            compact = self._compact_item(
+                {**message, "text": self._strip_transient_context_markers(str(message.get("text") or ""))},
+                text_limit=scoped_limit,
+            )
+            if isinstance(compact, dict):
+                if scope != "general":
+                    compact["context_scope"] = scope
+                if weight != "normal":
+                    compact["context_weight"] = weight
+            packed.append(compact)
+        return packed
+
+    def _context_priority_pack(self, context: TutorTurnContext, rag_context: dict[str, Any]) -> dict[str, Any]:
+        active_context = self._active_context_name(context)
+        payload = context.context_payload if isinstance(context.context_payload, dict) else {}
+        pack: dict[str, Any] = {
+            "priority_order": [
+                "current_user_request",
+                "active_context",
+                "grounding_evidence",
+                "conversation_continuity",
+                "inactive_context_summary",
+            ],
+            "active_context": active_context,
+            "current_user_request": self._strip_transient_context_markers(str(context.message or "")),
+            "context_payload": payload,
+            "conversation_continuity": self._prompt_recent_messages(context, limit=8, text_limit=500),
+        }
+        if active_context == "notebooklm":
+            pack["rules"] = [
+                "NotebookLM source chunks and source_refs outrank older English context.",
+                "Older English turns are continuity only; do not answer an English word unless the current user asks about it.",
+                "If grounding_evidence is empty, say the current NotebookLM sources contain no usable evidence.",
+            ]
+        elif active_context == "english":
+            pack["rules"] = [
+                "The active English word/context outranks older NotebookLM source selections.",
+                "Non-English history is continuity only unless the current user refers to it.",
+            ]
+        else:
+            pack["rules"] = ["Use recent conversation for continuity, but current_user_request decides the task."]
+        source_refs = rag_context.get("source_refs") if isinstance(rag_context.get("source_refs"), list) else []
+        if source_refs:
+            pack["grounding_source_refs"] = source_refs[:8]
+        if rag_context.get("context_priority"):
+            pack["grounding_priority"] = rag_context.get("context_priority")
+        return pack
 
     def _persisted_user_message(
         self,
@@ -482,6 +580,8 @@ class HermesTaskExecutor:
         ]
         if attachment_names:
             lines.append("用户上传附件: " + "、".join(attachment_names[:8]))
+        if context.context_payload:
+            lines.append(f"本轮结构化上下文: {self._truncate_text(json.dumps(context.context_payload, ensure_ascii=False), 1200)}")
         source_material = str((plan.payload.get("source_material") if plan else "") or "").strip()
         if source_material and source_material != str(context.message or "").strip():
             lines.append(f"绑定源材料: {self._truncate_text(source_material, 800)}")
@@ -514,7 +614,7 @@ class HermesTaskExecutor:
             "student_id": context.student_id,
             "course_id": context.course_id,
             "conversation_id": context.conversation_id,
-            "user_message": context.message,
+            "user_message": self._strip_transient_context_markers(context.message),
             "requested_skill": context.requested_skill,
             "attachments": [
                 {"name": str(item.get("name") or "").strip()}
@@ -529,6 +629,7 @@ class HermesTaskExecutor:
             "context_source": plan.payload.get("context_source"),
             "last_assistant_answer": self._truncate_text(context.last_assistant_answer, 2000),
             "recent_messages": self._prompt_recent_messages(context, limit=10, text_limit=1200),
+            "context_priority_pack": self._context_priority_pack(context, rag_context),
             "recent_apps": [self._compact_item(a) for a in context.recent_apps[-6:]],
             "recent_resources": [self._compact_item(r) for r in context.recent_resources[-6:]],
             "profile": self._truncate_text(json.dumps(context.profile, ensure_ascii=False), 1200) if context.profile else "",
@@ -1461,7 +1562,7 @@ class HermesTaskExecutor:
             parts.append(f"\n## 🧠 学生画像与掌握度\n{self._truncate_text(json.dumps(context.profile, ensure_ascii=False), 1200)}")
         if context.student_memories:
             parts.append(f"\n### 历史记忆(弱点/掌握/偏好)\n{json.dumps(context.student_memories[-12:], ensure_ascii=False)}")
-        parts.append(f"- 用户消息: {context.message}")
+        parts.append(f"- 用户消息: {self._strip_transient_context_markers(context.message)}")
         if context.last_assistant_answer:
             # Phase B：priority_context 轮（图片/artifact）保留压缩版历史，避免"一上图就失忆"。
             # 图片仍是最高优先级（见下方图片段），但 Hermes 不应完全忘记刚才聊了什么。
@@ -1473,6 +1574,10 @@ class HermesTaskExecutor:
             parts.append(
                 f"- 近期对话: {json.dumps(self._prompt_recent_messages(context, limit=message_limit, text_limit=text_lim), ensure_ascii=False)}"
             )
+        parts.append(
+            "\n## 🧭 上下文优先级包\n"
+            f"{self._truncate_text(json.dumps(self._context_priority_pack(context, rag_context), ensure_ascii=False), 5000)}"
+        )
         if artifact_context:
             parts.append(
                 "\n## 🧷 当前绑定 Artifact 上下文（优先级高于课程 RAG/历史对话）\n"
@@ -1837,10 +1942,11 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
                 f"被拒绝的 capability: {rejected_capability or 'unknown'}",
                 f"学生ID: {context.student_id}",
                 f"课程ID: {context.course_id}",
-                f"用户消息: {context.message}",
+                f"用户消息: {self._strip_transient_context_markers(context.message)}",
                 f"学生画像: {self._truncate_text(json.dumps(context.profile or {}, ensure_ascii=False), 1200)}",
                 f"学生记忆: {self._truncate_text(json.dumps(context.student_memories[-12:] if context.student_memories else [], ensure_ascii=False), 1800)}",
                 f"近期对话: {self._truncate_text(json.dumps(self._prompt_recent_messages(context, limit=12, text_limit=700), ensure_ascii=False), 2400)}",
+                f"上下文优先级包: {self._truncate_text(json.dumps(self._context_priority_pack(context, rag_context), ensure_ascii=False), 2600)}",
                 f"上轮回复: {self._truncate_text(context.last_assistant_answer or '', 1600)}",
                 f"课程参考: {self._truncate_text(str(rag_context.get('context') or ''), 1800)}",
                 "如果没有足够历史内容，就诚实说明你能看到的上下文有限，并基于现有记忆回答。",
@@ -2002,7 +2108,7 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
         parts.append("你是 LearnForge 的「详细分析和讲解」专家 Agent。")
 
         # 用户消息
-        parts.append(f"\n## 用户消息\n{context.message}")
+        parts.append(f"\n## 用户消息\n{self._strip_transient_context_markers(context.message)}")
 
         # 学习上下文
         parts.append(f"\n## 学习上下文\n- 学生ID: {context.student_id}\n- 课程ID: {context.course_id}")
@@ -2010,6 +2116,10 @@ JSON 必须是纯 JSON，无 markdown fence，无前后文字。`apps` 中每个
             parts.append(f"\n## 🧠 学生画像\n{self._truncate_text(json.dumps(context.profile, ensure_ascii=False), 1200)}")
         if context.student_memories:
             parts.append(f"\n### 掌握度与典型误区\n{json.dumps(context.student_memories[-12:], ensure_ascii=False)}")
+        parts.append(
+            "\n## 🧭 上下文优先级包\n"
+            f"{self._truncate_text(json.dumps(self._context_priority_pack(context, rag_context), ensure_ascii=False), 5000)}"
+        )
         if rag_context.get("context") and not priority_context:
             parts.append(f"\n## 课程资料参考\n{self._truncate_text(rag_context.get('context', ''), 6000)}")
         elif priority_context:

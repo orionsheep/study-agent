@@ -17,6 +17,7 @@ import {
   postAppEvent,
   recordNotebookLMEvent,
   streamChatMessage,
+  type ChatContextPayload,
   type ModelProvider,
   type NotebookLMContext,
   type SessionContext
@@ -58,22 +59,6 @@ function notebookLMContextLabel(context: NotebookLMContext): string {
   return context.sourceTitle || context.notebookTitle || context.notebookId || "当前来源";
 }
 
-function notebookLMMessageWithContext(text: string, context: NotebookLMContext): string {
-  const lines = [
-    "[NotebookLM Context]",
-    context.learnforgeNotebookId ? `learnforge_notebook_id: ${context.learnforgeNotebookId}` : "",
-    context.openNotebookId ? `open_notebook_id: ${context.openNotebookId}` : "",
-    context.notebookId ? `notebook_id: ${context.notebookId}` : "",
-    context.notebookTitle ? `notebook_title: ${context.notebookTitle}` : "",
-    context.sourceId ? `source_id: ${context.sourceId}` : "",
-    context.sourceTitle ? `source_title: ${context.sourceTitle}` : "",
-    context.kind ? `task_kind: ${context.kind}` : "",
-  ].filter(Boolean);
-  const refs = context.sourceRefs?.slice(0, 12) ?? [];
-  const refsBlock = refs.length ? `\nsource_refs_json:\n${JSON.stringify(refs, null, 2)}` : "";
-  return `${lines.join("\n")}${refsBlock}\n[/NotebookLM Context]\n\n${text}`;
-}
-
 export function LearnForgeShell({ sessionContext, onLogout }: Props) {
   const [apps, setApps] = useState<CanvasApp[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSnapshot | undefined>();
@@ -113,6 +98,7 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
   // injected as structured context. Clearing it returns Hermes to normal mode.
   const [englishWord, setEnglishWord] = useState<string | null>(null);
   const [notebookLMContext, setNotebookLMContextState] = useState<NotebookLMContext | null>(null);
+  const [chatFocusRequestId, setChatFocusRequestId] = useState(0);
   const notebookLMContextRef = useRef<NotebookLMContext | null>(null);
   const setNotebookLMContext = useCallback((context: NotebookLMContext | null) => {
     notebookLMContextRef.current = context;
@@ -264,12 +250,24 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
     focusWindow(appId);
   }, [computeCenterPos, focusWindow, sessionContext]);
 
+  const clearContextForApp = useCallback((appId: string) => {
+    const app = appsRef.current.find((item) => item.app_id === appId);
+    const appType = app?.app_type;
+    if (appId === "app-english" || appType === "english.workspace") {
+      setEnglishWord(null);
+    }
+    if (appId === "app-notebooklm" || appType === "notebooklm.workspace" || appType === "humanities.notebook") {
+      setNotebookLMContext(null);
+    }
+  }, [setNotebookLMContext]);
+
   const closeWindow = useCallback((appId: string) => {
+    clearContextForApp(appId);
     setOpenWindowIds((ids) => ids.filter((id) => id !== appId));
     setZOrder((z) => z.filter((id) => id !== appId));
     setFocusedId((f) => (f === appId ? null : f));
     setFullscreenId((fs) => (fs === appId ? null : fs));
-  }, []);
+  }, [clearContextForApp]);
 
   // Global word lookup: open or focus English workspace AND set the word as the
   // right-side Hermes english context in one motion, so a lookup from anywhere
@@ -401,22 +399,20 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
 
   const send = async (text: string, attachments?: Array<{ name: string; preview?: string }>, skillLabel?: { key?: string; label: string; color: string; bgColor: string; borderColor: string }) => {
     const now = Date.now();
-    // English context: when a word is selected in the English workspace, route the
-    // turn through the english_chat skill (→ EnglishAgent, which has the English-tutor
-    // system prompt) and prepend the word as structured context. This reuses the exact
-    // pattern the old in-workspace AIChatPanel used, but unifies it into the main
-    // Hermes chat so reasoning/thinking/trace are all surfaced.
+    // Skill context is sent as structured payload, so the persisted/displayed message
+    // remains the student's natural question while Hermes still receives the active
+    // English or NotebookLM grounding for this turn.
     const explicitNotebookLM = skillLabel?.key === "notebooklm_chat";
     const activeEnglishWord = englishWord && !skillLabel ? englishWord : null;
     const activeNotebookLMContext = notebookLMContextRef.current && (explicitNotebookLM || (!skillLabel && !activeEnglishWord))
       ? notebookLMContextRef.current
       : null;
     const effectiveSkillKey = skillLabel?.key ?? (activeEnglishWord ? "english_chat" : activeNotebookLMContext ? "notebooklm_chat" : undefined);
-    const effectiveMessage = activeEnglishWord
-      ? `[当前单词: ${activeEnglishWord}]\n\n${text}`
+    const contextPayload: ChatContextPayload | undefined = activeEnglishWord
+      ? { active_context: "english", english_word: activeEnglishWord }
       : activeNotebookLMContext
-        ? notebookLMMessageWithContext(text, activeNotebookLMContext)
-      : text;
+        ? { active_context: "notebooklm", notebooklm: activeNotebookLMContext }
+        : undefined;
     const effectiveSkillLabel = skillLabel ?? (activeEnglishWord
       ? { key: "english_chat", label: `英语·${activeEnglishWord}`, color: "#c4b5fd", bgColor: "rgba(139,92,246,0.14)", borderColor: "rgba(139,92,246,0.4)" }
       : activeNotebookLMContext
@@ -451,7 +447,7 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
       streamAbortRef.current?.abort();
       controller = new AbortController();
       streamAbortRef.current = controller;
-      await streamChatMessage(effectiveMessage, applyEvent, sessionContext, modelProvider, imageData, controller.signal, attachments, effectiveSkillKey);
+      await streamChatMessage(text, applyEvent, sessionContext, modelProvider, imageData, controller.signal, attachments, effectiveSkillKey, contextPayload);
       const fresh = await fetchDashboard(sessionContext);
       setDashboard(fresh);
     } catch (error) {
@@ -542,11 +538,21 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
       const context = notebookLMContextFromPayload(payload);
       setNotebookLMContext(context);
       setEnglishWord(null);
+      if (payload.focus_chat === true) setChatFocusRequestId((id) => id + 1);
       recordNotebookLMEvent(eventType, { app_id: appId, ...payload }, sessionContext).catch(() => undefined);
       return;
     }
 
-    if (eventType === "notebooklm.ask_hermes" || eventType === "notebooklm.generate_with_hermes") {
+    if (eventType === "notebooklm.ask_hermes") {
+      const context = notebookLMContextFromPayload(payload);
+      setNotebookLMContext(context);
+      setEnglishWord(null);
+      setChatFocusRequestId((id) => id + 1);
+      recordNotebookLMEvent(eventType, { app_id: appId, ...payload }, sessionContext).catch(() => undefined);
+      return;
+    }
+
+    if (eventType === "notebooklm.generate_with_hermes") {
       const context = notebookLMContextFromPayload(payload);
       setNotebookLMContext(context);
       setEnglishWord(null);
@@ -616,6 +622,7 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
   };
 
   const deleteApp = useCallback((appId: string) => {
+    clearContextForApp(appId);
     setApps((current) => current.filter((app) => app.app_id !== appId));
     setOpenWindowIds((ids) => ids.filter((id) => id !== appId));
     setZOrder((z) => z.filter((id) => id !== appId));
@@ -623,7 +630,7 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
     setFullscreenId((fs) => (fs === appId ? null : fs));
     onAppEvent(appId, "app.delete", { app_id: appId }).catch(() => undefined);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [clearContextForApp]);
 
   const addResourceToCanvas = useCallback(async (resource: LearningResource, targetPosition?: { x: number; y: number }) => {
     setTrace((items) => [
@@ -746,6 +753,7 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
         onClearEnglishWord={() => setEnglishWord(null)}
         notebookLMContext={notebookLMContext}
         onClearNotebookLMContext={() => setNotebookLMContext(null)}
+        focusRequestId={chatFocusRequestId}
       />
       <AppLinkFlightLayer flight={flight} />
       </main>

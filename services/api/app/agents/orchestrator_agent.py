@@ -497,23 +497,13 @@ class OrchestratorAgent:
 
     def plan_turn(self, context: TutorTurnContext) -> AgentPlan:
         message = context.message.lower()
-        if any(term in message for term in PROFILE_MARKERS):
-            return AgentPlan(
-                task_type="profile_build",
-                steps=["intent_detect", "profile_agent", "memory_agent", "dashboard_skill"],
-                payload={"topic": "学习画像", "capability": "dashboard", "requires_canvas": False},
-            )
-
-        repair_plan = self._interactive_app_repair_plan(context)
-        if repair_plan:
-            return repair_plan
-        clarification_plan = self._context_clarification_plan(context)
-        if clarification_plan:
-            return clarification_plan
-
         requested_skill = str(context.requested_skill or "").strip().lower()
 
-        # English chat: route through Hermes as a pure text answer (no canvas artifacts)
+        # Explicit skill requests take ABSOLUTE precedence — they are user/system
+        # intent signals that must never be overridden by heuristic intent detection.
+        # english_chat must run before profile_build / app_repair / clarification
+        # checks, otherwise a selected word gets mis-routed into generic Hermes
+        # (task_type=unified_hermes) and the English-tutor prompt never applies.
         if requested_skill == "english_chat":
             return AgentPlan(
                 task_type="english_chat",
@@ -540,6 +530,20 @@ class OrchestratorAgent:
                     ),
                 },
             )
+
+        if any(term in message for term in PROFILE_MARKERS):
+            return AgentPlan(
+                task_type="profile_build",
+                steps=["intent_detect", "profile_agent", "memory_agent", "dashboard_skill"],
+                payload={"topic": "学习画像", "capability": "dashboard", "requires_canvas": False},
+            )
+
+        repair_plan = self._interactive_app_repair_plan(context)
+        if repair_plan:
+            return repair_plan
+        clarification_plan = self._context_clarification_plan(context)
+        if clarification_plan:
+            return clarification_plan
 
         skill_prompts = {
             "demo": "请生成一个可交互的演示模型，让我能动手操作理解",
@@ -750,13 +754,21 @@ class OrchestratorAgent:
     ) -> None:
         if not text:
             return
+        full_metadata = dict(metadata or {})
+        if run_id:
+            full_metadata = {"run_id": run_id, **full_metadata}
+        if role == "user":
+            if context.requested_skill:
+                full_metadata.setdefault("requested_skill", context.requested_skill)
+            if context.context_payload:
+                full_metadata.setdefault("context_payload", context.context_payload)
         self.store.save_chat_message(
             student_id=context.student_id,
             course_id=context.course_id,
             conversation_id=context.conversation_id,
             role=role,
             text=text,
-            metadata={"run_id": run_id, **(metadata or {})} if run_id else metadata,
+            metadata=full_metadata or None,
         )
 
     def resource_create_event(self, resource: LearningResource, message_id: str | None, run_id: str | None = None) -> dict[str, Any]:
@@ -768,6 +780,8 @@ class OrchestratorAgent:
         return event_dict(ResourceCreateEvent(resource=resource, message_id=message_id or None))
 
     def source_refs_for_plan(self, plan: AgentPlan, context: TutorTurnContext, rag_refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if str(plan.payload.get("capability") or "") == "notebooklm_chat":
+            return rag_refs
         source_material = str(plan.payload.get("source_material") or context.message)
         topic = str(plan.payload.get("topic") or "当前学习主题")
         conversation_ref = {
@@ -4146,8 +4160,9 @@ class UnifiedOrchestrator(OrchestratorAgent):
         requested_skill = str(context.requested_skill or "").strip().lower()
         if requested_skill == "english_chat":
             return AgentPlan(
-                task_type="unified_hermes",
-                steps=["intent_detect", "hermes_runtime", "canvas_materializer", "artifact_verifier"],
+                task_type="english_chat",
+                # Pure text Q&A: no canvas materializer / artifact verifier steps.
+                steps=["intent_detect", "hermes_runtime"],
                 payload={
                     "capability": "english_chat",
                     "topic": "英语学习",
@@ -4417,6 +4432,7 @@ class UnifiedOrchestrator(OrchestratorAgent):
                 student_id=context.student_id,
                 course_id=context.course_id,
                 message=context.message,
+                context_payload=context.context_payload,
             )
             notebook_result = await OpenNotebookBridge().retrieve(
                 student_id=context.student_id,

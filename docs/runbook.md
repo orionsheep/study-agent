@@ -18,7 +18,23 @@ pip install 'hermes-agent>=0.14.0'
 # pip install -e /absolute/path/to/hermes-agent
 ```
 
-Run manually:
+Run the integrated local stack:
+
+```bash
+npm run dev
+```
+
+This starts the repo-local stack in dependency order:
+
+- Docker Postgres/Redis
+- Open Notebook via the `notebooklm` compose profile
+- `services/english-word-fission` on port `3011`
+- LearnForge API on port `8011`
+- LearnForge web on port `5173`
+
+Do not run `/Users/.../Desktop/english-word-fission` or another external Open Notebook checkout for LearnForge development; the sidecar sources are vendored under `services/`.
+
+Run pieces manually:
 
 ```bash
 . .venv/bin/activate

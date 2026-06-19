@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.notebooklm_service import OpenNotebookBridge, notebook_key
+from app.notebooklm_service import OpenNotebookBridge, is_binary_like_source_text, notebook_key, sanitize_notebook_sources
 from app.database.store import get_store
 
 
@@ -86,6 +86,54 @@ async def test_notebooklm_retrieve_returns_chunks_not_answer(monkeypatch):
     assert result["chunks"][0]["content"] == "grounded source text"
     assert result["citations"][0]["chunk_id"] == "chunk-a"
     assert result["answer"] is None
+
+
+@pytest.mark.asyncio
+async def test_notebooklm_retrieve_drops_citations_without_real_chunks(monkeypatch):
+    async def fake_bootstrap(self, *, student_id: str, course_id: str):
+        return {"status": "ready", "notebook_id": notebook_key(student_id, course_id)}
+
+    async def fake_post_first_json(self, paths, payload):
+        return {
+            "status": "ready",
+            "path": paths[0],
+            "data": {
+                "chunks": [],
+                "citations": [{"source_id": "src-a", "chunk_id": "chunk-a", "title": "Source A"}],
+            },
+        }
+
+    monkeypatch.setattr(OpenNotebookBridge, "bootstrap", fake_bootstrap)
+    monkeypatch.setattr(OpenNotebookBridge, "_post_first_json", fake_post_first_json)
+
+    result = await OpenNotebookBridge().retrieve(
+        student_id="stu-no-chunks",
+        course_id="course-no-chunks",
+        query="Explain this source",
+    )
+
+    assert result["chunks"] == []
+    assert result["citations"] == []
+
+
+def test_notebooklm_source_quality_gate_filters_binary_pdf_refs():
+    sources = [
+        {
+            "id": "source-bad",
+            "title": "坏 PDF",
+            "summary": "%PDF-1.7 1 0 obj <</Type/Page/Resources<</Font/F0>>>> endobj",
+            "source_refs": [
+                {"document_id": "doc-bad", "chunk_id": "chunk-bad", "snippet": "%PDF-1.7 2 0 obj <</XObject>> endobj"},
+                {"document_id": "doc-good", "chunk_id": "chunk-good", "snippet": "这一段是可引用的课程讲义文本。"},
+            ],
+        }
+    ]
+
+    cleaned = sanitize_notebook_sources(sources)
+
+    assert is_binary_like_source_text("%PDF-1.7 1 0 obj <</Type/Pages>> endobj")
+    assert cleaned[0]["summary"] == ""
+    assert cleaned[0]["source_refs"] == [{"document_id": "doc-good", "chunk_id": "chunk-good", "snippet": "这一段是可引用的课程讲义文本。"}]
 
 
 def test_notebooklm_publish_blocks_without_sources():

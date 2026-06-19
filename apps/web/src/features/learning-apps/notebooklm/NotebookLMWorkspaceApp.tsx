@@ -66,10 +66,10 @@ const GROUPS = [
 
 function statusLabel(status?: string) {
   if (!status) return "检测中";
-  if (status === "ready") return "Open Notebook 已连接";
+  if (status === "ready") return "来源服务可用";
   if (status === "partial") return "部分来源已同步";
   if (status === "not_synced") return "未同步";
-  if (status.startsWith("blocked")) return "Open Notebook 未连接";
+  if (status.startsWith("blocked")) return "来源服务不可用";
   return status;
 }
 
@@ -83,7 +83,25 @@ function sourceLabel(source: SourceCard | null) {
 }
 
 function sourceFromApi(source: NotebookLMSource): SourceCard {
-  return { ...source, refs: Array.isArray(source.source_refs) ? source.source_refs : [] };
+  const refs = Array.isArray(source.source_refs) ? source.source_refs.filter(isUsableSourceRef) : [];
+  const summary = isReadableSourceText(source.summary) ? source.summary : "";
+  return { ...source, summary, refs };
+}
+
+function isReadableSourceText(value: unknown): boolean {
+  const text = String(value ?? "").trim();
+  if (!text) return false;
+  const sample = text.slice(0, 600);
+  if (/%PDF-\d|endobj\b|\/Type\/Page\b|\/Font\b|\/XObject\b|xref\b|trailer\b/i.test(sample)) return false;
+  const controlChars = Array.from(sample).filter((ch) => {
+    const code = ch.charCodeAt(0);
+    return (code < 32 && !"\n\r\t".includes(ch)) || ch === "\uFFFD";
+  }).length;
+  return controlChars / Math.max(1, sample.length) < 0.02;
+}
+
+function isUsableSourceRef(ref: Record<string, unknown>): boolean {
+  return isReadableSourceText(ref.snippet ?? ref.quote ?? ref.content ?? ref.text);
 }
 
 export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) {
@@ -120,6 +138,18 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
 
   const writableNotebook = selectedNotebook?.purpose !== "course_official" && selectedNotebook?.owner_scope !== "course";
   const ready = status?.status === "ready" || status?.status === "partial";
+  const showStatus = status?.status && status.status !== "ready";
+
+  const notebookEventPayload = useCallback((source: SourceCard | null, extra: Record<string, unknown> = {}) => ({
+    ...extra,
+    learnforge_notebook_id: selectedNotebook?.id,
+    notebook_id: selectedNotebook?.id,
+    open_notebook_id: bootstrap?.notebook_id || selectedNotebook?.open_notebook_id,
+    notebook_title: selectedNotebook?.title,
+    source_id: source?.id,
+    source_title: source?.title,
+    source_refs: source?.refs?.slice(0, 12) ?? [],
+  }), [bootstrap?.notebook_id, selectedNotebook]);
 
   const loadNotebookSources = useCallback(async (notebookId: string) => {
     const [nextBootstrap, sourcePayload] = await Promise.all([
@@ -161,15 +191,9 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
 
   useEffect(() => {
     if (!selectedNotebook) return;
-    const payload = {
-      learnforge_notebook_id: selectedNotebook.id,
-      notebook_id: selectedNotebook.id,
-      open_notebook_id: bootstrap?.notebook_id || selectedNotebook.open_notebook_id,
-      notebook_title: selectedNotebook.title,
-      source_id: selectedSource?.id,
-      source_title: selectedSource?.title,
+    const payload = notebookEventPayload(selectedSource, {
       source_refs: selectedSource?.refs?.slice(0, 8) ?? [],
-    };
+    });
     const contextKey = JSON.stringify({
       learnforge_notebook_id: payload.learnforge_notebook_id,
       open_notebook_id: payload.open_notebook_id,
@@ -179,7 +203,7 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
     if (lastContextKeyRef.current === contextKey) return;
     lastContextKeyRef.current = contextKey;
     onEvent(app.app_id, "notebooklm.context_select", payload);
-  }, [app.app_id, bootstrap?.notebook_id, onEvent, selectedNotebook, selectedSource]);
+  }, [app.app_id, notebookEventPayload, onEvent, selectedNotebook, selectedSource]);
 
   const selectNotebook = async (notebookId: string) => {
     setSelectedNotebookId(notebookId);
@@ -337,17 +361,17 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
   const askHermes = async (prompt?: string, kind?: string) => {
     if (!selectedNotebook) return;
     const basePrompt = prompt || "请基于当前 NotebookLM 来源回答我的问题，必须说明引用依据。";
-    await onEvent(app.app_id, kind ? "notebooklm.generate_with_hermes" : "notebooklm.ask_hermes", {
+    const payload = notebookEventPayload(selectedSource, {
       kind,
       prompt: basePrompt,
-      learnforge_notebook_id: selectedNotebook.id,
-      notebook_id: selectedNotebook.id,
-      open_notebook_id: bootstrap?.notebook_id || selectedNotebook.open_notebook_id,
-      notebook_title: selectedNotebook.title,
-      source_id: selectedSource?.id,
-      source_title: selectedSource?.title,
-      source_refs: selectedSource?.refs?.slice(0, 12) ?? [],
+      focus_chat: !kind,
     });
+    if (!kind) {
+      setMessage("已引用当前来源，请在右侧输入你的问题。");
+      await onEvent(app.app_id, "notebooklm.context_select", payload);
+      return;
+    }
+    await onEvent(app.app_id, "notebooklm.generate_with_hermes", payload);
   };
 
   const grouped = GROUPS.map((group) => ({ ...group, items: notebooks.filter(group.match) })).filter((group) => group.items.length);
@@ -367,10 +391,12 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
             <span>来源中心</span>
           </div>
         </div>
-        <div className={`nblm-status ${ready ? "ready" : "blocked"}`} data-testid="notebooklm-status">
-          {ready ? <CheckCircle2 size={14} /> : <TriangleAlert size={14} />}
-          <span>{statusLabel(status?.status)}</span>
-        </div>
+        {showStatus ? (
+          <div className={`nblm-status ${ready ? "ready" : "blocked"}`} data-testid="notebooklm-status">
+            {ready ? <CheckCircle2 size={14} /> : <TriangleAlert size={14} />}
+            <span>{statusLabel(status?.status)}</span>
+          </div>
+        ) : null}
 
         <div className="nblm-create-row">
           <input value={newNotebookTitle} onChange={(event) => setNewNotebookTitle(event.target.value)} placeholder="新的复习 Notebook" />
@@ -416,7 +442,10 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
             <button
               key={source.id}
               className={`nblm-source-card ${selectedSource?.id === source.id ? "active" : ""}`}
-              onClick={() => setSelectedSourceId(source.id)}
+              onClick={() => {
+                setSelectedSourceId(source.id);
+                Promise.resolve(onEvent(app.app_id, "notebooklm.context_select", notebookEventPayload(source, { focus_chat: true }))).catch(() => undefined);
+              }}
               title={source.title}
             >
               <FileText size={15} />
@@ -465,7 +494,7 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
             </button>
             <button className="nblm-compact-btn nblm-ask-btn" onClick={() => runHermesAction()} disabled={!selectedNotebook}>
               <Send size={14} />
-              <span>问 Hermes</span>
+              <span>引用到对话</span>
             </button>
             <div className="nblm-menu-wrap">
               <button
@@ -555,7 +584,7 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
         ) : (
           <>
             <section className="nblm-source-summary">
-              <p>{selectedSource?.summary || "选择 Notebook 后，可以查看课程正式来源和个人复习资料。所有回答都会在右侧 Hermes 中完成。"}</p>
+              <p>{selectedSource?.summary || "当前来源还没有可引用文本。可以重新同步，或上传可解析的文本/PDF 后再向右侧 Hermes 提问。"}</p>
               <div className="nblm-source-meta">
                 <span>{sourceLabel(selectedSource)}</span>
                 <span>{selectedSource?.sync_status || selectedSource?.upload_status || "source"}</span>
@@ -576,7 +605,7 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
                   <p>{String(ref.snippet ?? ref.quote ?? ref.chunk_id ?? ref.document_id ?? "source ref")}</p>
                 </article>
               ))}
-              {!selectedRefs.length ? <p className="nblm-muted">当前来源没有可展示的 source_refs。</p> : null}
+              {!selectedRefs.length ? <p className="nblm-muted">当前来源没有通过质量门的可展示引用。</p> : null}
             </section>
           </>
         )}

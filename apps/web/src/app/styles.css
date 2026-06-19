@@ -5884,6 +5884,19 @@ body,
   padding: 24px 32px;
 }
 
+/* Workspace apps in fullscreen fill the viewport edge-to-edge — no gradient frame,
+   no padding ring. The default fullscreen background (a purple gradient) and 24x32
+   padding read as a pointless border around the workspace's own full-bleed UI. */
+.canvas-app.is-workspace.fullscreen,
+.appwin.is-workspace.fullscreen {
+  background: #000 !important;
+  box-shadow: none !important;
+}
+.canvas-app.is-workspace.fullscreen .appwin-body,
+.appwin.is-workspace.fullscreen .appwin-body {
+  padding: 0 !important;
+}
+
 .canvas-app.fullscreen:has(.native-app-body-custom) .appwin-body,
 .appwin.fullscreen:has(.native-app-body-custom) .appwin-body,
 .canvas-app.fullscreen:has(.native-app-body-image) .appwin-body,

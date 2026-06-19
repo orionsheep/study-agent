@@ -15,3 +15,14 @@ playwright-report/
 test-results/
 *.sqlite
 *.db
+
+# === english-word-fission 词库静态数据 ===
+# 运行时必需，但体积大 / 文件数极多（4.8 万），不进 git。
+# 克隆后需从原项目或备份放置 services/english-word-fission/data/ 下的词库。
+# 保留 data/ai_prompts/（prompt 模板，代码性质，体积小）。
+services/english-word-fission/data/word_chinese/
+services/english-word-fission/data/word_text_database/
+services/english-word-fission/data/word_library/
+services/english-word-fission/data/*.csv
+# 测试账号凭据，不进仓库
+services/english-word-fission/passowrd.md

@@ -42,6 +42,7 @@ type Props = {
   onClearEnglishWord?: () => void;
   notebookLMContext?: NotebookLMContext | null;
   onClearNotebookLMContext?: () => void;
+  focusRequestId?: number;
 };
 
 /* ── TutorChat ── */
@@ -66,6 +67,7 @@ export function TutorChat({
   onClearEnglishWord,
   notebookLMContext,
   onClearNotebookLMContext,
+  focusRequestId,
 }: Props) {
   const [input, setInput] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -374,6 +376,7 @@ export function TutorChat({
         activeSkill={activeSkill}
         onActiveSkillChange={setActiveSkill}
         onSummarize={onSummarize}
+        focusRequestId={focusRequestId}
       />
     </aside>
   );

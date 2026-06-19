@@ -41,7 +41,7 @@ services:
       - "8502:8502"
       - "5055:5055"
     environment:
-      OPEN_NOTEBOOK_ENCRYPTION_KEY: ${OPEN_NOTEBOOK_ENCRYPTION_KEY:-replace_with_32_char_secret}
+      OPEN_NOTEBOOK_ENCRYPTION_KEY: ${OPEN_NOTEBOOK_ENCRYPTION_KEY:-learnforgeopennotebooksecret0000}
       OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-}
       SURREAL_URL: ws://open_notebook_surrealdb:8000/rpc
       SURREAL_USER: root

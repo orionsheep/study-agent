@@ -50,6 +50,7 @@ class ChatRequest(BaseModel):
     model_provider: str | None = None
     message: str
     requested_skill: str | None = None
+    context_payload: dict[str, Any] | None = None
     attachments: list[dict[str, Any]] | None = None
     image_data: list[str] | None = None
 
@@ -365,6 +366,7 @@ def build_tutor_context(
         conversation_id=conversation_id,
         message=request.message,
         requested_skill=request.requested_skill,
+        context_payload=request.context_payload or {},
         attachments=request.attachments or [],
         model_provider=request.model_provider,
         recent_messages=semantic_recent_messages,

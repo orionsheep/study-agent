@@ -65,6 +65,41 @@ def _compact_chunks(text: str, *, size: int = 900) -> list[str]:
     return TextChunker().chunk(cleaned, size=size) or [cleaned]
 
 
+_BINARY_SOURCE_PATTERN = re.compile(r"%PDF-\d|endobj\b|/\s*Type\s*/\s*Page\b|/\s*Font\b|/\s*XObject\b|xref\b|trailer\b", re.I)
+
+
+def is_binary_like_source_text(text: Any) -> bool:
+    value = str(text or "").strip()
+    if not value:
+        return True
+    sample = value[:800]
+    if _BINARY_SOURCE_PATTERN.search(sample):
+        return True
+    control_count = sum(1 for ch in sample if (ord(ch) < 32 and ch not in "\n\r\t") or ch == "\ufffd")
+    return control_count / max(1, len(sample)) >= 0.02
+
+
+def _usable_source_ref(ref: dict[str, Any]) -> bool:
+    text = ref.get("snippet") or ref.get("quote") or ref.get("content") or ref.get("text")
+    if str(text or "").strip():
+        return not is_binary_like_source_text(text)
+    return bool(ref.get("chunk_id") or ref.get("document_id") or ref.get("source_id"))
+
+
+def sanitize_notebook_sources(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    cleaned: list[dict[str, Any]] = []
+    for source in sources:
+        item = dict(source)
+        refs = item.get("source_refs") if isinstance(item.get("source_refs"), list) else []
+        item["source_refs"] = [ref for ref in refs if isinstance(ref, dict) and _usable_source_ref(ref)]
+        if is_binary_like_source_text(item.get("summary")):
+            item["summary"] = ""
+        if not item["source_refs"] and not item.get("summary"):
+            item["quality_status"] = "blocked_no_usable_text"
+        cleaned.append(item)
+    return cleaned
+
+
 def _document_source_ref(source: dict[str, Any]) -> dict[str, Any]:
     return {
         "document_id": source.get("document_id") or source.get("id") or source.get("source_id"),
@@ -145,23 +180,29 @@ class OpenNotebookBridge:
                 "notebook_id": learnforge_notebook_id,
                 "embed_url": notebook_embed_url(),
             }
-        existing_open_id = str(notebook.get("open_notebook_id") or "")
-        if existing_open_id:
-            return {
-                "status": "ready",
-                "provider": "open_notebook",
-                "notebook_id": existing_open_id,
-                "learnforge_notebook_id": learnforge_notebook_id,
-                "external_id": notebook_external_key(student_id, course_id, learnforge_notebook_id),
-                "embed_url": notebook_embed_url(existing_open_id),
-                "data": notebook,
-            }
-
         health = await self.status()
-        external_id = notebook_external_key(student_id, course_id, learnforge_notebook_id)
         if health["status"] != "ready":
+            external_id = notebook_external_key(student_id, course_id, learnforge_notebook_id)
             return {**health, "notebook_id": external_id, "learnforge_notebook_id": learnforge_notebook_id, "embed_url": notebook_embed_url(external_id)}
 
+        existing_open_id = str(notebook.get("open_notebook_id") or "")
+        if existing_open_id:
+            existing = await self._get_json("/api/notebooks")
+            existing_data = existing.get("data")
+            if isinstance(existing_data, list) and any(str(item.get("id") or "") == existing_open_id for item in existing_data if isinstance(item, dict)):
+                return {
+                    "status": "ready",
+                    "provider": "open_notebook",
+                    "notebook_id": existing_open_id,
+                    "learnforge_notebook_id": learnforge_notebook_id,
+                    "external_id": notebook_external_key(student_id, course_id, learnforge_notebook_id),
+                    "embed_url": notebook_embed_url(existing_open_id),
+                    "api_path": existing.get("path"),
+                    "data": notebook,
+                }
+            store.set_notebook_open_notebook_id(learnforge_notebook_id, "", "not_synced")
+
+        external_id = notebook_external_key(student_id, course_id, learnforge_notebook_id)
         notebook_name = f"LearnForge {notebook.get('title') or learnforge_notebook_id} ({external_id})"
         existing = await self._get_json("/api/notebooks")
         existing_data = existing.get("data")
@@ -301,6 +342,70 @@ class OpenNotebookBridge:
         if not notebook:
             raise ValueError("notebook_not_found")
         return notebook
+
+    async def repair_notebook_sources(self, *, student_id: str, course_id: str, learnforge_notebook_id: str) -> None:
+        store = get_store()
+        for source in store.list_notebook_sources(learnforge_notebook_id, student_id=student_id, course_id=course_id):
+            await self._repair_source_if_needed(source, student_id=student_id, course_id=course_id, learnforge_notebook_id=learnforge_notebook_id)
+
+    async def _repair_source_if_needed(
+        self,
+        source: dict[str, Any],
+        *,
+        student_id: str,
+        course_id: str,
+        learnforge_notebook_id: str,
+    ) -> None:
+        source_id = str(source.get("source_id") or source.get("id") or "")
+        if not source_id or str(source.get("parser") or "") != "notebooklm_file":
+            return
+        store = get_store()
+        chunks = store.list_document_chunks(course_id, source_id)
+        if any(not is_binary_like_source_text(chunk.get("content")) for chunk in chunks):
+            return
+        metadata = source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
+        artifact_id = str(metadata.get("artifact_id") or "").strip()
+        object_key = str(metadata.get("object_key") or "").strip()
+        if not object_key and artifact_id:
+            artifact = store.get_artifact(artifact_id) if hasattr(store, "get_artifact") else None
+            if artifact:
+                object_key = str(artifact.get("object_key") or "")
+        if not object_key:
+            return
+        try:
+            raw, content_type = ObjectStorage().get_bytes(object_key)
+        except Exception:
+            return
+        parsed = await parse_profile_upload(
+            data=raw,
+            filename=str(metadata.get("filename") or source.get("title") or "notebooklm-source"),
+            mime_type=str(source.get("mime_type") or content_type or "application/octet-stream"),
+            source_type="document",
+        )
+        text = str(parsed.get("extracted_text") or parsed.get("raw_text") or "").strip()
+        chunks = [chunk for chunk in _compact_chunks(text) if not is_binary_like_source_text(chunk)]
+        parser_status = str(parsed.get("parser_status") or ("parsed" if chunks else "blocked_parser_limited"))
+        store.save_course_document_from_chunks(
+            course_id=course_id,
+            title=str(source.get("title") or parsed.get("title") or "NotebookLM 来源"),
+            chunks=chunks,
+            file_url=source.get("file_url"),
+            parser="notebooklm_file",
+            document_id=source_id,
+            ingest_type=str(source.get("ingest_type") or "file_upload"),
+            owner_scope=str(source.get("owner_scope") or "user"),
+            owner_id=str(source.get("owner_id") or student_id),
+            source_scope=str(source.get("source_scope") or "personal_notebook"),
+            mime_type=source.get("mime_type"),
+            upload_status="ready" if chunks else parser_status,
+            metadata={
+                **metadata,
+                "repair_status": "reparsed" if chunks else "blocked_parser_limited",
+                "parser_status": parser_status,
+                "parser_reason": parsed.get("parser_reason"),
+                "learnforge_notebook_id": learnforge_notebook_id,
+            },
+        )
 
     async def ingest_text_source(
         self,
@@ -525,6 +630,7 @@ class OpenNotebookBridge:
             return {**bootstrap, "synced": [], "blocked": True}
         open_notebook_id = str(bootstrap.get("notebook_id") or "")
         store = get_store()
+        await self.repair_notebook_sources(student_id=student_id, course_id=course_id, learnforge_notebook_id=learnforge_notebook_id)
         sources = store.list_notebook_sources(learnforge_notebook_id, student_id=student_id, course_id=course_id)
         synced: list[dict[str, Any]] = []
         blocked: list[dict[str, Any]] = []
@@ -534,7 +640,8 @@ class OpenNotebookBridge:
                 synced.append({"document_id": source_id, "title": source.get("title"), "chunk_count": source.get("chunk_count", 0), "result": {"status": "ready", "path": "cached", "data": {"id": source.get("open_notebook_source_id")}}})
                 continue
             chunks = store.list_document_chunks(course_id, source_id)
-            content = "\n\n".join(str(chunk.get("content") or "") for chunk in chunks).strip()
+            usable_chunks = [chunk for chunk in chunks if not is_binary_like_source_text(chunk.get("content"))]
+            content = "\n\n".join(str(chunk.get("content") or "") for chunk in usable_chunks).strip()
             title = source.get("title") or source_id
             if str(source.get("ingest_type") or "").lower() == "link" and source.get("original_url"):
                 payload = {
@@ -576,7 +683,7 @@ class OpenNotebookBridge:
             item = {
                 "document_id": source_id,
                 "title": title,
-                "chunk_count": len(chunks),
+                "chunk_count": len(usable_chunks),
                 "ingest_type": source.get("ingest_type"),
                 "source_scope": source.get("source_scope"),
                 "result": result,
@@ -635,7 +742,7 @@ class OpenNotebookBridge:
                 chunks = []
             for idx, ch in enumerate(chunks, 1):
                 content = str(ch.get("content") or "")
-                if not content:
+                if not content or is_binary_like_source_text(content):
                     continue
                 lowered = content.lower()
                 hits = sum(1 for term in terms if term in lowered)
@@ -673,6 +780,8 @@ class OpenNotebookBridge:
         if bootstrap["status"] != "ready":
             return {**bootstrap, "chunks": [], "citations": [], "query": query, "answer": None}
         notebook_id = str(bootstrap.get("notebook_id") or notebook_key(student_id, course_id))
+        if learnforge_notebook_id:
+            await self.repair_notebook_sources(student_id=student_id, course_id=course_id, learnforge_notebook_id=learnforge_notebook_id)
         payload = {
             "query": query,
             "type": "text",
@@ -698,6 +807,13 @@ class OpenNotebookBridge:
         data = result.get("data") if isinstance(result.get("data"), dict) else {}
         chunks = data.get("chunks") or data.get("results") or data.get("items") or []
         citations = data.get("citations") or data.get("source_refs") or []
+        if isinstance(chunks, list):
+            chunks = [
+                chunk for chunk in chunks
+                if not (isinstance(chunk, dict) and is_binary_like_source_text(chunk.get("snippet") or chunk.get("content") or chunk.get("text")))
+            ]
+        if isinstance(citations, list):
+            citations = [ref for ref in citations if isinstance(ref, dict) and _usable_source_ref(ref)]
         if not citations and isinstance(chunks, list):
             citations = [
                 {
@@ -736,6 +852,12 @@ class OpenNotebookBridge:
                     }
                     for c in local
                 ]
+        has_real_content = any(
+            str(c.get("snippet") or c.get("content") or c.get("text") or "").strip()
+            for c in chunks if isinstance(c, dict)
+        )
+        if not has_real_content:
+            citations = []
         return {
             "status": "ready",
             "provider": "open_notebook",

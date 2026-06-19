@@ -37,7 +37,7 @@ ACTIONS_BY_APP_TYPE = {
     "video.script": [{"label": "查看分镜", "action": "video_script.view"}, {"label": "让导师解说", "action": "tutor.explain"}],
     "video.player": [{"label": "切换视频", "action": "video.select"}, {"label": "让导师总结视频", "action": "tutor.explain"}],
     "notes.session": [{"label": "保存笔记", "action": "notes.save"}, {"label": "让导师总结", "action": "tutor.explain"}],
-    "notebooklm.workspace": [{"label": "同步来源", "action": "notebooklm.sources.sync"}, {"label": "用来源问 Hermes", "action": "notebooklm.ask_hermes"}],
+    "notebooklm.workspace": [{"label": "同步来源", "action": "notebooklm.sources.sync"}, {"label": "引用到对话", "action": "notebooklm.ask_hermes"}],
 }
 
 
