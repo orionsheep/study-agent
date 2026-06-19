@@ -174,12 +174,16 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
   });
 
   const handleItemClick = (item: LibraryItem) => {
-    // A directory library (e.g. 考试考纲) is treated as a single aggregated word
-    // source — we go straight into the words view rather than drilling into the
-    // raw CSV files inside it. The backend aggregates the directory's CSVs.
     setCurrentPath(item.path);
     setCurrentLibraryName(item.name.replace('.csv', ''));
-    setViewMode('words');
+    if (item.type === 'directory') {
+      // 目录：进入下一层，展示目录内容（点「考试考纲」→ 列出 14 个考纲 csv：
+      // 初中/高中/CET4/CET6/考研/托福/SAT，各顺序+乱序）。
+      setViewMode('libraries');
+    } else {
+      // 文件（csv）：进入该词库的单词视图。
+      setViewMode('words');
+    }
     setSelectedGroupIndex(-1);
   };
 
