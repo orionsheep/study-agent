@@ -391,7 +391,12 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
             // The hit area must be comfortably grabbable even after zoomToFit shrinks a
             // large (100+ node) graph. A 4px radius becomes sub-pixel when zoomed out,
             // making peripheral nodes effectively unclickable — hence the generous size.
-            const size = node.level === 0 ? 14 : (node.level === 1 ? 10 : 8);
+            // 命中区用固定「屏幕像素」（除以当前 zoom 抵消缩放）。旧实现用固定 graph
+            // 单位(14/10/8)，zoomToFit 把大图缩到 zoom≈0.5 时命中半径只剩 4-7px，
+            // 鼠标几乎点不中节点——这正是"图里的节点点不到"的根因。
+            const zoom = (typeof fgRef.current?.zoom === 'function' && fgRef.current.zoom()) || 1;
+            const screenPx = node.level === 0 ? 32 : (node.level === 1 ? 22 : 16);
+            const size = screenPx / zoom;
             ctx.fillStyle = color;
             ctx.beginPath();
             ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false);
