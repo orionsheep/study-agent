@@ -127,16 +127,15 @@ async def libraries(
 ) -> Any:
     """Get libraries (system file system + user libraries).
 
-    Only directories are surfaced to the workspace — the individual CSV files inside
-    考试考纲 are an implementation detail; the workspace treats the directory as a
-    single library and lists its aggregated words directly.
+    透传 EFW 文件系统条目（directory + csv file），让工作区能逐层浏览：
+    根目录看到「考试考纲」目录，点进去看到 14 个考纲 csv（初中/高中/CET4/CET6/考研/托福/SAT，
+    各顺序+乱序），再点某个 csv 进入单词列表。旧实现只返回 directory、过滤掉 csv，
+    导致点进「考试考纲」后是空的。
     """
     try:
         data = await get_libraries(student_id, path)
         items = data if isinstance(data, list) else data.get("libraries", [])
-        # Keep directories only; drop the raw .csv file entries.
-        dirs = [it for it in items if it.get("type") == "directory"]
-        return dirs
+        return items
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"EFW backend error: {e}")
 
