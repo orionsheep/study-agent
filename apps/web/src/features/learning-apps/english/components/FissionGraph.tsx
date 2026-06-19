@@ -37,7 +37,7 @@ const defaultGraphSettings: GraphSettings = {
   level2Size: 0.6,
   level1FontSize: 12,
   level2FontSize: 9,
-  chargeStrength: -4000,
+  chargeStrength: -400,
   level1LinkDistance: 180,
   level2LinkDistance: 100,
   collisionRadius: 40,
@@ -77,6 +77,9 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       try {
         const res = await fetch(`/api/english/fission?word=${encodeURIComponent(word)}`);
         const graphData = await res.json();
+        // 中心词（level 0）钉在 graph 原点 (0,0)，辐射图围绕画布中心展开。
+        // 在数据进入 force-graph 前就设 fx/fy，确保 simulation 不会把它推开。
+        graphData.nodes?.forEach((n: any) => { if (n.level === 0) { n.fx = 0; n.fy = 0; n.x = 0; n.y = 0; } });
         setData(graphData);
       } catch (error) {
         console.error('Failed to fetch graph data', error);
@@ -168,6 +171,12 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
   useEffect(() => {
     if (!fgRef.current || data.nodes.length === 0) return;
     try {
+      // 中心词（level 0）固定在 graph 原点 (0,0)，辐射图围绕画布中心展开。
+      // 旧实现只在 nodeCanvasObject 渲染时设 fx/fy（时机晚、易被 simulation 抖动），
+      // 这里在数据到位、reheat 前就钉住，确保中心词稳定位于 (0,0)。
+      data.nodes.forEach((n: any) => {
+        if (n.level === 0) { n.fx = 0; n.fy = 0; }
+      });
       const big = data.nodes.length > 60;
       const charge = fgRef.current.d3Force("charge");
       if (charge) charge.strength(big ? -120 : -200);
@@ -195,6 +204,12 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
             fgRef.current.zoom(1.2, 500);
           } else {
             fgRef.current.zoomToFit(600, 60);
+            // zoomToFit 把整群节点 fit 进视口（视口中心 = 节点质心），但质心通常
+            // 不在 graph 原点，导致固定在 (0,0) 的中心词偏离画布中心。fit 完成后
+            // 强制把视口中心对齐 graph 原点，让中心词回到正中。
+            setTimeout(() => {
+              try { fgRef.current?.centerAt(0, 0, 300); } catch { /* instance torn down */ }
+            }, 700);
           }
         } catch {
           // fgRef may briefly point at a tearing-down instance; ignore.
@@ -208,7 +223,9 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
   useEffect(() => {
     if (fgRef.current) {
       fgRef.current.d3Force('charge')?.strength(settings.chargeStrength);
-      fgRef.current.d3Force('center')?.strength(0.05);
+      // center force 保持默认强度（1.0），把节点拉回 (0,0)=画布中心；
+      // 旧值 0.05 太弱，节点被电荷推到左下角、整体偏移。
+      fgRef.current.d3Force('center')?.strength(1.0);
       fgRef.current.d3Force('link')?.distance((link: any) => {
         if (link.target.level === 1) return settings.level1LinkDistance;
         return settings.level2LinkDistance;
@@ -221,11 +238,9 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       }).strength(1.0).iterations(8));
 
       fgRef.current.d3ReheatSimulation();
-      setTimeout(() => {
-        if (fgRef.current && data.nodes.length > 0) {
-          fgRef.current.zoomToFit(400, 80);
-        }
-      }, 300);
+      // 不在这里 zoomToFit：它和 [data,dimensions] effect 的 fit+centerAt(0,0) 序列
+      // 打架（两个 zoomToFit 时序重叠），会让固定在原点的中心词偏离画布中心。
+      // 视口 fit/居中统一交给上面的 [data, dimensions] effect。
     }
   }, [settings.chargeStrength, settings.level1LinkDistance, settings.level2LinkDistance, settings.collisionRadius]);
 
