@@ -18,7 +18,7 @@ import {
   Podcast,
   Plus,
   RefreshCw,
-  Send,
+  MessageSquarePlus,
   Sparkles,
   TextCursorInput,
   TriangleAlert,
@@ -71,6 +71,18 @@ function statusLabel(status?: string) {
   if (status === "not_synced") return "未同步";
   if (status.startsWith("blocked")) return "来源服务不可用";
   return status;
+}
+
+// 单条来源的同步/上传状态：只在异常时显示中文提示，正常（ready/parsed）不裸露技术词。
+// 避免把 "ready"/"source" 这种英文技术状态直接展示给用户。
+function sourceMetaStatus(status?: string): string | null {
+  if (!status) return null;
+  const value = String(status).toLowerCase();
+  if (value === "ready" || value === "parsed" || value === "synced" || value === "ok") return null;
+  if (value.startsWith("blocked")) return "来源未就绪";
+  if (value === "not_synced") return "未同步";
+  if (value === "pending" || value === "processing") return "同步中";
+  return null;
 }
 
 function sourceLabel(source: SourceCard | null) {
@@ -376,6 +388,7 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
 
   const grouped = GROUPS.map((group) => ({ ...group, items: notebooks.filter(group.match) })).filter((group) => group.items.length);
   const selectedRefs = selectedSource?.refs ?? [];
+  const selectedMetaStatus = sourceMetaStatus(selectedSource?.sync_status || selectedSource?.upload_status);
   const runHermesAction = (prompt?: string, kind?: string) => {
     setGenerateMenuOpen(false);
     askHermes(prompt, kind).catch(() => undefined);
@@ -450,7 +463,7 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
             >
               <FileText size={15} />
               <span>{source.title}</span>
-              <small>{source.refs.length} refs</small>
+              {source.refs.length > 0 ? <small>{source.refs.length} 条引用</small> : null}
             </button>
           ))}
           {!sources.length && !loading ? (
@@ -493,7 +506,7 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
               {syncing ? <Loader2 className="spin" size={15} /> : <RefreshCw size={15} />}
             </button>
             <button className="nblm-compact-btn nblm-ask-btn" onClick={() => runHermesAction()} disabled={!selectedNotebook}>
-              <Send size={14} />
+              <MessageSquarePlus size={14} />
               <span>引用到对话</span>
             </button>
             <div className="nblm-menu-wrap">
@@ -587,7 +600,7 @@ export function NotebookLMWorkspaceApp({ app, onEvent, sessionContext }: Props) 
               <p>{selectedSource?.summary || "当前来源还没有可引用文本。可以重新同步，或上传可解析的文本/PDF 后再向右侧 Hermes 提问。"}</p>
               <div className="nblm-source-meta">
                 <span>{sourceLabel(selectedSource)}</span>
-                <span>{selectedSource?.sync_status || selectedSource?.upload_status || "source"}</span>
+                {selectedMetaStatus ? <span>{selectedMetaStatus}</span> : null}
                 {selectedSource?.original_url ? <span>{selectedSource.original_url}</span> : null}
               </div>
               {message ? <small>{message}</small> : null}
