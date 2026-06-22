@@ -1276,3 +1276,79 @@ html:not(.dark) .fission-graph-container > div:last-child {
   filter: invert(1) hue-rotate(180deg);
 }
 
+
+/* =====================================================================
+   Ultimate Light Mode Overrides for English Workspace
+   This forces the component to abandon its dark inline styles in light mode,
+   ensuring perfect readability without touching the complex React code.
+   ===================================================================== */
+html:not(.dark) .english-workspace,
+html:not(.dark) .english-workspace > div,
+html:not(.dark) .english-workspace [style*="background: var(--ew-bg-main)"],
+html:not(.dark) .english-workspace [style*="background: var(--ew-bg-panel)"] {
+  background: var(--bg-1) !important;
+  color: var(--text-1) !important;
+}
+
+html:not(.dark) .english-workspace [style*="background: rgba(23, 23, 23"],
+html:not(.dark) .english-workspace [style*="background: rgba(10, 10, 10"] {
+  background: var(--glass-1) !important;
+}
+
+/* Force Text Colors */
+html:not(.dark) .english-workspace [style*="color: var(--ew-text-1)"],
+html:not(.dark) .english-workspace [style*="color: #ffffff"],
+html:not(.dark) .english-workspace [style*="color: #fff"] {
+  color: var(--text-1) !important;
+}
+
+html:not(.dark) .english-workspace [style*="color: var(--ew-text-2)"],
+html:not(.dark) .english-workspace [style*="color: #d4d4d4"] {
+  color: var(--text-2) !important;
+}
+
+html:not(.dark) .english-workspace [style*="color: var(--ew-text-3)"],
+html:not(.dark) .english-workspace [style*="color: #a3a3a3"],
+html:not(.dark) .english-workspace [style*="color: #737373"] {
+  color: var(--text-3) !important;
+}
+
+/* Borders */
+html:not(.dark) .english-workspace [style*="border"],
+html:not(.dark) .english-workspace [style*="border-color"] {
+  border-color: var(--border) !important;
+}
+
+/* WordDetail specific fixes */
+html:not(.dark) .english-workspace h1,
+html:not(.dark) .english-workspace h2,
+html:not(.dark) .english-workspace h3,
+html:not(.dark) .english-workspace strong {
+  color: var(--text-1) !important;
+}
+
+/* Make sure the force-graph container is fully visible */
+html:not(.dark) .fission-graph-container {
+  background: var(--bg-0) !important;
+  /* Apply an invert filter to the canvas to make dark nodes dark on white bg */
+  filter: invert(1) hue-rotate(180deg) brightness(1.1);
+}
+/* Re-invert any tooltips inside the graph container so they don't look weird */
+html:not(.dark) .fission-graph-container > div:not(.force-graph-container) {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Fix Inputs and Placeholders */
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-3) !important;
+  opacity: 1;
+}
+
+/* Fix inactive tabs */
+.segmented button {
+  color: var(--text-2) !important;
+}
+.segmented button.active {
+  color: var(--bg-0) !important;
+}

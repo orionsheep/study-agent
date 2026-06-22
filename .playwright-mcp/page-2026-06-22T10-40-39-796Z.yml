@@ -1,0 +1,14 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - img "LearnForge" [ref=e6]
+    - generic [ref=e7]: LearnForge V2
+    - heading "建立你的学习画像" [level=1] [ref=e8]
+    - paragraph [ref=e9]: 登录后先通过资料上传和简短问答生成个人画像，再进入空间学习画布。
+  - generic [ref=e10]:
+    - generic [ref=e11]:
+      - button "注册" [ref=e12] [cursor=pointer]
+      - button "登录" [ref=e13] [cursor=pointer]
+    - textbox "昵称" [ref=e14]
+    - textbox "邮箱" [ref=e15]
+    - textbox "密码，至少 6 位" [ref=e16]
+    - button "创建账号" [disabled] [ref=e17]
