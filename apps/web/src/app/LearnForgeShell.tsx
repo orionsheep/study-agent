@@ -61,7 +61,7 @@ function notebookLMContextLabel(context: NotebookLMContext): string {
 }
 
 export function LearnForgeShell({ sessionContext, onLogout }: Props) {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, glassEnabled, toggleTheme, toggleGlass } = useTheme();
   const [apps, setApps] = useState<CanvasApp[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSnapshot | undefined>();
   const [shellMessages, setShellMessages] = useState<ChatMessage[]>([
@@ -669,6 +669,8 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
         learningObjective={learningFocus.objective}
         theme={theme}
         onToggleTheme={toggleTheme}
+        glassEnabled={glassEnabled}
+        onToggleGlass={toggleGlass}
       />
       <main
         ref={shellRef}

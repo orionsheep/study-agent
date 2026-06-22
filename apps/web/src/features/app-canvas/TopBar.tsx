@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Brain, ChevronDown, Cpu, Download, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Sun, User } from "lucide-react";
+import { Brain, ChevronDown, Cpu, Download, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Sun, User, Droplets, Droplet } from "lucide-react";
 import type { TraceItem } from "../../lib/events/agentEvents";
 import { logoutAccount } from "../../lib/api/client";
 import type { ThemeMode } from "../../lib/state/useTheme";
@@ -14,11 +14,13 @@ type Props = {
   learningObjective?: string;
   theme: ThemeMode;
   onToggleTheme: () => void;
+  glassEnabled: boolean;
+  onToggleGlass: () => void;
   onToggleCanvas?: () => void;
   onLogout?: () => void;
 };
 
-export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, currentTopic, courseLabel, learningObjective, theme, onToggleTheme, onToggleCanvas, onLogout }: Props) {
+export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, currentTopic, courseLabel, learningObjective, theme, onToggleTheme, glassEnabled, onToggleGlass, onToggleCanvas, onLogout }: Props) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -122,6 +124,16 @@ export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, c
         onClick={onToggleTheme}
       >
         {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+      </button>
+
+      
+      <button
+        className="theme-toggle"
+        title={glassEnabled ? "关闭毛玻璃效果 (使用纯色背景)" : "开启毛玻璃效果 (液态玻璃质感)"}
+        aria-label={glassEnabled ? "关闭毛玻璃效果" : "开启毛玻璃效果"}
+        onClick={onToggleGlass}
+      >
+        {glassEnabled ? <Droplets size={16} /> : <Droplet size={16} />}
       </button>
 
       <button className="btn btn-icon" title="导出">
