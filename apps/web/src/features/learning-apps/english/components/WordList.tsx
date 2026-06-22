@@ -223,9 +223,9 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
 
   const getProgressColor = (score: number | undefined) => {
     if (score === undefined) return 'var(--text-3)';
-    if (score >= 2) return '#22c55e';
-    if (score === 1) return '#eab308';
-    return '#ef4444';
+    if (score >= 2) return 'var(--st-done)';
+    if (score === 1) return 'var(--st-weak)';
+    return 'var(--st-risk)';
   };
 
   const renderCollinsStars = (collins: string | undefined) => {
@@ -235,7 +235,7 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginLeft: 8 }} title={`柯林斯星级: ${stars}`}>
         {[...Array(stars)].map((_, i) => (
-          <svg key={i} style={{ width: 12, height: 12, color: '#eab308', fill: 'currentColor' }} viewBox="0 0 24 24">
+          <svg key={i} style={{ width: 12, height: 12, color: 'var(--st-weak)', fill: 'currentColor' }} viewBox="0 0 24 24">
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
           </svg>
         ))}
@@ -256,7 +256,7 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
             <button
               onClick={handleBackToLibraries}
               style={{ padding: 8, color: 'var(--text-3)', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 8, transition: 'all 0.15s' }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--bg-0)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--bg-0)'; e.currentTarget.style.background = 'var(--ew-bg-hover)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-3)'; e.currentTarget.style.background = 'none'; }}
               title="返回"
             >
@@ -273,7 +273,7 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
               style={{
                 width: '100%',
                 background: 'var(--bg-2)',
-                color: '#e5e5e5',
+                color: 'var(--ew-text-1)',
                 paddingLeft: 36,
                 paddingRight: 16,
                 paddingTop: 8,
@@ -314,7 +314,7 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
                 borderRadius: 4,
                 border: 'none',
                 cursor: 'pointer',
-                background: isSelectMode ? 'rgba(37, 99, 235, 0.2)' : 'transparent',
+                background: isSelectMode ? 'var(--ew-accent-bg)' : 'transparent',
                 color: isSelectMode ? 'var(--text-1)' : 'var(--text-faint)',
                 transition: 'all 0.15s',
               }}
@@ -383,10 +383,10 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 14, color: 'var(--text-faint)' }}>
             {/* Indeterminate progress bar — gives immediate visual feedback while the
                 word list loads from the backend (7508 words can take a moment). */}
-            <div style={{ width: '70%', height: 4, borderRadius: 999, background: '#1a1a1a', overflow: 'hidden' }}>
+            <div style={{ width: '70%', height: 4, borderRadius: 999, background: 'var(--ew-border)', overflow: 'hidden' }}>
               <div style={{
                 height: '100%', width: '40%', borderRadius: 999,
-                background: 'linear-gradient(90deg, var(--text-1), #8b5cf6)',
+                background: 'var(--ew-accent)',
                 animation: 'lf-wordload 1.1s ease-in-out infinite',
               }} />
             </div>
@@ -427,16 +427,16 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
                   {item.type === 'directory' ? (
                     <Folder size={16} style={{ color: 'var(--text-1)' }} />
                   ) : (
-                    <svg width={16} height={16} style={{ color: item.source === 'user' ? '#a855f7' : '#22c55e' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg width={16} height={16} style={{ color: item.source === 'user' ? 'var(--ew-accent)' : 'var(--st-done)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   )}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 14, fontWeight: 500, color: '#e5e5e5' }}>{item.name.replace('.csv', '')}</span>
+                    <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--ew-text-1)' }}>{item.name.replace('.csv', '')}</span>
                     {item.source === 'user' && (
-                      <span style={{ fontSize: 10, padding: '2px 6px', background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', borderRadius: 4 }}>我的库</span>
+                      <span style={{ fontSize: 10, padding: '2px 6px', background: 'var(--ew-accent-bg)', color: 'var(--ew-text-2)', borderRadius: 4 }}>我的库</span>
                     )}
                   </div>
                   <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
@@ -548,7 +548,7 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
                         {renderCollinsStars(collins)}
                       </div>
                       {showChinese && definition && (
-                        <span style={{ fontSize: 12, color: '#525252', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+                        <span style={{ fontSize: 12, color: 'var(--ew-text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
                           {definition}
                         </span>
                       )}

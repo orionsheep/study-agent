@@ -136,7 +136,7 @@ export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
             >
               <ChevronLeft size={14} /> 返回工作区
             </button>
-            <span style={{ fontSize: 13, color: '#d4d4d4', fontWeight: 500 }}>
+            <span style={{ fontSize: 13, color: 'var(--ew-text-2)', fontWeight: 500 }}>
               {selectedWord ? `测验 · ${selectedWord}` : '单词测验'}
             </span>
           </div>
@@ -213,7 +213,7 @@ function DashboardMode({
                   <PanelLeftOpen size={16} />
                 </button>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'rgba(23,23,23,0.6)', borderRadius: 8, padding: 2, border: '1px solid var(--glass-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'var(--ew-bg-active)', borderRadius: 8, padding: 2, border: '1px solid var(--glass-border)' }}>
                 <button onClick={onBack} disabled={!canBack} style={navArrowStyle(canBack)} title="上一个">
                   <ChevronLeft size={16} />
                 </button>
@@ -251,7 +251,7 @@ function DashboardMode({
         {/* Radial vignette, matching the original dashboard right column */}
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
-          background: 'radial-gradient(ellipse at center, rgba(38,38,38,0.2) 0%, #000 70%)',
+          background: 'radial-gradient(ellipse at center, rgba(38,38,38,0.2) 0%, var(--ew-bg-main) 70%)',
         }} />
         <div style={{ position: 'absolute', inset: 0 }}>
           <FissionGraph word={selectedWord} onNodeClick={onSelectWord} mode="dashboard" />
@@ -531,7 +531,7 @@ function DraggableWindow({
           height: 44, flexShrink: 0, cursor: 'grab', userSelect: 'none',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '0 12px', borderBottom: '1px solid rgba(255,255,255,0.06)',
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.05), transparent)',
+          background: 'linear-gradient(180deg, var(--ew-bg-hover), transparent)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -598,13 +598,13 @@ const resizeHandleStyle: React.CSSProperties = {
 
 const navBtnStyle: React.CSSProperties = {
   padding: 6, borderRadius: 8, border: 'none', cursor: 'pointer',
-  background: 'transparent', color: '#737373', display: 'flex', alignItems: 'center',
+  background: 'transparent', color: 'var(--ew-text-faint)', display: 'flex', alignItems: 'center',
   transition: 'color 0.15s, background 0.15s',
 };
 
 const navArrowStyle = (enabled: boolean): React.CSSProperties => ({
   padding: 4, borderRadius: 6, border: 'none', cursor: enabled ? 'pointer' : 'not-allowed',
-  background: 'transparent', color: enabled ? 'var(--text-3)' : '#404040',
+  background: 'transparent', color: enabled ? 'var(--text-3)' : 'var(--ew-border-hi)',
   display: 'flex', alignItems: 'center', transition: 'color 0.15s, background 0.15s',
 });
 
@@ -612,7 +612,7 @@ const navArrowStyle = (enabled: boolean): React.CSSProperties => ({
 // action look: compact, muted, hover-brightens.
 const footerBtnStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
-  borderRadius: 8, border: '1px solid var(--glass-border)', background: 'rgba(23,23,23,0.6)',
+  borderRadius: 8, border: '1px solid var(--glass-border)', background: 'var(--ew-bg-active)',
   color: 'var(--text-3)', fontSize: 12, cursor: 'pointer', transition: 'color 0.15s, background 0.15s',
 };
 

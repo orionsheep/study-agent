@@ -415,7 +415,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>连接含义</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
-            '#a1a1aa', '#71717a', '#52525b', '#3f3f46', '#27272a', '#18181b', '#09090b', '#000000',
+            '#a1a1aa', '#71717a', '#52525b', '#3f3f46', '#27272a', '#18181b', '#09090b', 'var(--ew-bg-main)000',
           ].map((color, index) => {
             const meaningNum = (index + 1).toString();
             const definition = data.definitions?.[meaningNum];
@@ -486,7 +486,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
           }}
           linkColor="color"
           linkWidth={1.5}
-          backgroundColor="#000000"
+          backgroundColor="var(--ew-bg-main)000"
           d3VelocityDecay={0.15}
           // Scale the simulation cooldown to the graph size: a 29-node graph (hello)
           // settles quickly, but a 100+ node graph (world) needs many more ticks to
@@ -550,8 +550,8 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
               ctx.arc(x, y, node.val * 3 * pulse, 0, 2 * Math.PI);
               ctx.fill();
 
-              ctx.fillStyle = '#ffffff';
-              ctx.shadowColor = '#ffffff';
+              ctx.fillStyle = 'var(--ew-text-1)';
+              ctx.shadowColor = 'var(--ew-text-1)';
               ctx.shadowBlur = 15 * pulse;
               ctx.beginPath();
               ctx.arc(x, y, node.val * 0.8 * scale, 0, 2 * Math.PI);
@@ -570,7 +570,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
               const glowSize = isLevel1 ? 4.0 : 2.5;
 
               const gradient = ctx.createRadialGradient(x, y, 0, x, y, node.val * glowSize * scale * sizeMultiplier);
-              const nodeColor = node.color || '#fff';
+              const nodeColor = node.color || 'var(--ew-text-1)';
               gradient.addColorStop(0, nodeColor);
               gradient.addColorStop(1, 'rgba(0,0,0,0)');
               ctx.globalAlpha = brightness * (isHovered || isNeighbor ? 1.2 : 1);
@@ -584,7 +584,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
               ctx.arc(x, y, node.val * 0.9 * scale * sizeMultiplier, 0, 2 * Math.PI);
               ctx.fill();
 
-              ctx.fillStyle = '#fff';
+              ctx.fillStyle = 'var(--ew-text-1)';
               ctx.beginPath();
               ctx.arc(x, y, node.val * 0.35 * scale * sizeMultiplier, 0, 2 * Math.PI);
               ctx.fill();
@@ -640,7 +640,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
                 );
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillStyle = '#ffffff';
+                ctx.fillStyle = 'var(--ew-text-1)';
                 ctx.fillText(nodeName, layout.labelX, layout.labelY);
               }
             });
@@ -670,7 +670,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       {hoveredNode && (
         <div ref={tooltipRef} style={{ position: 'absolute', pointerEvents: 'none', zIndex: 50, left: 0, top: 0 }}>
           <div style={{ background: 'var(--glass-bg)', backdropFilter: 'blur(12px)', border: '1px solid var(--glass-border)', borderRadius: 8, padding: '8px 12px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', maxWidth: 240 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 4 }}>{hoveredNode.name}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ew-text-1)', marginBottom: 4 }}>{hoveredNode.name}</div>
             {hoveredNode.phonetic && (
               <div style={{ fontSize: 12, color: 'var(--text-3)', fontFamily: 'monospace', marginBottom: 4 }}>/{hoveredNode.phonetic}/</div>
             )}
@@ -693,7 +693,7 @@ function ControlButton({ onClick, title, active, children }: { onClick: () => vo
       style={{
         padding: 8,
         background: active ? '#2563eb' : 'rgba(23, 23, 23, 0.8)',
-        color: '#fff',
+        color: 'var(--ew-text-1)',
         borderRadius: 8,
         border: '1px solid var(--glass-border)',
         cursor: 'pointer',
@@ -742,7 +742,7 @@ function SliderControl({ label, value, min, max, step, unit, onChange, onCommit 
           height: 4,
           borderRadius: 4,
           appearance: 'none',
-          background: '#404040',
+          background: 'var(--ew-border-hi)',
           cursor: 'pointer',
           outline: 'none',
         }}

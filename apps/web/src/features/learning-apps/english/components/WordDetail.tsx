@@ -214,7 +214,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginLeft: 8 }} title={`柯林斯星级: ${stars}`}>
         {[...Array(stars)].map((_, i) => (
-          <svg key={i} style={{ width: 14, height: 14, color: '#eab308', fill: 'currentColor' }} viewBox="0 0 24 24">
+          <svg key={i} style={{ width: 14, height: 14, color: 'var(--st-weak)', fill: 'currentColor' }} viewBox="0 0 24 24">
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
           </svg>
         ))}
@@ -249,7 +249,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
         display: 'flex',
         flexDirection: 'column',
         background: 'var(--bg-1)',
-        color: '#e5e5e5',
+        color: 'var(--ew-text-1)',
       }}
     >
       {/* Header with Word Title */}
@@ -277,7 +277,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                 transition: 'all 0.15s',
               }}
               title="美式发音 (J)"
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--glass-border)'; e.currentTarget.style.color = '#60a5fa'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--glass-border)'; e.currentTarget.style.color = 'var(--ew-accent)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--glass-border)'; e.currentTarget.style.color = 'var(--text-3)'; }}
             >
               <span style={{ fontWeight: 700 }}>US</span>
@@ -324,7 +324,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
               {renderCollinsStars(chineseData.collins)}
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-              <div style={{ flex: 1, fontSize: 18, color: '#d4d4d4', fontWeight: 500 }}>
+              <div style={{ flex: 1, fontSize: 18, color: 'var(--ew-text-2)', fontWeight: 500 }}>
                 {chineseData.concise_definition}
               </div>
               <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -410,7 +410,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                       e.stopPropagation();
                     }}
                     style={{
-                      color: '#60a5fa',
+                      color: 'var(--ew-accent)',
                       background: 'transparent',
                       border: 0,
                       padding: 0,
@@ -429,10 +429,10 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                   <span {...props} style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, margin: '0 4px' }} />
                 ),
                 p: (props) => (
-                  <div {...props} style={{ marginBottom: 8, color: '#d4d4d4', lineHeight: 1.75 }} />
+                  <div {...props} style={{ marginBottom: 8, color: 'var(--ew-text-2)', lineHeight: 1.75 }} />
                 ),
                 strong: (props) => (
-                  <strong {...props} style={{ color: '#fef08a', fontWeight: 700 }} />
+                  <strong {...props} style={{ color: 'var(--st-weak)', fontWeight: 700 }} />
                 ),
                 em: (props) => (
                   <em {...props} style={{ color: 'var(--text-3)' }} />
@@ -467,7 +467,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                   <span style={{ color: 'var(--text-faint)', fontSize: 11, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', marginRight: 8 }}>
                     {key}
                   </span>
-                  <span style={{ color: '#e5e5e5', fontWeight: 500 }}>{value}</span>
+                  <span style={{ color: 'var(--ew-text-1)', fontWeight: 500 }}>{value}</span>
                 </div>
               ))}
             </div>
@@ -478,7 +478,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
         {chineseData?.definitions && chineseData.definitions.length > 0 && (
           <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 24, marginBottom: 32 }}>
             <h3 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-1)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 4, height: 24, background: '#3b82f6', borderRadius: 4 }} />
+              <span style={{ width: 4, height: 24, background: 'var(--ew-accent)', borderRadius: 4 }} />
               详细释义
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -510,11 +510,11 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div>
-                      <p style={{ color: '#e5e5e5', margin: '0 0 4px' }}>{def.explanation_en}</p>
+                      <p style={{ color: 'var(--ew-text-1)', margin: '0 0 4px' }}>{def.explanation_en}</p>
                       <p style={{ color: 'var(--text-faint)', fontSize: 14, margin: 0 }}>{def.explanation_cn}</p>
                     </div>
                     <div style={{ paddingLeft: 12, borderLeft: '2px solid var(--glass-border-hi)' }}>
-                      <p style={{ color: '#d4d4d4', fontStyle: 'italic', margin: '0 0 4px' }}>"{def.example_en}"</p>
+                      <p style={{ color: 'var(--ew-text-2)', fontStyle: 'italic', margin: '0 0 4px' }}>"{def.example_en}"</p>
                       <p style={{ color: 'var(--text-faint)', fontSize: 14, margin: 0 }}>{def.example_cn}</p>
                     </div>
                   </div>
@@ -528,7 +528,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
         {chineseData?.comparison && chineseData.comparison.length > 0 && (
           <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 24, marginBottom: 32 }}>
             <h3 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-1)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 4, height: 24, background: '#a855f7', borderRadius: 4 }} />
+              <span style={{ width: 4, height: 24, background: 'var(--ew-accent)', borderRadius: 4 }} />
               近义词辨析
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -543,10 +543,10 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-                    <span style={{ color: '#c084fc', fontWeight: 700, fontSize: 18 }}>{comp.word_to_compare}</span>
+                    <span style={{ color: 'var(--ew-accent)', fontWeight: 700, fontSize: 18 }}>{comp.word_to_compare}</span>
                     <span style={{ color: 'var(--text-faint)', fontSize: 14 }}>vs {word}</span>
                   </div>
-                  <p style={{ color: '#d4d4d4', lineHeight: 1.7, fontSize: 14, margin: 0 }}>{comp.analysis}</p>
+                  <p style={{ color: 'var(--ew-text-2)', lineHeight: 1.7, fontSize: 14, margin: 0 }}>{comp.analysis}</p>
                 </div>
               ))}
             </div>
@@ -556,7 +556,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
         {/* Notes Section */}
         <div ref={notesRef} style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 24, paddingBottom: 32 }}>
           <h3 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-1)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 4, height: 24, background: '#f97316', borderRadius: 4 }} />
+            <span style={{ width: 4, height: 24, background: 'var(--st-weak)', borderRadius: 4 }} />
             笔记
           </h3>
           {myNotes.length > 0 ? (
@@ -571,10 +571,10 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                     borderRadius: 8,
                   }}
                 >
-                  <p style={{ fontSize: 14, color: '#d4d4d4', lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: 0 }}>
+                  <p style={{ fontSize: 14, color: 'var(--ew-text-2)', lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: 0 }}>
                     {note.content}
                   </p>
-                  <p style={{ fontSize: 12, color: '#525252', marginTop: 8 }}>
+                  <p style={{ fontSize: 12, color: 'var(--ew-text-3)', marginTop: 8 }}>
                     {new Date(note.createdAt).toLocaleDateString('zh-CN')}
                   </p>
                 </div>

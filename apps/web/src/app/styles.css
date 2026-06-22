@@ -1128,3 +1128,38 @@ button:active:not(:disabled) {
   overflow: hidden;
   background: transparent;
 }
+
+/* ===== English Workspace Local Theme ===== */
+/* Light Mode (Liquid Glass / Clean B/W) */
+.english-workspace {
+  --ew-bg-main: transparent;
+  --ew-bg-panel: var(--glass-1);
+  --ew-bg-header: transparent;
+  --ew-bg-hover: var(--glass-2);
+  --ew-bg-active: var(--glass-3);
+  --ew-border: var(--glass-border);
+  --ew-border-hi: var(--glass-border-hi);
+  --ew-text-1: var(--text-1);
+  --ew-text-2: var(--text-2);
+  --ew-text-3: var(--text-3);
+  --ew-text-faint: var(--text-faint);
+  --ew-accent: var(--text-1);
+  --ew-accent-bg: var(--glass-2);
+}
+
+/* Dark Mode (100% Original Deep Dark Colors) */
+.dark .english-workspace {
+  --ew-bg-main: #000000;
+  --ew-bg-panel: #0a0a0a;
+  --ew-bg-header: #0a0a0a;
+  --ew-bg-hover: rgba(255, 255, 255, 0.05);
+  --ew-bg-active: rgba(23, 23, 23, 0.6);
+  --ew-border: #262626;
+  --ew-border-hi: #404040;
+  --ew-text-1: #ffffff;
+  --ew-text-2: #d4d4d4;
+  --ew-text-3: #a3a3a3;
+  --ew-text-faint: #737373;
+  --ew-accent: #3b82f6;
+  --ew-accent-bg: rgba(37, 99, 235, 0.2);
+}
