@@ -9,7 +9,10 @@ import pytest
 
 
 TEST_DATA_DIR = Path(tempfile.mkdtemp(prefix="learnforge-api-tests-"))
-os.environ["DATABASE_URL"] = os.environ.get("LEARNFORGE_TEST_DATABASE_URL", f"sqlite:///{TEST_DATA_DIR / 'learnforge_test.sqlite'}")
+os.environ["DATABASE_URL"] = os.environ.get(
+    "LEARNFORGE_TEST_DATABASE_URL",
+    "postgresql://learnforge:learnforge@127.0.0.1:5432/learnforge",
+)
 
 from app.hermes_runtime.task_executor import HermesTaskResult
 

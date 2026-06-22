@@ -45,7 +45,7 @@ class Settings:
     app_env: str = _env("APP_ENV", "development")
     api_host: str = _env("API_HOST", "127.0.0.1")
     api_port: int = int(_env("API_PORT", "8000"))
-    database_url: str = _env("DATABASE_URL", "sqlite:///.data/learnforge_dev.sqlite")
+    database_url: str = _env("DATABASE_URL", "postgresql://learnforge:learnforge@localhost:5432/learnforge")
     redis_url: str = _env("REDIS_URL", "redis://localhost:6379/0")
     model_provider: str = _env("MODEL_PROVIDER", "gemini")
     gemini_api_key: str = _env("GEMINI_API_KEY", "")
@@ -105,14 +105,7 @@ class Settings:
 
     @property
     def sqlite_path(self) -> Path:
-        if self.database_url.startswith("sqlite:///"):
-            raw = self.database_url.replace("sqlite:///", "", 1)
-            path = Path(raw)
-            if not path.is_absolute():
-                path = self.project_root / path
-            path.parent.mkdir(parents=True, exist_ok=True)
-            return path
-        return self.data_dir / "learnforge_dev.sqlite"
+        raise RuntimeError("SQLite runtime has been retired. Configure DATABASE_URL with a PostgreSQL URL.")
 
 
 @lru_cache

@@ -16,6 +16,8 @@ from app.schemas.app_protocol import (
     DashboardSnapshot,
     EduMemoryItem,
     LearningResource,
+    QuizQuestion,
+    QuizSubmission,
     VerifierResult,
     new_id,
     utc_now,
@@ -29,6 +31,31 @@ def _require_psycopg():
     except Exception as exc:  # pragma: no cover - only used in Postgres runtime.
         raise RuntimeError("Postgres runtime requires installing services/api[postgres].") from exc
     return psycopg, dict_row
+
+
+def _iso(value: Any) -> str | None:
+    """Normalize a DB timestamp/str to an ISO-8601 string.
+
+    PostgreSQL returns ``timestamp without time zone`` columns as Python
+    ``datetime`` objects; SQLite (and the legacy code path) stored them as
+    ISO strings. Most pydantic models in this project declare ``created_at``
+    as ``str``, so a raw ``datetime`` trips validation. This helper converts
+    either form to a plain string, appending a ``Z`` when the value carries
+    no timezone marker (matching the legacy SQLite format).
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    # datetime → ISO string. naive datetimes get a trailing 'Z' to match the
+    # legacy "2026-06-04T10:02:10Z" format the frontend expects.
+    try:
+        iso = value.isoformat()
+    except (AttributeError, ValueError):
+        return str(value)
+    if "+" not in iso and not iso.endswith("Z"):
+        iso = iso + "Z"
+    return iso
 
 
 class PostgresLearningStore:
@@ -383,7 +410,7 @@ class PostgresLearningStore:
                         action=link_row["action"],
                         anchor_text=link_row.get("anchor_text"),
                         source_run_id=link_row.get("source_run_id"),
-                        created_at=link_row["created_at"],
+                        created_at=_iso(link_row["created_at"]),
                     ).model_dump()
                     links_by_message.setdefault(target_message_id, []).append(link)
             for row in rows:
@@ -487,13 +514,13 @@ class PostgresLearningStore:
             evidence_type=row["evidence_type"],
             source_event_id=row.get("source_event_id"),
             source_agent=row.get("source_agent"),
-            valid_from=str(row["valid_from"]).replace("+00:00", "Z"),
-            valid_until=str(row["valid_until"]) if row.get("valid_until") else None,
+            valid_from=_iso(row["valid_from"]),
+            valid_until=_iso(row["valid_until"]),
             embedding=row.get("embedding"),
             tags=list(row.get("tags") or []),
             version=row["version"],
-            created_at=str(row["created_at"]).replace("+00:00", "Z"),
-            updated_at=str(row["updated_at"]).replace("+00:00", "Z"),
+            created_at=_iso(row["created_at"]),
+            updated_at=_iso(row["updated_at"]),
         )
         item.effective_confidence = item.confidence
         return item
@@ -1053,7 +1080,7 @@ class PostgresLearningStore:
         layout = row.get("layout") if isinstance(row.get("layout"), dict) else loads(row.get("layout"), {})
         payload = row.get("payload") if isinstance(row.get("payload"), dict) else loads(row.get("payload"), {})
         actions = payload.pop("_actions", []) if isinstance(payload, dict) else []
-        return CanvasApp(app_id=row["id"], app_type=row["app_type"], title=row["title"], icon=row.get("icon"), status=row["status"], render_mode=row["render_mode"], state=row["state"], position=CanvasPosition(**layout.get("position", {"x": 0, "y": 0})), size=CanvasSize(**layout.get("size", {"width": 320, "height": 220})), z_index=layout.get("z_index", 1), group_id=layout.get("group_id"), payload=payload, source={"resource_id": row.get("resource_id"), "conversation_id": row.get("conversation_id"), "student_id": row.get("student_id"), "course_id": layout.get("course_id")}, source_refs=row.get("source_refs") or [], personalized_reason=row.get("personalized_reason"), actions=actions, created_at=str(row["created_at"]), updated_at=str(row["updated_at"]))
+        return CanvasApp(app_id=row["id"], app_type=row["app_type"], title=row["title"], icon=row.get("icon"), status=row["status"], render_mode=row["render_mode"], state=row["state"], position=CanvasPosition(**layout.get("position", {"x": 0, "y": 0})), size=CanvasSize(**layout.get("size", {"width": 320, "height": 220})), z_index=layout.get("z_index", 1), group_id=layout.get("group_id"), payload=payload, source={"resource_id": row.get("resource_id"), "conversation_id": row.get("conversation_id"), "student_id": row.get("student_id"), "course_id": layout.get("course_id")}, source_refs=row.get("source_refs") or [], personalized_reason=row.get("personalized_reason"), actions=actions, created_at=_iso(row["created_at"]), updated_at=_iso(row["updated_at"]))
 
     def list_apps(self, student_id: str = "demo-student", course_id: str | None = None, conversation_id: str | None = None) -> list[CanvasApp]:
         where = ["student_id=%s"]
@@ -1090,7 +1117,7 @@ class PostgresLearningStore:
             "course_id": row.get("course_id"),
             "conversation_id": row.get("conversation_id"),
             "metadata": row.get("metadata_json") or {},
-            "created_at": str(row["created_at"]),
+            "created_at": _iso(row["created_at"]),
         }
 
     def save_artifact(
@@ -1220,8 +1247,153 @@ class PostgresLearningStore:
             app.group_id = patch["group_id"]
         return self.save_app(app, student_id=student_id or str(app.source.get("student_id")), course_id=course_id or str(app.source.get("course_id")))
 
+    def create_run(self, student_id: str, task_type: str, input_json: dict[str, Any]) -> str:
+        run_id = new_id("run")
+        now = utc_now()
+        self.execute(
+            """
+            INSERT INTO agent_runs(id, student_id, task_type, input_json, output_json, status, model_name, latency_ms, created_at, updated_at)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (run_id, student_id, task_type, dumps(input_json or {}), dumps({}), "running", None, 0, now, now),
+        )
+        return run_id
+
+    def add_step(
+        self,
+        run_id: str,
+        order: int,
+        name: str,
+        input_json: dict[str, Any] | None = None,
+        output_json: dict[str, Any] | None = None,
+        status: str = "completed",
+    ) -> str:
+        step_id = new_id("step")
+        self.execute(
+            """
+            INSERT INTO agent_steps(id, run_id, step_order, agent_or_skill, input_json, output_json, status, latency_ms, error_message, created_at)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (step_id, run_id, order, name, dumps(input_json or {}), dumps(output_json or {}), status, 0, None, utc_now()),
+        )
+        return step_id
+
+    def finish_run(self, run_id: str, output_json: dict[str, Any], status: str = "completed") -> None:
+        self.execute(
+            "UPDATE agent_runs SET output_json=%s, status=%s, updated_at=%s WHERE id=%s",
+            (dumps(output_json or {}), status, utc_now(), run_id),
+        )
+
+    def get_run(self, run_id: str) -> dict[str, Any] | None:
+        row = self.fetchone("SELECT * FROM agent_runs WHERE id=%s", (run_id,))
+        if not row:
+            return None
+        steps = self.fetchall("SELECT * FROM agent_steps WHERE run_id=%s ORDER BY step_order", (run_id,))
+        return {
+            "run_id": row["id"],
+            "student_id": row["student_id"],
+            "task_type": row["task_type"],
+            "input_json": row.get("input_json") if isinstance(row.get("input_json"), dict) else loads(row.get("input_json"), {}),
+            "output_json": row.get("output_json") if isinstance(row.get("output_json"), dict) else loads(row.get("output_json"), {}),
+            "status": row["status"],
+            "model_name": row.get("model_name"),
+            "latency_ms": row.get("latency_ms") or 0,
+            "created_at": _iso(row["created_at"]),
+            "updated_at": _iso(row["updated_at"]),
+            "steps": [
+                {
+                    **dict(step),
+                    "input_json": step.get("input_json") if isinstance(step.get("input_json"), dict) else loads(step.get("input_json"), {}),
+                    "output_json": step.get("output_json") if isinstance(step.get("output_json"), dict) else loads(step.get("output_json"), {}),
+                    "created_at": _iso(step["created_at"]),
+                }
+                for step in steps
+            ],
+        }
+
     def recent_runs(self, limit: int = 5) -> list[dict[str, Any]]:
-        return []
+        rows = self.fetchall("SELECT * FROM agent_runs ORDER BY updated_at DESC LIMIT %s", (limit,))
+        return [
+            {
+                "run_id": row["id"],
+                "task_type": row["task_type"],
+                "status": row["status"],
+                "created_at": _iso(row["created_at"]),
+            }
+            for row in rows
+        ]
+
+    def save_quiz_question(self, question: QuizQuestion, resource_id: str | None = None) -> QuizQuestion:
+        self.execute(
+            """
+            INSERT INTO quiz_questions(id, resource_id, question_type, prompt, options, answer, explanation, knowledge_point_id, difficulty, misconception_tags, source_refs)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (id) DO UPDATE SET
+              resource_id=EXCLUDED.resource_id,
+              question_type=EXCLUDED.question_type,
+              prompt=EXCLUDED.prompt,
+              options=EXCLUDED.options,
+              answer=EXCLUDED.answer,
+              explanation=EXCLUDED.explanation,
+              knowledge_point_id=EXCLUDED.knowledge_point_id,
+              difficulty=EXCLUDED.difficulty,
+              misconception_tags=EXCLUDED.misconception_tags,
+              source_refs=EXCLUDED.source_refs
+            """,
+            (
+                question.question_id,
+                resource_id,
+                question.question_type,
+                question.prompt,
+                dumps(question.options),
+                dumps(question.answer),
+                question.explanation,
+                question.knowledge_point_id,
+                question.difficulty,
+                dumps(question.misconception_tags),
+                dumps(question.source_refs),
+            ),
+        )
+        return question
+
+    def get_quiz_question(self, question_id: str) -> QuizQuestion | None:
+        row = self.fetchone("SELECT * FROM quiz_questions WHERE id=%s", (question_id,))
+        if not row:
+            return None
+        return QuizQuestion(
+            question_id=row["id"],
+            question_type=row["question_type"],
+            prompt=row["prompt"],
+            options=row.get("options") if isinstance(row.get("options"), list) else loads(row.get("options"), []),
+            answer=row.get("answer") if not isinstance(row.get("answer"), str) else loads(row.get("answer"), row.get("answer")),
+            explanation=row.get("explanation") or "",
+            knowledge_point_id=row.get("knowledge_point_id"),
+            difficulty=row.get("difficulty") or "adaptive",
+            misconception_tags=row.get("misconception_tags") if isinstance(row.get("misconception_tags"), list) else loads(row.get("misconception_tags"), []),
+            source_refs=row.get("source_refs") if isinstance(row.get("source_refs"), list) else loads(row.get("source_refs"), []),
+        )
+
+    def save_quiz_submission(self, submission: QuizSubmission) -> QuizSubmission:
+        self.execute(
+            """
+            INSERT INTO quiz_submissions(id, student_id, question_id, answer, is_correct, evaluation, created_at)
+            VALUES(%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (id) DO UPDATE SET
+              answer=EXCLUDED.answer,
+              is_correct=EXCLUDED.is_correct,
+              evaluation=EXCLUDED.evaluation
+            """,
+            (
+                submission.submission_id,
+                submission.student_id,
+                submission.question_id,
+                dumps(submission.answer),
+                bool(submission.is_correct),
+                dumps(submission.evaluation),
+                submission.created_at,
+            ),
+        )
+        return submission
 
     def dashboard(self, student_id: str = "demo-student", course_id: str | None = None, conversation_id: str | None = None) -> DashboardSnapshot:
         profile = self.get_profile(student_id, course_id=course_id or "ai-course")
@@ -1235,7 +1407,7 @@ class PostgresLearningStore:
             weak_points = []
         else:
             weak_points = [str(raw_weak_points)]
-        return DashboardSnapshot(student_id=student_id, profile=profile, mastery=mastery, weak_points=weak_points, recommendations=[], memory_evidence=memories, recent_runs=[], path_progress=0, canvas_activity=[])
+        return DashboardSnapshot(student_id=student_id, profile=profile, mastery=mastery, weak_points=weak_points, recommendations=[], memory_evidence=memories, recent_runs=self.recent_runs(), path_progress=0, canvas_activity=[])
 
 
 def is_postgres_url(database_url: str) -> bool:

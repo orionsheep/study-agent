@@ -122,7 +122,7 @@ export function NativeAppRenderer({ app, dashboard, isFullscreen, onEvent, onFoc
       {app.app_type === "quiz.practice" ? <QuizPracticeApp app={app} onEvent={onEvent} sessionContext={sessionContext} /> : null}
       {app.app_type === "code.lab" ? <CodeLabApp app={app} /> : null}
       {app.app_type === "notes.session" ? <NotesApp app={app} onEvent={onEvent} /> : null}
-      {app.app_type === "dashboard.learning" ? <LearningDashboardApp dashboard={dashboard} isFullscreen={isFullscreen} /> : null}
+      {app.app_type === "dashboard.learning" ? <LearningDashboardApp dashboard={dashboard} isFullscreen={isFullscreen} sessionContext={sessionContext} /> : null}
       {app.app_type === "ppt.preview" ? <PPTPreviewApp app={app} /> : null}
       {app.app_type === "image.explanation" ? <ImageExplanationApp app={app} onEvent={onEvent} /> : null}
       {app.app_type === "video.script" ? <VideoScriptApp app={app} /> : null}
@@ -624,7 +624,7 @@ const RUN_LABELS: Record<string, string> = {
   quiz_evaluation: "测验评估",
 };
 
-function LearningDashboardApp({ dashboard, isFullscreen }: { dashboard?: DashboardSnapshot; isFullscreen?: boolean }) {
+function LearningDashboardApp({ dashboard, isFullscreen, sessionContext }: { dashboard?: DashboardSnapshot; isFullscreen?: boolean; sessionContext?: SessionContext }) {
   const evidence = dashboard?.memory_evidence ?? [];
   const mastery = dashboard?.mastery ?? {};
   const masteryEntries = Object.entries(mastery);
@@ -633,7 +633,64 @@ function LearningDashboardApp({ dashboard, isFullscreen }: { dashboard?: Dashboa
   const recentRuns = dashboard?.recent_runs ?? [];
   const weakPoints = dashboard?.weak_points ?? [];
 
+  // English-domain stats — pulled from the same EFW endpoints EnglishDashboard used.
+  // 以前这部分是一个独立模块内的 "英语学习仪表盘"，现在合并进系统级仪表盘，
+  // 让所有学习数据汇聚到一处，避免页面分散且重复。
+  const [englishStats, setEnglishStats] = useState<{
+    totalLibraries: number;
+    totalWords: number;
+    studiedWords: number;
+    libraries: Array<{ id: string; name: string; wordCount: number }>;
+    loading: boolean;
+    error: string | null;
+  }>({ totalLibraries: 0, totalWords: 0, studiedWords: 0, libraries: [], loading: true, error: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const libRes = await fetch("/api/english/libraries");
+        const libData = await libRes.json();
+        const libs: Array<{ id?: string; path?: string; name: string }> = Array.isArray(libData) ? libData : (libData.libraries ?? []);
+        let totalWords = 0;
+        const libsWithCounts = await Promise.all(
+          libs.slice(0, 12).map(async (lib) => {
+            try {
+              const libraryKey = lib.id ?? lib.path ?? lib.name;
+              if (!libraryKey) {
+                return { id: lib.name, name: lib.name, wordCount: 0 };
+              }
+              const wr = await fetch(`/api/english/words?library_id=${encodeURIComponent(libraryKey)}&limit=1`);
+              const wd = await wr.json();
+              const count = typeof wd.total === "number" ? wd.total : Array.isArray(wd) ? wd.length : 0;
+              totalWords += count;
+              return { id: libraryKey, name: lib.name, wordCount: count };
+            } catch {
+              const libraryKey = lib.id ?? lib.path ?? lib.name;
+              return { id: libraryKey, name: lib.name, wordCount: 0 };
+            }
+          })
+        );
+        if (cancelled) return;
+        setEnglishStats({
+          totalLibraries: libs.length,
+          totalWords,
+          studiedWords: libsWithCounts[0]?.wordCount ?? 0,
+          libraries: libsWithCounts,
+          loading: false,
+          error: null,
+        });
+      } catch (e) {
+        if (!cancelled) {
+          setEnglishStats((s) => ({ ...s, loading: false, error: e instanceof Error ? e.message : "加载失败" }));
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const masteryColor = (v: number) => (v >= 0.7 ? "var(--st-done)" : v >= 0.4 ? "var(--accent-blue)" : "var(--st-weak)");
+  const englishMasteryPct = englishStats.totalWords > 0 ? Math.min(100, Math.round((englishStats.studiedWords / englishStats.totalWords) * 100)) : 0;
 
   return (
     <div className={`learning-dashboard ${isFullscreen ? "is-fullscreen" : ""}`} data-testid="learning-dashboard-app">
@@ -643,6 +700,46 @@ function LearningDashboardApp({ dashboard, isFullscreen }: { dashboard?: Dashboa
         <div className="kpi"><span>平均掌握</span><strong>{avgMastery}%</strong><i className="kpi-bar"><b style={{ width: `${avgMastery}%`, background: masteryColor(avgMastery / 100) }} /></i></div>
         <div className="kpi"><span>记忆证据</span><strong>{evidence.length}</strong></div>
         <div className="kpi"><span>薄弱点</span><strong>{weakPoints.length}</strong></div>
+      </div>
+
+      {/* 英语学习统计 — 整合自原 EnglishDashboard */}
+      <div className="dash-section">
+        <h4 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Languages size={15} style={{ color: "var(--accent-amber, #f59e0b)" }} />
+          英语学习
+        </h4>
+        {englishStats.loading ? (
+          <p style={{ color: "var(--text-dim)", fontSize: 12 }}>加载英语学习数据…</p>
+        ) : englishStats.error ? (
+          <p style={{ color: "var(--st-weak)", fontSize: 12 }}>英语数据加载失败：{englishStats.error}</p>
+        ) : (
+          <>
+            <div className="dash-kpis" style={{ marginBottom: 12 }}>
+              <div className="kpi"><span>词库数量</span><strong>{englishStats.totalLibraries}</strong></div>
+              <div className="kpi"><span>单词总数</span><strong>{englishStats.totalWords}</strong></div>
+              <div className="kpi"><span>已学单词</span><strong>{englishStats.studiedWords}</strong></div>
+              <div className="kpi">
+                <span>掌握度</span>
+                <strong>{englishMasteryPct}%</strong>
+                <i className="kpi-bar"><b style={{ width: `${englishMasteryPct}%`, background: "linear-gradient(90deg, #3b82f6, #8b5cf6)" }} /></i>
+              </div>
+            </div>
+            {englishStats.libraries.length ? (
+              <div className="mastery-bars">
+                {englishStats.libraries.slice(0, isFullscreen ? 12 : 4).map((lib) => {
+                  const pct = englishStats.totalWords > 0 ? Math.round((lib.wordCount / englishStats.totalWords) * 100) : 0;
+                  return (
+                    <label key={lib.id}>
+                      <span title={lib.name}>{lib.name}</span>
+                      <i><b style={{ width: `${Math.max(3, pct)}%`, background: "#3b82f6" }} /></i>
+                      <small>{lib.wordCount} 词</small>
+                    </label>
+                  );
+                })}
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
 
       {/* Mastery map */}

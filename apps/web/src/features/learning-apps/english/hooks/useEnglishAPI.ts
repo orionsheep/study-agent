@@ -201,11 +201,12 @@ export function useLibraries() {
       .getLibraries()
       .then((res) => {
         if (cancelled) return;
+        const libraryItems = Array.isArray(res) ? res : (res.libraries ?? []);
         setLibraries(
-          (res.libraries ?? []).map((l) => ({
-            id: l.id,
+          libraryItems.map((l) => ({
+            id: l.id ?? ("path" in l ? l.path : undefined) ?? l.name,
             name: l.name,
-            wordCount: l.wordCount,
+            wordCount: l.wordCount ?? 0,
             description: l.description,
           }))
         );

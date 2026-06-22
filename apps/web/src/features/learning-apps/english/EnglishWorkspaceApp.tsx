@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { ChevronLeft, ChevronRight, PanelLeftOpen, MessageSquareText, Monitor, LayoutDashboard, X, Minimize2, BarChart3 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, PanelLeftOpen, MessageSquareText, Monitor, LayoutDashboard, X, Minimize2, BarChart3, BrainCircuit, Clock } from 'lucide-react';
 import type { CanvasApp } from '@learnforge/app-protocol';
 import type { SessionContext } from '../../../lib/api/client';
 import WordList from './components/WordList';
@@ -30,7 +30,7 @@ interface Props {
   sessionContext?: SessionContext;
 }
 
-type Mode = 'dashboard' | 'immersive' | 'stats';
+type Mode = 'dashboard' | 'immersive' | 'stats' | 'quiz';
 
 export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
   const [selectedWord, setSelectedWord] = useState<string | null>(
@@ -55,17 +55,19 @@ export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
   // Centralized word selection: updates UI state + history + bubbles up to the shell
   // so the right-side Hermes picks up the word as its english context.
   const handleSelectWord = useCallback((word: string) => {
-    const normalized = word.toLowerCase();
+    const normalized = String(word || '').trim().toLowerCase();
+    if (!normalized) return;
     setSelectedWord((prev) => {
       if (prev === normalized) return prev;
       setHistory((h) => {
-        const next = [...h.slice(0, currentIndex + 1), normalized];
+        const baseIndex = currentIndex >= 0 ? currentIndex : h.length - 1;
+        const next = [...h.slice(0, baseIndex + 1), normalized];
         setCurrentIndex(next.length - 1);
         return next;
       });
       return normalized;
     });
-    onEvent(app.app_id, 'english.word_select', { word: normalized });
+    void Promise.resolve(onEvent(app.app_id, 'english.word_select', { word: normalized })).catch(() => undefined);
   }, [app.app_id, onEvent, currentIndex]);
 
   const handleBack = useCallback(() => {
@@ -107,6 +109,7 @@ export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
           canForward={currentIndex < history.length - 1}
           onToggleMode={toggleMode}
           onOpenStats={() => setMode('stats')}
+          onOpenQuiz={() => setMode('quiz')}
         />
       ) : mode === 'stats' ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -121,6 +124,24 @@ export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <EnglishDashboard sessionContext={sessionContext} />
+          </div>
+        </div>
+      ) : mode === 'quiz' ? (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid #262626', background: '#0a0a0a' }}>
+            <button
+              onClick={() => setMode('dashboard')}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, background: 'transparent', color: '#a3a3a3' }}
+              title="返回单词工作区"
+            >
+              <ChevronLeft size={14} /> 返回工作区
+            </button>
+            <span style={{ fontSize: 13, color: '#d4d4d4', fontWeight: 500 }}>
+              {selectedWord ? `测验 · ${selectedWord}` : '单词测验'}
+            </span>
+          </div>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'auto', background: '#0a0a0a' }}>
+            <QuizPanel word={selectedWord} />
           </div>
         </div>
       ) : (
@@ -152,13 +173,15 @@ interface DashboardProps {
   canForward: boolean;
   onToggleMode: () => void;
   onOpenStats: () => void;
+  onOpenQuiz: () => void;
 }
 
 function DashboardMode({
-  selectedWord, isLeftSidebarOpen, onToggleSidebar, onOpenSidebar, onSelectWord, onBack, onForward, canBack, canForward, onToggleMode, onOpenStats,
+  selectedWord, isLeftSidebarOpen, onToggleSidebar, onOpenSidebar, onSelectWord, onBack, onForward, canBack, canForward, onToggleMode, onOpenStats, onOpenQuiz,
 }: DashboardProps) {
   return (
-    <PanelGroup direction="horizontal" style={{ height: '100%' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <PanelGroup direction="horizontal" style={{ flex: 1, minHeight: 0 }}>
       {/* Left column: Word List */}
       {isLeftSidebarOpen ? (
         <>
@@ -211,19 +234,6 @@ function DashboardMode({
                   右侧讨论：<strong style={{ color: '#fff', fontWeight: 600 }}>{selectedWord}</strong>
                 </span>
               ) : null}
-              <button
-                onClick={onOpenStats}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px',
-                  borderRadius: 8, border: '1px solid #262626', background: 'rgba(23,23,23,0.6)',
-                  color: '#a3a3a3', fontSize: 12, cursor: 'pointer', transition: 'color 0.15s',
-                }}
-                title="英语学习仪表盘"
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#c4b5fd'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = '#a3a3a3'; }}
-              >
-                <BarChart3 size={13} /> 统计
-              </button>
             </div>
           </div>
           {/* Word detail body — scrollable. WordDetail uses min-height so its content
@@ -253,6 +263,32 @@ function DashboardMode({
         </button>
       </Panel>
     </PanelGroup>
+
+    {/* Bottom toolbar — restores the original ThreeColumnLayout global footer actions:
+        stats, quiz, immersive. Keeps the english module self-contained (only the
+        tutor chat / agent is handled by the shell-level Hermes on the right). */}
+    <div style={{
+      flexShrink: 0, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '0 14px', borderTop: '1px solid #171717', background: '#0a0a0a',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <button onClick={onOpenStats} style={footerBtnStyle} title="英语学习统计">
+          <BarChart3 size={14} />
+          <span>统计</span>
+        </button>
+        <button onClick={onOpenQuiz} style={footerBtnStyle} title="单词测验">
+          <BrainCircuit size={14} />
+          <span>测验</span>
+        </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <button onClick={onToggleMode} style={footerBtnStyle} title="进入浸润模式">
+          <Monitor size={14} />
+          <span>Immersive</span>
+        </button>
+      </div>
+    </div>
+    </div>
   );
 }
 
@@ -571,6 +607,14 @@ const navArrowStyle = (enabled: boolean): React.CSSProperties => ({
   background: 'transparent', color: enabled ? '#a3a3a3' : '#404040',
   display: 'flex', alignItems: 'center', transition: 'color 0.15s, background 0.15s',
 });
+
+// Bottom toolbar button style — restores the original ThreeColumnLayout footer
+// action look: compact, muted, hover-brightens.
+const footerBtnStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
+  borderRadius: 8, border: '1px solid #262626', background: 'rgba(23,23,23,0.6)',
+  color: '#a3a3a3', fontSize: 12, cursor: 'pointer', transition: 'color 0.15s, background 0.15s',
+};
 
 // Immersive floating-window header button (minimize / close).
 const headerBtnStyle: React.CSSProperties = {

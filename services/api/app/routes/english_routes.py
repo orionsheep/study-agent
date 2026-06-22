@@ -60,6 +60,7 @@ async def fission_graph(
 @router.get("/words")
 async def word_list(
     library_id: str | None = None,
+    library_id_camel: str | None = Query(default=None, alias="libraryId"),
     search: str | None = Query(default=None),
     # The english-word-fission frontend historically sends `query` (not `search`),
     # and the ported WordList.tsx still does. Accept both so the search box actually
@@ -72,7 +73,8 @@ async def word_list(
     """Get word list."""
     try:
         effective_search = search or query
-        return await get_word_list(student_id, library_id, effective_search, limit, offset)
+        effective_library_id = library_id or library_id_camel
+        return await get_word_list(student_id, effective_library_id, effective_search, limit, offset)
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"EFW backend error: {e}")
 

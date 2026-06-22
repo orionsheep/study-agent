@@ -45,6 +45,38 @@ const defaultGraphSettings: GraphSettings = {
   showHoverTooltip: true,
 };
 
+function graphNodeWord(node: any): string {
+  return String(node?.name ?? node?.label ?? node?.word ?? node?.id ?? '').trim();
+}
+
+function visibleLabelLayout(node: any, globalScale: number, settings: GraphSettings, forceVisible = false) {
+  if (!node || !(forceVisible || node.level < 2 || globalScale > 1.2)) return null;
+  const nx = node.x ?? 0;
+  const ny = node.y ?? 0;
+  let labelOffsetMultiplier = 1.2;
+  if (node.level === 0) labelOffsetMultiplier = 1.5;
+  else if (node.level === 1) labelOffsetMultiplier = 1.4;
+
+  let fontSize = 12 / globalScale;
+  if (node.level === 0) fontSize = 16 / globalScale;
+  else if (node.level === 1) fontSize = settings.level1FontSize / globalScale;
+  else fontSize = settings.level2FontSize / globalScale;
+  const labelPadding = 4 / globalScale;
+
+  let labelX = nx;
+  let labelY = ny;
+  if (node.level === 0) {
+    labelY = ny + node.val * labelOffsetMultiplier + fontSize;
+  } else {
+    const angle = Math.atan2(ny, nx);
+    const distance = node.val * labelOffsetMultiplier + fontSize;
+    labelX = nx + Math.cos(angle) * distance;
+    labelY = ny + Math.sin(angle) * distance;
+  }
+
+  return { labelX, labelY, fontSize, labelPadding, nodeName: graphNodeWord(node) };
+}
+
 export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: FissionGraphProps) {
   const [data, setData] = useState<{ nodes: any[]; links: any[]; definitions?: Record<string, string> }>({ nodes: [], links: [] });
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -60,10 +92,18 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
   const containerRef = useRef<HTMLDivElement>(null);
   const fgRef = useRef<any>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const hoveredNodeRef = useRef<any>(null);
+  const graphRequestSeqRef = useRef(0);
 
   const resetToDefaults = () => {
     setUiSettings({ ...defaultGraphSettings });
     setSettings({ ...defaultGraphSettings });
+  };
+
+  const selectGraphNode = (node: any) => {
+    if (!node || (!showLevel2 && node.level === 2)) return;
+    const nextWord = graphNodeWord(node);
+    if (nextWord && onNodeClick) onNodeClick(nextWord);
   };
 
   useEffect(() => {
@@ -72,29 +112,45 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       return;
     }
 
+    const controller = new AbortController();
+    const requestSeq = ++graphRequestSeqRef.current;
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/english/fission?word=${encodeURIComponent(word)}`);
+        const res = await fetch(`/api/english/fission?word=${encodeURIComponent(word)}`, { signal: controller.signal });
         const graphData = await res.json();
+        if (requestSeq !== graphRequestSeqRef.current) return;
         // 中心词（level 0）钉在 graph 原点 (0,0)，辐射图围绕画布中心展开。
         // 在数据进入 force-graph 前就设 fx/fy，确保 simulation 不会把它推开。
         graphData.nodes?.forEach((n: any) => { if (n.level === 0) { n.fx = 0; n.fy = 0; n.x = 0; n.y = 0; } });
         setData(graphData);
       } catch (error) {
+        if (controller.signal.aborted) return;
         console.error('Failed to fetch graph data', error);
       } finally {
-        setTimeout(() => setIsLoading(false), 100);
+        if (requestSeq === graphRequestSeqRef.current) setTimeout(() => setIsLoading(false), 100);
       }
     };
 
     fetchData();
+    return () => controller.abort();
   }, [word, refreshKey]);
 
   useEffect(() => {
     const updateDimensions = () => {
       if (containerRef.current) {
-        const { width, height } = containerRef.current.getBoundingClientRect();
+        // Use offsetWidth/offsetHeight (CSS layout pixels) instead of
+        // getBoundingClientRect() (rendered pixels). When this component lives
+        // inside the native-app-layer — which carries a CSS transform:
+        // translate(..) scale(viewport.scale) — getBoundingClientRect returns
+        // the post-transform (screen) size, e.g. 310px for a 500px panel at
+        // scale 0.62. ForceGraph2D would then render at 310px while the panel
+        // is 500px, so the canvas only covers part of the container and node
+        // hit-detection breaks (clicks land outside the canvas's coordinate
+        // space). offsetWidth/offsetHeight always report pre-transform CSS
+        // pixels, so the graph fills the panel correctly at any viewport scale.
+        const width = containerRef.current.offsetWidth;
+        const height = containerRef.current.offsetHeight;
         if (width > 0 && height > 0) {
           setDimensions((prev) => (Math.round(prev.width) === Math.round(width) && Math.round(prev.height) === Math.round(height) ? prev : { width, height }));
         }
@@ -132,7 +188,9 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
     let lastW = 0, lastH = 0;
     const pollInterval = setInterval(() => {
       if (!containerRef.current) return;
-      const { width, height } = containerRef.current.getBoundingClientRect();
+      // Same offsetWidth/offsetHeight fix as updateDimensions — see comment there.
+      const width = containerRef.current.offsetWidth;
+      const height = containerRef.current.offsetHeight;
       if (width > 0 && height > 0) {
         if (Math.round(width) !== lastW || Math.round(height) !== lastH) {
           lastW = Math.round(width); lastH = Math.round(height);
@@ -273,7 +331,18 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
   }
 
   return (
-    <div ref={containerRef} className="fission-graph-container" style={{ position: 'absolute', inset: 0, background: '#000', overflow: 'hidden' }}>
+    <div
+      ref={containerRef}
+      className="fission-graph-container"
+      style={{ position: 'absolute', inset: 0, background: '#000', overflow: 'hidden' }}
+      onClickCapture={(event) => {
+        // react-force-graph can treat a tiny mouse movement as a drag and skip
+        // onNodeClick even though hover hit-testing correctly found a node.
+        // If the click landed on the graph canvas, use the current hovered node
+        // as a fallback so label clicks reliably navigate to the word detail.
+        if (event.target instanceof HTMLCanvasElement) selectGraphNode(hoveredNodeRef.current);
+      }}
+    >
       {/* Gradient Background */}
       <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, #0a0a0a 0%, #000 100%)', opacity: 0.6, pointerEvents: 'none' }} />
 
@@ -386,7 +455,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
           nodeLabel={() => ''}
           nodeColor="color"
           nodeVal={(node: any) => (node.level === 0 ? 12 : 4)}
-          nodePointerAreaPaint={(node: any, color, ctx) => {
+          nodePointerAreaPaint={(node: any, color, ctx, globalScale) => {
             if (!showLevel2 && node.level === 2) return;
             // The hit area must be comfortably grabbable even after zoomToFit shrinks a
             // large (100+ node) graph. A 4px radius becomes sub-pixel when zoomed out,
@@ -401,6 +470,19 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
             ctx.beginPath();
             ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false);
             ctx.fill();
+
+            const layout = visibleLabelLayout(node, globalScale || 1, settings);
+            if (layout?.nodeName) {
+              ctx.font = `${node.level === 0 ? 'bold ' : ''}${layout.fontSize}px "Inter", -apple-system, sans-serif`;
+              const textWidth = ctx.measureText(layout.nodeName).width;
+              const textHeight = layout.fontSize * 1.2;
+              ctx.fillRect(
+                layout.labelX - textWidth / 2 - layout.labelPadding - 6 / (globalScale || 1),
+                layout.labelY - textHeight / 2 - layout.labelPadding - 4 / (globalScale || 1),
+                textWidth + layout.labelPadding * 2 + 12 / (globalScale || 1),
+                textHeight + layout.labelPadding * 2 + 8 / (globalScale || 1),
+              );
+            }
           }}
           linkColor="color"
           linkWidth={1.5}
@@ -416,16 +498,17 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
           linkDirectionalParticleSpeed={0.003}
           onNodeHover={(node: any) => {
             if (!showLevel2 && node?.level === 2) {
+              hoveredNodeRef.current = null;
               setHoveredNode(null);
               if (containerRef.current) containerRef.current.style.cursor = 'default';
               return;
             }
+            hoveredNodeRef.current = node || null;
             setHoveredNode(node || null);
             if (containerRef.current) containerRef.current.style.cursor = node ? 'pointer' : 'default';
           }}
           onNodeClick={(node: any) => {
-            if (!showLevel2 && node?.level === 2) return;
-            if (onNodeClick) onNodeClick(node.id);
+            selectGraphNode(node);
           }}
           onNodeDrag={(node: any) => {
             if (!showLevel2 && node?.level === 2) return false;
@@ -529,58 +612,36 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
             // Draw labels
             data.nodes.forEach((node: any) => {
               if (!showLevel2 && node.level === 2) return;
-              const nx = node.x ?? 0;
-              const ny = node.y ?? 0;
               const isHovered = hoveredNode && hoveredNode.id === node.id;
 
               if (node.level < 2 || globalScale > 1.2 || isHovered) {
-                let labelOffsetMultiplier = 1.2;
-                if (node.level === 0) labelOffsetMultiplier = 1.5;
-                else if (node.level === 1) labelOffsetMultiplier = 1.4;
-                else labelOffsetMultiplier = 1.2;
-
-                let fontSize = 12 / globalScale;
-                if (node.level === 0) fontSize = 16 / globalScale;
-                else if (node.level === 1) fontSize = settings.level1FontSize / globalScale;
-                else fontSize = settings.level2FontSize / globalScale;
-                const labelPadding = 4 / globalScale;
-
-                let labelX = nx;
-                let labelY = ny;
-                if (node.level === 0) {
-                  labelY = ny + node.val * labelOffsetMultiplier + fontSize;
-                } else {
-                  const angle = Math.atan2(ny, nx);
-                  const distance = node.val * labelOffsetMultiplier + fontSize;
-                  labelX = nx + Math.cos(angle) * distance;
-                  labelY = ny + Math.sin(angle) * distance;
-                }
-
-                ctx.font = `${node.level === 0 ? 'bold ' : ''}${fontSize}px "Inter", -apple-system, sans-serif`;
-                const nodeName = node.name || '';
+                const layout = visibleLabelLayout(node, globalScale, settings, isHovered);
+                if (!layout?.nodeName) return;
+                ctx.font = `${node.level === 0 ? 'bold ' : ''}${layout.fontSize}px "Inter", -apple-system, sans-serif`;
+                const nodeName = layout.nodeName;
                 const textMetrics = ctx.measureText(nodeName);
                 const textWidth = textMetrics.width;
-                const textHeight = fontSize * 1.2;
+                const textHeight = layout.fontSize * 1.2;
 
                 ctx.fillStyle = 'rgba(0, 0, 0, 1)';
                 ctx.fillRect(
-                  labelX - textWidth / 2 - labelPadding,
-                  labelY - textHeight / 2 - labelPadding,
-                  textWidth + labelPadding * 2,
-                  textHeight + labelPadding * 2,
+                  layout.labelX - textWidth / 2 - layout.labelPadding,
+                  layout.labelY - textHeight / 2 - layout.labelPadding,
+                  textWidth + layout.labelPadding * 2,
+                  textHeight + layout.labelPadding * 2,
                 );
                 ctx.strokeStyle = node.level === 0 ? '#3b82f6' : 'rgba(255, 255, 255, 0.3)';
                 ctx.lineWidth = 1 / globalScale;
                 ctx.strokeRect(
-                  labelX - textWidth / 2 - labelPadding,
-                  labelY - textHeight / 2 - labelPadding,
-                  textWidth + labelPadding * 2,
-                  textHeight + labelPadding * 2,
+                  layout.labelX - textWidth / 2 - layout.labelPadding,
+                  layout.labelY - textHeight / 2 - layout.labelPadding,
+                  textWidth + layout.labelPadding * 2,
+                  textHeight + layout.labelPadding * 2,
                 );
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillStyle = '#ffffff';
-                ctx.fillText(nodeName, labelX, labelY);
+                ctx.fillText(nodeName, layout.labelX, layout.labelY);
               }
             });
 

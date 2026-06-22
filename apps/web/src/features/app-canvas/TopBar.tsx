@@ -1,5 +1,7 @@
-import { Brain, Cpu, Download, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Brain, ChevronDown, Cpu, Download, LogOut, PanelLeftClose, PanelLeftOpen, User } from "lucide-react";
 import type { TraceItem } from "../../lib/events/agentEvents";
+import { logoutAccount } from "../../lib/api/client";
 
 type Props = {
   isStreaming: boolean;
@@ -14,6 +16,35 @@ type Props = {
 };
 
 export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, currentTopic, courseLabel, learningObjective, onToggleCanvas, onLogout }: Props) {
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onPointerDown = (event: MouseEvent | PointerEvent) => {
+      if (!userMenuRef.current?.contains(event.target as Node)) setUserMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setUserMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [userMenuOpen]);
+
+  // 直接处理退出：清 token + 回调，即使后端 /api/auth/logout 报错也强制登出
+  const handleLogout = () => {
+    setUserMenuOpen(false);
+    console.log("[TopBar] 退出按钮被点击");
+    try { logoutAccount(); } catch (e) { console.warn("[TopBar] logoutAccount error", e); }
+    try { onLogout?.(); } catch (e) { console.warn("[TopBar] onLogout error", e); }
+    // 兜底：强制刷新页面回到登录页
+    setTimeout(() => { window.location.href = window.location.pathname; }, 300);
+  };
+
   return (
     <div className="topbar">
       <div className="brand">
@@ -44,6 +75,7 @@ export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, c
         <span className="crumb-val">{learningObjective || "与导师对话以设定学习目标"}</span>
       </div>
 
+      {/* spacer */}
       <div style={{ flex: 1 }} />
 
       {isStreaming ? (
@@ -84,17 +116,29 @@ export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, c
         <Download size={16} />
       </button>
 
-      {onLogout ? (
+      <div className="topbar-user-menu" ref={userMenuRef}>
         <button
-          className="btn btn-icon"
-          title="退出登录"
-          aria-label="退出登录"
-          onClick={onLogout}
-          style={{ marginLeft: 4 }}
+          type="button"
+          className={`topbar-avatar-button ${userMenuOpen ? "is-open" : ""}`}
+          onClick={() => setUserMenuOpen((open) => !open)}
+          aria-haspopup="menu"
+          aria-expanded={userMenuOpen}
+          title="账户菜单"
         >
-          <LogOut size={16} />
+          <span className="topbar-avatar-icon">
+            <User size={14} color="#fff" />
+          </span>
+          <ChevronDown size={12} />
         </button>
-      ) : null}
+        {userMenuOpen ? (
+          <div className="topbar-user-dropdown" role="menu">
+            <button type="button" role="menuitem" className="topbar-user-menu-item danger" onClick={handleLogout}>
+              <LogOut size={14} />
+              <span>退出登录</span>
+            </button>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

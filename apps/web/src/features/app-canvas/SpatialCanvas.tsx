@@ -303,10 +303,11 @@ function isFolderApp(app: CanvasApp) {
   return (app.app_type as string) === "resource.folder";
 }
 
-// Some workspace-class apps need native, transform-free coordinates for canvas
-// rendering. NotebookLM is a source workbench, so it stays inside canvas-world and
-// follows pan/zoom like any other learning window.
-const NATIVE_LAYER_APP_TYPES = new Set(["english.workspace", "english.dashboard"]);
+// Keep app windows in one stacking context. A previous native layer for English
+// workspaces sat below canvas-world when another window was focused, so clicks hit
+// the canvas instead of the workspace. Rendering all windows in canvas-world keeps
+// z-order, focus, and pointer hit-testing consistent.
+const NATIVE_LAYER_APP_TYPES = new Set<string>();
 function isNativeLayerAppType(appType: string): boolean {
   return NATIVE_LAYER_APP_TYPES.has(appType);
 }
@@ -501,6 +502,8 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
     window.removeEventListener("pointermove", onWindowInteractionMove);
     window.removeEventListener("pointerup", finishWindowInteraction);
     window.removeEventListener("pointercancel", finishWindowInteraction);
+    document.removeEventListener("pointerup", finishWindowInteraction, true);
+    document.removeEventListener("pointercancel", finishWindowInteraction, true);
     const app = appsRef.current.find((item) => item.app_id === interaction.appId);
     const frame = frameElementFor(interaction.appId);
     const nextPosition = interaction.kind === "app"
@@ -544,9 +547,9 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
 
   const startWindowInteraction = (event: ReactPointerEvent<HTMLElement>, app: CanvasApp, kind: "app" | "resize") => {
     if (isPinnedApp(app)) return;
+    if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
     const size = displaySizeForApp(app);
     const interaction: WindowInteraction = {
       kind,
@@ -573,7 +576,29 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
     window.addEventListener("pointermove", onWindowInteractionMove, { passive: false });
     window.addEventListener("pointerup", finishWindowInteraction);
     window.addEventListener("pointercancel", finishWindowInteraction);
+    document.addEventListener("pointerup", finishWindowInteraction, true);
+    document.addEventListener("pointercancel", finishWindowInteraction, true);
   };
+
+  useEffect(() => {
+    if (!drag) return;
+    const clearStaleDrag = () => {
+      if (windowInteractionRef.current) {
+        void finishWindowInteraction();
+      } else {
+        setDrag(null);
+      }
+    };
+    document.addEventListener("pointerup", clearStaleDrag, true);
+    document.addEventListener("pointercancel", clearStaleDrag, true);
+    window.addEventListener("blur", clearStaleDrag);
+    return () => {
+      document.removeEventListener("pointerup", clearStaleDrag, true);
+      document.removeEventListener("pointercancel", clearStaleDrag, true);
+      window.removeEventListener("blur", clearStaleDrag);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drag]);
 
   const onViewportPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
@@ -1218,7 +1243,13 @@ function AppWindow({ app, dimmed, isFullscreen, fixed, dashboard, onFocus, onDra
         </div>
       </header>
       )}
-      <div className="appwin-body">
+      <div
+        className="appwin-body"
+        onPointerDownCapture={(event) => {
+          event.stopPropagation();
+          onFocus();
+        }}
+      >
         <NativeAppRenderer app={app} dashboard={dashboard} isFullscreen={isFullscreen} onEvent={onAppEvent} onFocusApp={onFocusApp} onDashboardUpdate={onDashboardUpdate} sessionContext={sessionContext} />
       </div>
       {!isWorkspaceApp && (

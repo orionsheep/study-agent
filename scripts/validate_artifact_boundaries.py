@@ -9,7 +9,7 @@ from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "services/api"))
-os.environ.setdefault("DATABASE_URL", f"sqlite:///{ROOT / '.data' / 'artifact_boundaries.sqlite'}")
+os.environ.setdefault("DATABASE_URL", "postgresql://learnforge:learnforge@127.0.0.1:5432/learnforge")
 
 from app.agents.base import TutorTurnContext  # noqa: E402
 from app.agents.orchestrator_agent import OrchestratorAgent, UnifiedOrchestrator  # noqa: E402

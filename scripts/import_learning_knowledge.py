@@ -22,7 +22,7 @@ API_ROOT = PROJECT_ROOT / "services" / "api"
 sys.path.insert(0, str(API_ROOT))
 
 from app.core.config import get_settings  # noqa: E402
-from app.database.store import LearningStore, dumps, loads  # noqa: E402
+from app.database.store import dumps, get_store, loads  # noqa: E402
 from app.rag.embeddings import embed_text  # noqa: E402
 from app.schemas.app_protocol import (  # noqa: E402
     CanvasApp,
@@ -848,7 +848,7 @@ def main() -> None:
     parser.add_argument("--skip-embedding-backfill", action="store_true")
     args = parser.parse_args()
 
-    store = LearningStore()
+    store = get_store()
     math_resources = import_math(store, args.course_id, args.student_id)
     physics_result = import_physics(store, args.course_id, args.student_id, args.physics_pdf, args.max_ocr_pages, args.ocr_concurrency, retry_unverified=not args.no_retry_unverified)
     embedding_updates = 0 if args.skip_embedding_backfill else backfill_embeddings(store, args.course_id, args.embedding_backfill_limit)

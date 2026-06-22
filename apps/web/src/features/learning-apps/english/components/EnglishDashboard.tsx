@@ -10,7 +10,8 @@ import { Library, BookOpen, TrendingUp, Flame, Target, Award, Calendar } from 'l
 // surfaced through clearly-marked "接通中" placeholders until that proxy is wired.
 
 interface LibraryInfo {
-  id: string;
+  id?: string;
+  path?: string;
   name: string;
   type: string;
   wordCount?: number;
@@ -44,7 +45,11 @@ export function EnglishDashboard({}: Props) {
       const libsWithCounts = await Promise.all(
         libs.slice(0, 12).map(async (lib) => {
           try {
-            const wr = await fetch(`/api/english/words?library_id=${encodeURIComponent(lib.id)}&limit=1&include_count=true`);
+            const libraryKey = lib.id ?? lib.path ?? lib.name;
+            if (!libraryKey) {
+              return { ...lib, wordCount: 0 };
+            }
+            const wr = await fetch(`/api/english/words?library_id=${encodeURIComponent(libraryKey)}&limit=1`);
             const wd = await wr.json();
             const count = typeof wd.total === 'number' ? wd.total : Array.isArray(wd) ? wd.length : 0;
             totalWords += count;

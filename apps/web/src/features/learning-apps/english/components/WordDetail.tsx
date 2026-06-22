@@ -39,6 +39,12 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
   const [myNotes, setMyNotes] = useState<{ id: string; content: string; createdAt: string }[]>([]);
   const notesRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const requestSeqRef = useRef(0);
+  const onWordClickRef = useRef(onWordClick);
+
+  useEffect(() => {
+    onWordClickRef.current = onWordClick;
+  }, [onWordClick]);
 
   // Fetch user's own notes for this word
   const fetchMyNotes = useCallback(async () => {
@@ -48,9 +54,12 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
       if (res.ok) {
         const data = await res.json();
         setMyNotes(data || []);
+      } else {
+        setMyNotes([]);
       }
     } catch (error) {
       console.error('Failed to fetch notes:', error);
+      setMyNotes([]);
     }
   }, [word]);
 
@@ -65,12 +74,18 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
       return;
     }
 
+    const controller = new AbortController();
+    const requestSeq = ++requestSeqRef.current;
     const fetchDetail = async () => {
       setLoading(true);
+      setContent(null);
+      setChineseData(null);
       try {
-        const res = await fetch(`/api/english/words/${encodeURIComponent(word)}`);
+        const res = await fetch(`/api/english/words/${encodeURIComponent(word)}`, { signal: controller.signal });
+        if (requestSeq !== requestSeqRef.current) return;
         if (res.ok) {
           const data = await res.json();
+          if (requestSeq !== requestSeqRef.current) return;
           // Process Markdown content
           let processed = data.content || '';
           processed = processed.replace(/\[\[(.*?)\]\]/g, (_: string, p1: string) => {
@@ -83,14 +98,16 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
           setChineseData(null);
         }
       } catch (error) {
+        if (controller.signal.aborted) return;
         console.error('Failed to fetch detail', error);
         setContent('# 加载出错');
       } finally {
-        setLoading(false);
+        if (requestSeq === requestSeqRef.current) setLoading(false);
       }
     };
 
     fetchDetail();
+    return () => controller.abort();
   }, [word]);
 
   // Keyboard shortcuts
@@ -116,16 +133,51 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [word, onNextWord, onPrevWord]);
 
-  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    const href = e.currentTarget.getAttribute('href');
-    if (href && href.startsWith('#')) {
-      e.preventDefault();
-      const targetWord = href.substring(1);
-      if (onWordClick) {
-        onWordClick(targetWord);
-      }
-    }
+  const selectLinkedWord = (target: EventTarget & HTMLElement) => {
+    const href = target.getAttribute('data-href') || target.getAttribute('href') || '';
+    const text = target.textContent || '';
+    const rawTarget = href.startsWith('#')
+      ? href.substring(1)
+      : href.startsWith('/')
+        ? href.split('/').filter(Boolean).pop() || ''
+        : href && !/^https?:\/\//i.test(href)
+          ? href
+          : text;
+    const targetWord = decodeURIComponent(rawTarget).replace(/^#/, '').trim().replace(/[，,.;；:：]+$/g, '');
+    if (!targetWord) return false;
+    onWordClickRef.current?.(targetWord);
+    return true;
   };
+
+  const handleLinkClick = (e: React.MouseEvent<HTMLElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    selectLinkedWord(e.currentTarget);
+  };
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const handleNativeLinkClick = (event: MouseEvent | PointerEvent) => {
+      const rawTarget = event.target;
+      const targetElement = rawTarget instanceof Element ? rawTarget : rawTarget instanceof Node ? rawTarget.parentElement : null;
+      const link = targetElement?.closest<HTMLElement>('[data-word-link="true"]');
+      if (!link) return;
+      event.preventDefault();
+      event.stopPropagation();
+      selectLinkedWord(link);
+    };
+    container.addEventListener('click', handleNativeLinkClick, true);
+    container.addEventListener('pointerup', handleNativeLinkClick, true);
+    return () => {
+      container.removeEventListener('click', handleNativeLinkClick, true);
+      container.removeEventListener('pointerup', handleNativeLinkClick, true);
+    };
+  // Rebind when the detail view swaps between the empty/loading/content DOM.
+  // On the initial empty state containerRef is null, so a one-time listener misses
+  // all later markdown links.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [word, content]);
 
   const scrollToNotes = () => {
     notesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -185,23 +237,6 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
         }}
       >
         选择一个单词查看详情
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div
-        style={{
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#737373',
-          background: '#0a0a0a',
-        }}
-      >
-        加载中...
       </div>
     );
   }
@@ -344,9 +379,21 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
       {/* Scrollable Content */}
       <div style={{ flex: 1, overflow: 'auto', padding: '24px 24px 32px' }}>
         {/* Markdown Content */}
+        {loading && (
+          <div style={{ marginBottom: 24, color: '#737373', fontSize: 14 }}>
+            加载 {word} 中...
+          </div>
+        )}
         {content && (
           <div
             className="english-markdown"
+            onClickCapture={(e) => {
+              const target = (e.target as HTMLElement).closest<HTMLElement>('[data-word-link="true"]');
+              if (!target) return;
+              e.preventDefault();
+              e.stopPropagation();
+              selectLinkedWord(target);
+            }}
             style={{ marginBottom: 32 }}
           >
             <ReactMarkdown
@@ -354,14 +401,29 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
               rehypePlugins={[rehypeRaw]}
               components={{
                 a: (props) => (
-                  <a
-                    {...props}
-                    href={props.href}
+                  <button
+                    type="button"
+                    data-word-link="true"
+                    data-href={props.href}
                     onClick={handleLinkClick}
-                    style={{ color: '#60a5fa', textDecoration: 'none', cursor: 'pointer' }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                    }}
+                    style={{
+                      color: '#60a5fa',
+                      background: 'transparent',
+                      border: 0,
+                      padding: 0,
+                      margin: 0,
+                      font: 'inherit',
+                      textDecoration: 'none',
+                      cursor: 'pointer',
+                    }}
                     onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
-                  />
+                  >
+                    {props.children}
+                  </button>
                 ),
                 small: (props) => (
                   <span {...props} style={{ fontSize: 10, color: '#737373', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, margin: '0 4px' }} />

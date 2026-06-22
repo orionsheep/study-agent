@@ -2990,4 +2990,4 @@ def get_store() -> Any:
         from app.database.postgres_store import PostgresLearningStore
 
         return PostgresLearningStore(settings.database_url)
-    return LearningStore()
+    raise RuntimeError("SQLite runtime has been retired. Set DATABASE_URL to a PostgreSQL connection string.")

@@ -37,7 +37,7 @@ export const englishClient = {
   // ── Word List ──────────────────────────────────────────
   getWordList(params?: { libraryId?: string; search?: string; limit?: number; offset?: number }) {
     const qs = new URLSearchParams();
-    if (params?.libraryId) qs.set("libraryId", params.libraryId);
+    if (params?.libraryId) qs.set("library_id", params.libraryId);
     if (params?.search) qs.set("search", params.search);
     qs.set("limit", String(params?.limit ?? 100));
     qs.set("offset", String(params?.offset ?? 0));
@@ -95,7 +95,9 @@ export const englishClient = {
 
   // ── Libraries ──────────────────────────────────────────
   getLibraries() {
-    return englishFetch<{
+    return englishFetch<
+      | Array<{ id?: string; path?: string; name: string; wordCount?: number; description?: string }>
+      | {
       libraries: Array<{ id: string; name: string; wordCount: number; description?: string }>;
     }>("/libraries");
   },

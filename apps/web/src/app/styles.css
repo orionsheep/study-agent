@@ -2414,11 +2414,24 @@ textarea {
   cursor: grabbing;
 }
 
+.canvas-viewport .canvas-app,
+.canvas-viewport .appwin,
+.canvas-viewport .appwin-body,
+.canvas-viewport .native-app-body {
+  cursor: default;
+}
+
 .canvas-world {
   width: 3200px;
   height: 1500px;
   will-change: transform;
   transition: transform var(--cam-dur) var(--ease-spring);
+  /* Explicit z-index so the native-app-layer (zIndex 5 when unfocused) sinks below
+     canvas-world when focus moves to a regular window. When a native window is
+     focused the native-app-layer jumps to zIndex 60 and covers canvas-world again.
+     Without this, canvas-world defaulted to z-index auto (0) and the native layer
+     at 5 always stayed on top — the English workspace never got occluded. */
+  z-index: 10;
 }
 
 .connector-layer {
@@ -2522,6 +2535,13 @@ textarea {
   user-select: none;
 }
 
+.canvas-viewport.window-dragging .appwin-body,
+.canvas-viewport.window-dragging .native-app-body,
+.canvas-viewport.window-resizing .appwin-body,
+.canvas-viewport.window-resizing .native-app-body {
+  cursor: default;
+}
+
 .canvas-viewport.window-dragging iframe,
 .canvas-viewport.window-resizing iframe {
   pointer-events: none;
@@ -2552,6 +2572,12 @@ textarea {
   border-bottom: 1px solid var(--glass-border);
   background: linear-gradient(180deg, #141128, #0e0b1e);
   user-select: none;
+  cursor: grab;
+}
+
+.appwin-bar:active,
+.app-titlebar:active {
+  cursor: grabbing;
 }
 
 .appwin-ico {
@@ -5590,7 +5616,7 @@ body,
   background: linear-gradient(180deg, rgba(18, 14, 38, 0.86), rgba(12, 10, 24, 0.7));
   border-bottom: 1px solid var(--glass-border);
   backdrop-filter: blur(20px);
-  z-index: 60;
+  z-index: 100;
   position: relative;
 }
 
@@ -5719,6 +5745,88 @@ body,
   width: 34px;
   padding: 0;
   justify-content: center;
+}
+
+.topbar-user-menu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.topbar-avatar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 7px 0 2px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--text-3);
+  background: transparent;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-soft);
+}
+
+.topbar-avatar-button:hover,
+.topbar-avatar-button.is-open {
+  color: var(--text-1);
+  border-color: var(--glass-border-hi);
+  background: var(--glass-1);
+}
+
+.topbar-avatar-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 8px 18px rgba(99, 102, 241, 0.28), 0 0 0 1px rgba(255,255,255,.16) inset;
+}
+
+.topbar-user-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 9px);
+  z-index: 320;
+  min-width: 142px;
+  padding: 6px;
+  border: 1px solid var(--glass-border-hi);
+  border-radius: 8px;
+  background: rgba(15, 12, 31, 0.96);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(18px) saturate(1.1);
+}
+
+.topbar-user-menu-item {
+  width: 100%;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.topbar-user-menu-item:hover {
+  color: var(--text-1);
+  background: var(--glass-2);
+}
+
+.topbar-user-menu-item.danger {
+  color: #f87171;
+}
+
+.topbar-user-menu-item.danger:hover {
+  color: #fff;
+  background: rgba(248, 113, 113, 0.18);
 }
 
 /* agent-now status pill */

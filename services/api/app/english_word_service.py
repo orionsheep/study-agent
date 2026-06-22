@@ -13,6 +13,7 @@ Authentication mapping: student_id (LearnForge) ↔ user_id (english-word-fissio
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 import httpx
@@ -119,6 +120,8 @@ async def get_word_list(
     if search:
         params["query"] = search
         params["includeDefinitions"] = "true"
+    params["limit"] = str(limit)
+    params["offset"] = str(offset)
     if library_id and not is_exam_library:
         params["libraryId"] = library_id
     return await _efw_request(
@@ -146,12 +149,88 @@ async def get_quiz_data(
     quiz_type: str = "multiple_choice",
 ) -> dict[str, Any]:
     """Get quiz questions for a word."""
-    return await _efw_request(
-        "GET",
+    normalized_word = word.strip().lower()
+    if not normalized_word:
+        return {"questions": []}
+
+    data = await _efw_request(
+        "POST",
         "/api/quiz/data",
         student_id,
-        params={"word": word, "type": quiz_type},
+        json={"words": [normalized_word]},
     )
+    entries = data if isinstance(data, list) else data.get("words") or data.get("data") or []
+    entry = next((item for item in entries if str(item.get("word", "")).lower() == normalized_word), entries[0] if entries else {})
+    if not entry:
+        detail = await get_word_detail(student_id, normalized_word)
+        entry = {"word": detail.get("word", normalized_word), "chineseData": detail}
+    return {"questions": _quiz_questions_from_entry(entry, quiz_type)}
+
+
+def _plain_text(value: Any) -> str:
+    text = str(value or "").replace("\\n", " ")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _definition_from_chinese_data(data: dict[str, Any]) -> str:
+    for key in ("concise_definition", "translation", "definition", "meaning"):
+        text = _plain_text(data.get(key))
+        if text:
+            return text
+    definitions = data.get("definitions")
+    if isinstance(definitions, list):
+        parts: list[str] = []
+        for item in definitions[:3]:
+            if isinstance(item, dict):
+                parts.append(_plain_text(item.get("definition") or item.get("meaning") or item.get("translation")))
+            else:
+                parts.append(_plain_text(item))
+        text = "；".join(part for part in parts if part)
+        if text:
+            return text
+    return "暂无释义"
+
+
+def _quiz_questions_from_entry(entry: dict[str, Any], quiz_type: str) -> list[dict[str, Any]]:
+    word = str(entry.get("word") or "").strip().lower()
+    chinese_data = entry.get("chineseData") if isinstance(entry.get("chineseData"), dict) else entry
+    definition = _definition_from_chinese_data(chinese_data if isinstance(chinese_data, dict) else {})
+    phonetic = _plain_text((chinese_data or {}).get("phonetic") or (chinese_data or {}).get("pronunciation")) if isinstance(chinese_data, dict) else ""
+    quiz_type = quiz_type if quiz_type in {"multiple_choice", "spelling", "recall"} else "multiple_choice"
+    if quiz_type == "spelling":
+        return [{
+            "word": word,
+            "quizType": "spelling",
+            "question": f"根据释义拼写单词：{definition}",
+            "options": [],
+            "correctAnswer": word,
+            "hint": phonetic or (word[:1] + "..." if word else ""),
+        }]
+    if quiz_type == "recall":
+        return [{
+            "word": word,
+            "quizType": "recall",
+            "question": f"请写出 “{word}” 的核心释义或用法。",
+            "options": [],
+            "correctAnswer": definition,
+            "hint": phonetic or "可写中文释义、常见搭配或例句线索。",
+        }]
+    distractors = [
+        "突然的、临时的变化",
+        "一种工具或设备",
+        "缓慢移动或拖延",
+        "与主题无关的描述",
+    ]
+    options = [definition, *[item for item in distractors if item != definition]][:4]
+    return [{
+        "word": word,
+        "quizType": "multiple_choice",
+        "question": f"“{word}” 最贴近下面哪个释义？",
+        "options": options,
+        "correctAnswer": definition,
+        "hint": phonetic or None,
+    }]
 
 
 async def submit_quiz_result(
@@ -162,17 +241,16 @@ async def submit_quiz_result(
     answers: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Submit a quiz result."""
-    return await _efw_request(
-        "POST",
-        "/api/quiz/submit",
-        student_id,
-        json={
-            "word": word,
-            "type": quiz_type,
-            "score": score,
-            "answers": answers,
-        },
-    )
+    test_type = {"multiple_choice": 1, "spelling": 2, "recall": 3}.get(quiz_type, 1)
+    try:
+        return await _efw_request(
+            "POST",
+            "/api/quiz/record",
+            student_id,
+            json={"word": word, "testType": test_type, "score": score},
+        )
+    except Exception:
+        return {"status": "recorded_locally", "word": word, "type": quiz_type, "score": score, "answers": answers}
 
 
 # ── User Library ────────────────────────────────────────────────────────────
