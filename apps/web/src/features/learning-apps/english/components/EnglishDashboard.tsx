@@ -79,16 +79,16 @@ export function EnglishDashboard({}: Props) {
 
   if (loading) {
     return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', background: 'var(--bg-1)' }}>
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#737373', background: '#0a0a0a' }}>
         加载学习数据...
       </div>
     );
   }
   if (error) {
     return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--text-faint)', background: 'var(--bg-1)' }}>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: '#737373', background: '#0a0a0a' }}>
         <span>数据加载失败</span>
-        <button onClick={loadDashboard} style={{ padding: '8px 16px', borderRadius: 8, background: '#262626', color: 'var(--text-1)', border: '1px solid #404040', cursor: 'pointer' }}>重试</button>
+        <button onClick={loadDashboard} style={{ padding: '8px 16px', borderRadius: 8, background: '#262626', color: '#e5e5e5', border: '1px solid #404040', cursor: 'pointer' }}>重试</button>
         <span style={{ fontSize: 12, color: '#525252' }}>{error}</span>
       </div>
     );
@@ -97,13 +97,13 @@ export function EnglishDashboard({}: Props) {
   const masteryLevel = data ? Math.min(100, Math.round((data.studiedWords / Math.max(1, data.totalWords)) * 100)) : 0;
 
   return (
-    <div style={{ height: '100%', overflow: 'auto', background: 'var(--bg-1)', color: 'var(--text-1)', padding: '28px 32px' }}>
+    <div style={{ height: '100%', overflow: 'auto', background: '#0a0a0a', color: '#e5e5e5', padding: '28px 32px' }}>
       <div style={{ marginBottom: 28 }}>
-        <h2 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-1)', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <h2 style={{ fontSize: 24, fontWeight: 700, color: '#fff', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ width: 4, height: 26, background: 'linear-gradient(180deg, #3b82f6, #8b5cf6)', borderRadius: 4 }} />
           英语学习仪表盘
         </h2>
-        <p style={{ color: 'var(--text-faint)', fontSize: 13, margin: 0 }}>单词学习进度、词库统计与掌握情况</p>
+        <p style={{ color: '#737373', fontSize: 13, margin: 0 }}>单词学习进度、词库统计与掌握情况</p>
       </div>
 
       {/* Stat cards */}
@@ -115,14 +115,14 @@ export function EnglishDashboard({}: Props) {
       </div>
 
       {/* Mastery progress */}
-      <div style={{ background: 'rgba(23,23,23,0.5)', border: '1px solid var(--glass-border)', borderRadius: 12, padding: 20, marginBottom: 24 }}>
+      <div style={{ background: 'rgba(23,23,23,0.5)', border: '1px solid #262626', borderRadius: 12, padding: 20, marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <TrendingUp size={16} style={{ color: 'var(--accent)' }} /> 整体掌握度
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#d4d4d4', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <TrendingUp size={16} style={{ color: '#3b82f6' }} /> 整体掌握度
           </span>
-          <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-1)' }}>{masteryLevel}%</span>
+          <span style={{ fontSize: 22, fontWeight: 700, color: '#fff' }}>{masteryLevel}%</span>
         </div>
-        <div style={{ height: 10, background: 'var(--bg-2)', borderRadius: 999, overflow: 'hidden' }}>
+        <div style={{ height: 10, background: '#171717', borderRadius: 999, overflow: 'hidden' }}>
           <div style={{
             height: '100%', width: `${masteryLevel}%`, borderRadius: 999,
             background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
@@ -135,22 +135,22 @@ export function EnglishDashboard({}: Props) {
       </div>
 
       {/* Library breakdown */}
-      <div style={{ background: 'rgba(23,23,23,0.5)', border: '1px solid var(--glass-border)', borderRadius: 12, padding: 20, marginBottom: 24 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-2)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Award size={16} style={{ color: '#9333ea' }} /> 词库进度明细
+      <div style={{ background: 'rgba(23,23,23,0.5)', border: '1px solid #262626', borderRadius: 12, padding: 20, marginBottom: 24 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, color: '#d4d4d4', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Award size={16} style={{ color: '#a855f7' }} /> 词库进度明细
         </h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {data?.libraries.map((lib) => {
             const pct = data.totalWords > 0 ? Math.round(((lib.wordCount ?? 0) / data.totalWords) * 100) : 0;
             return (
               <div key={lib.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ flex: '0 0 180px', fontSize: 13, color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ flex: '0 0 180px', fontSize: 13, color: '#a3a3a3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {lib.name}
                 </span>
-                <div style={{ flex: 1, height: 8, background: 'var(--bg-2)', borderRadius: 999, overflow: 'hidden' }}>
+                <div style={{ flex: 1, height: 8, background: '#171717', borderRadius: 999, overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${Math.max(3, pct)}%`, background: '#3b82f6', borderRadius: 999, transition: 'width 0.5s' }} />
                 </div>
-                <span style={{ flex: '0 0 60px', textAlign: 'right', fontSize: 12, color: 'var(--text-faint)' }}>{lib.wordCount ?? 0} 词</span>
+                <span style={{ flex: '0 0 60px', textAlign: 'right', fontSize: 12, color: '#737373' }}>{lib.wordCount ?? 0} 词</span>
               </div>
             );
           })}
@@ -163,7 +163,7 @@ export function EnglishDashboard({}: Props) {
       {/* Placeholder for quiz/checkin history */}
       <div style={{ background: 'rgba(23,23,23,0.3)', border: '1px dashed #404040', borderRadius: 12, padding: 20, textAlign: 'center' }}>
         <Calendar size={20} style={{ color: '#525252', marginBottom: 8 }} />
-        <p style={{ color: 'var(--text-faint)', fontSize: 13, margin: '0 0 4px' }}>测验记录与每日打卡</p>
+        <p style={{ color: '#737373', fontSize: 13, margin: '0 0 4px' }}>测验记录与每日打卡</p>
         <p style={{ color: '#525252', fontSize: 12, margin: 0 }}>接通 EFW 用户学习记录后展示（连续天数、正确率趋势、错题回顾）</p>
       </div>
     </div>
@@ -172,13 +172,13 @@ export function EnglishDashboard({}: Props) {
 
 function StatCard({ icon, label, value, accent, hint }: { icon: React.ReactNode; label: string; value: string | number; accent: string; hint?: string }) {
   return (
-    <div style={{ background: 'rgba(23,23,23,0.5)', border: '1px solid var(--glass-border)', borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ background: 'rgba(23,23,23,0.5)', border: '1px solid #262626', borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ display: 'grid', placeItems: 'center', width: 36, height: 36, borderRadius: 8, background: `${accent}1a`, color: accent }}>{icon}</span>
-        <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{label}</span>
-        {hint && <span style={{ fontSize: 10, color: '#525252', background: 'var(--bg-2)', padding: '2px 6px', borderRadius: 4, marginLeft: 'auto' }}>{hint}</span>}
+        <span style={{ fontSize: 12, color: '#737373' }}>{label}</span>
+        {hint && <span style={{ fontSize: 10, color: '#525252', background: '#171717', padding: '2px 6px', borderRadius: 4, marginLeft: 'auto' }}>{hint}</span>}
       </div>
-      <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-1)' }}>{value}</span>
+      <span style={{ fontSize: 28, fontWeight: 700, color: '#fff' }}>{value}</span>
     </div>
   );
 }
