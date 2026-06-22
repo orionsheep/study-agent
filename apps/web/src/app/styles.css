@@ -1651,3 +1651,104 @@ html.enable-glass:not(.dark) .english-workspace [style*="background: '#000'"] {
   background: rgba(255, 255, 255, 0.4) !important;
 }
 
+
+/* =====================================================================
+   EXTREME READABILITY OVERRIDES FOR LIGHT MODE
+   Zinc-based high-contrast palette for buttons and texts.
+   ===================================================================== */
+
+/* 1. Master Typography Overrides */
+html:not(.dark) .english-workspace [style*="color: var(--ew-text-1)"],
+html:not(.dark) .english-workspace [style*="color: #ffffff"],
+html:not(.dark) .english-workspace [style*="color: #fff"],
+html:not(.dark) .english-workspace h1,
+html:not(.dark) .english-workspace h2,
+html:not(.dark) .english-workspace h3,
+html:not(.dark) .english-workspace strong {
+  color: #09090b !important; /* Zinc 950 - Absolute maximum contrast */
+  font-weight: 600 !important;
+}
+
+html:not(.dark) .english-workspace [style*="color: var(--ew-text-2)"],
+html:not(.dark) .english-workspace [style*="color: #d4d4d4"],
+html:not(.dark) .english-workspace [style*="color: #e5e5e5"],
+html:not(.dark) .english-workspace p {
+  color: #3f3f46 !important; /* Zinc 700 - Highly readable body text */
+}
+
+html:not(.dark) .english-workspace [style*="color: var(--ew-text-3)"],
+html:not(.dark) .english-workspace [style*="color: #a3a3a3"],
+html:not(.dark) .english-workspace [style*="color: #525252"],
+html:not(.dark) .english-workspace [style*="color: #737373"],
+html:not(.dark) .english-workspace small {
+  color: #52525b !important; /* Zinc 600 - Muted but still perfectly legible */
+}
+
+/* 2. Redesigning the Buttons (US/UK pronunciation, Immersive, Notes) */
+html:not(.dark) .english-workspace button {
+  color: #3f3f46 !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  transition: all 0.15s ease !important;
+}
+
+html:not(.dark) .english-workspace button[style*="background: var(--ew-bg-hover)"],
+html:not(.dark) .english-workspace button[style*="background: rgba(255, 255, 255, 0.05)"] {
+  background: rgba(0, 0, 0, 0.03) !important; /* Extremely soft gray instead of transparency */
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+html:not(.dark) .english-workspace button:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #09090b !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+/* The active state for the Left WordList items */
+html:not(.dark) .english-workspace .ew-word-item[style*="background: var(--ew-accent-bg)"] {
+  background: #eff6ff !important; /* Very soft blue */
+  border-color: #bfdbfe !important;
+}
+
+/* 3. "My Library" / "词形变化" / Semantic Tags */
+html:not(.dark) .english-workspace [style*="background: var(--ew-bg-active)"],
+html:not(.dark) .english-workspace [style*="background: rgba(23, 23, 23, 0.6)"] {
+  background: #f4f4f5 !important; /* Zinc 100 */
+  border-color: rgba(0,0,0,0.1) !important;
+  color: #18181b !important;
+}
+
+/* Fix the solid backgrounds on the left/middle panels to be pristine white/light gray */
+html:not(.dark) .english-workspace [style*="background: var(--ew-bg-panel)"],
+html:not(.dark) .english-workspace [style*="background: var(--ew-bg-main)"] {
+  background: #ffffff !important; 
+  /* Fallback if glass is disabled */
+}
+
+/* 4. Ensure Glass mode on Light mode is stunning */
+html.enable-glass:not(.dark) .english-workspace [style*="background: var(--ew-bg-panel)"],
+html.enable-glass:not(.dark) .english-workspace [style*="background: var(--ew-bg-main)"] {
+  background: rgba(255, 255, 255, 0.65) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.9) !important;
+}
+
+/* 5. Fix FissionGraph Legends and Menus */
+html:not(.dark) .fission-graph-container > div:not(.force-graph-container) {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08) !important;
+}
+
+html:not(.dark) .fission-graph-container > div:not(.force-graph-container) * {
+  color: #18181b !important;
+}
+
+html:not(.dark) .fission-graph-container > div:not(.force-graph-container) [style*="color: var(--ew-text-3)"] {
+  color: #52525b !important;
+}
+
+/* FissionGraph Settings Panel title */
+html:not(.dark) .fission-graph-container h3 {
+  color: #09090b !important;
+}

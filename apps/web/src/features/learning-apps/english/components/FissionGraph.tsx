@@ -310,7 +310,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       vy: (Math.random() - 0.5) * 0.3,
       size: Math.random() * 2 + 0.3,
       opacity: Math.random() * 0.4 + 0.1,
-      color: isDark ? ['#ffffff', '#ffffff', '#3b82f6', '#8b5cf6', '#ec4899', '#a78bfa'][Math.floor(Math.random() * 6)] : ['#18181b', '#18181b', '#2563eb', '#7e22ce', '#db2777', '#9333ea'][Math.floor(Math.random() * 6)],
+      color: isDark ? ['#ffffff', '#ffffff', '#3b82f6', '#8b5cf6', '#ec4899', '#a78bfa'][Math.floor(Math.random() * 6)] : ['#94a3b8', '#cbd5e1', '#3b82f6', '#8b5cf6', '#f472b6', '#c084fc'][Math.floor(Math.random() * 6)],
     }));
     setParticles(newParticles);
   }, [dimensions]);
@@ -483,7 +483,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
           }}
           linkColor="color"
           linkWidth={1.5}
-          backgroundColor={isDark ? '#000000' : '#ffffff'}
+          backgroundColor={isDark ? '#000000' : '#f8fafc'}
           d3VelocityDecay={0.15}
           // Scale the simulation cooldown to the graph size: a 29-node graph (hello)
           // settles quickly, but a 100+ node graph (world) needs many more ticks to
@@ -547,7 +547,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
               ctx.arc(x, y, node.val * 3 * pulse, 0, 2 * Math.PI);
               ctx.fill();
 
-              ctx.fillStyle = isDark ? '#ffffff' : '#18181b';
+              ctx.fillStyle = isDark ? '#ffffff' : '#334155';
               ctx.shadowColor = '#ffffff';
               ctx.shadowBlur = 15 * pulse;
               ctx.beginPath();
@@ -567,7 +567,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
               const glowSize = isLevel1 ? 4.0 : 2.5;
 
               const gradient = ctx.createRadialGradient(x, y, 0, x, y, node.val * glowSize * scale * sizeMultiplier);
-              const nodeColor = node.color || (isDark ? '#ffffff' : '#18181b');
+              const nodeColor = node.color || (isDark ? '#ffffff' : '#475569');
               gradient.addColorStop(0, nodeColor);
               gradient.addColorStop(1, 'rgba(0,0,0,0)');
               ctx.globalAlpha = brightness * (isHovered || isNeighbor ? 1.2 : 1);
@@ -581,7 +581,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
               ctx.arc(x, y, node.val * 0.9 * scale * sizeMultiplier, 0, 2 * Math.PI);
               ctx.fill();
 
-              ctx.fillStyle = isDark ? '#ffffff' : '#ffffff';
+              ctx.fillStyle = '#ffffff';
               ctx.beginPath();
               ctx.arc(x, y, node.val * 0.35 * scale * sizeMultiplier, 0, 2 * Math.PI);
               ctx.fill();
@@ -595,7 +595,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
             if (!showLevel2 && (start.level === 2 || end.level === 2)) return;
 
             const isHighlighted = hoveredNode && (start.id === hoveredNode.id || end.id === hoveredNode.id);
-            const linkColor = (link as any).color || (isDark ? '#555' : 'rgba(0,0,0,0.15)');
+            const linkColor = (link as any).color || (isDark ? '#555' : 'rgba(99, 102, 241, 0.25)');
             ctx.strokeStyle = linkColor;
             ctx.lineWidth = (isHighlighted ? 2.5 : 1.5) / globalScale;
             ctx.globalAlpha = isHighlighted ? 0.9 : 0.6;
@@ -620,14 +620,14 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
                 const textWidth = textMetrics.width;
                 const textHeight = layout.fontSize * 1.2;
 
-                ctx.fillStyle = isDark ? 'rgba(0, 0, 0, 1)' : 'rgba(255, 255, 255, 0.95)';
+                ctx.fillStyle = isDark ? 'rgba(0, 0, 0, 1)' : 'rgba(255, 255, 255, 0.98)';
                 ctx.fillRect(
                   layout.labelX - textWidth / 2 - layout.labelPadding,
                   layout.labelY - textHeight / 2 - layout.labelPadding,
                   textWidth + layout.labelPadding * 2,
                   textHeight + layout.labelPadding * 2,
                 );
-                ctx.strokeStyle = node.level === 0 ? (isDark ? '#3b82f6' : '#2563eb') : (isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.15)');
+                ctx.strokeStyle = node.level === 0 ? (isDark ? '#3b82f6' : '#2563eb') : (isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(15, 23, 42, 0.12)');
                 ctx.lineWidth = 1 / globalScale;
                 ctx.strokeRect(
                   layout.labelX - textWidth / 2 - layout.labelPadding,
@@ -637,7 +637,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
                 );
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillStyle = isDark ? '#ffffff' : '#18181b';
+                ctx.fillStyle = isDark ? '#ffffff' : '#334155';
                 ctx.fillText(nodeName, layout.labelX, layout.labelY);
               }
             });
