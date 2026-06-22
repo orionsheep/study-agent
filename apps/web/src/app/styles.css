@@ -133,7 +133,7 @@ html, body, #root { height: 100%; margin: 0; overflow: hidden; }
 .appwin::after, .canvas-app::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.01) 30%, transparent 60%); mix-blend-mode: screen; pointer-events: none; }
 .dark .appwin::after, .dark .canvas-app::after { background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.005) 30%, transparent 60%); }
 .appwin.canvas-app:not(.fullscreen) { position: relative; inset: auto; width: 100%; height: 100%; }
-.appwin.dimmed { opacity: 0.85; filter: none; border-color: var(--glass-border); box-shadow: var(--shadow-md); }
+.appwin.dimmed { opacity: 1; filter: none; border-color: var(--glass-border); box-shadow: var(--shadow-md); z-index: 10; }
 .window-frame { will-change: auto; contain: layout style paint; }
 .window-frame.is-direct-manipulating { z-index: 999 !important; transition: none !important; will-change: transform, width, height; }
 .window-frame.is-direct-manipulating .appwin, .window-frame.is-direct-manipulating .canvas-app { transition: none !important; box-shadow: var(--shadow-lg), 0 0 0 1px var(--accent); }
@@ -1698,3 +1698,105 @@ html.disable-glass .canvas-app {
 html.disable-glass .nblm-source-rail {
   background: var(--bg-1) !important;
 }
+
+/* =====================================================================
+   Ultimate FissionGraph Light Mode (No Invert Filter)
+   Preserves all transparency, layers, and shadows.
+   ===================================================================== */
+
+/* Force light background on container but keep it structurally intact */
+html:not(.dark) .fission-graph-container {
+  background: var(--light-panel-solid) !important;
+  border-radius: var(--r-md) !important;
+  border: 1px solid var(--light-glass-border) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Force text colors inside the graph container */
+html:not(.dark) .fission-graph-container * {
+  color: var(--light-text-1) !important;
+}
+
+/* Make sure the floating tooltips and legends use elegant glass */
+html:not(.dark) .fission-graph-container > div:not(.force-graph-container) {
+  background: var(--light-glass-panel) !important;
+  backdrop-filter: var(--light-glass-blur) !important;
+  -webkit-backdrop-filter: var(--light-glass-blur) !important;
+  border: 1px solid var(--light-glass-border) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08) !important;
+  color: var(--light-text-1) !important;
+}
+
+/* Specifically target muted text in legends */
+html:not(.dark) .fission-graph-container > div:not(.force-graph-container) [style*="color: rgb(163, 163, 163)"],
+html:not(.dark) .fission-graph-container > div:not(.force-graph-container) [style*="color: #a3a3a3"] {
+  color: var(--light-text-sec) !important;
+}
+
+/* In light mode, the canvas is drawing white text on a white background.
+   We can't easily change the canvas fillText with CSS.
+   BUT, we can invert JUST the canvas element! This doesn't break the container's z-index.
+*/
+html:not(.dark) .force-graph-container canvas {
+  filter: invert(1) hue-rotate(180deg) brightness(1.05) contrast(0.95);
+}
+
+/* Since the canvas is inverted, we need to ensure the parent's background is black 
+   so it inverts to white, matching the container. */
+html:not(.dark) .fission-graph-container > div:first-child {
+  background: #000 !important;
+}
+
+/* The gradient background div should also stay black so it inverts cleanly */
+html:not(.dark) .fission-graph-container > div:nth-child(2) {
+  background: radial-gradient(ellipse at center, #0a0a0a 0%, #000 100%) !important;
+}
+
+
+/* =====================================================================
+   Global Glass Integration for English Workspace
+   When .enable-glass is active on the HTML element (toggled via Droplet button),
+   we make the deeply nested dark backgrounds transparent so the shell's glass shows.
+   ===================================================================== */
+
+/* 
+  If glass is enabled, remove the hardcoded background colors from 
+  the nested panels in both dark and light modes, letting the parent's glass shine through.
+*/
+html.enable-glass .english-workspace [style*="background: #0a0a0a"],
+html.enable-glass .english-workspace [style*="background: rgb(10, 10, 10)"],
+html.enable-glass .english-workspace [style*="background: #171717"],
+html.enable-glass .english-workspace [style*="background: rgb(23, 23, 23)"] {
+  background: transparent !important;
+}
+
+html.enable-glass .english-workspace [style*="background: rgba(23, 23, 23, 0.6)"] {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Ensure borders are delicate when glass is on */
+html.enable-glass .english-workspace [style*="border-color: #262626"],
+html.enable-glass .english-workspace [style*="border-bottom: 1px solid #262626"],
+html.enable-glass .english-workspace [style*="border-right: 1px solid #262626"] {
+  border-color: var(--glass-border) !important;
+}
+
+/* 
+   For light mode specifically, if glass is enabled, we use a very soft white
+   to maintain readability without blocking the blur.
+*/
+html.enable-glass:not(.dark) .english-workspace [style*="background: #0a0a0a"],
+html.enable-glass:not(.dark) .english-workspace [style*="background: rgb(10, 10, 10)"],
+html.enable-glass:not(.dark) .english-workspace [style*="background: #171717"],
+html.enable-glass:not(.dark) .english-workspace [style*="background: rgb(23, 23, 23)"] {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Force borders in light mode */
+html:not(.dark) .english-workspace [style*="border-color: #262626"],
+html:not(.dark) .english-workspace [style*="border-bottom: 1px solid #262626"],
+html:not(.dark) .english-workspace [style*="border-right: 1px solid #262626"],
+html:not(.dark) .english-workspace [style*="border-top: 1px solid #171717"] {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
