@@ -381,7 +381,7 @@ button:disabled { cursor: not-allowed; opacity: 0.45; box-shadow: none; }
 .rich-widget-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--text-2); font-size: var(--fs-xs); }
 .rich-widget .pdot { width: 8px; height: 8px; border-radius: 99px; background: var(--text-2); animation: blink 1.1s infinite; }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-.rich-widget .custom-html-frame { min-height: 180px; border-radius: var(--r-sm); background: var(--bg-2); }
+.rich-widget .custom-html-frame { flex: 1 1 auto; min-height: 180px; border-radius: var(--r-sm); background: var(--bg-2); }
 .message.tutor .message-text, .msg.tutor .msg-bubble { border: 1px solid var(--glass-border); border-top-left-radius: 5px; background: var(--glass-1); }
 .message.user .message-text, .msg.user .msg-bubble { border: 1px solid var(--glass-border-hi); border-top-right-radius: 5px; background: var(--glass-3); color: var(--text-1); }
 .message.user .message-content, .msg.user .message-content { flex: 0 1 auto; align-items: flex-end; max-width: min(88%, 540px); }
@@ -597,7 +597,7 @@ button:disabled { cursor: not-allowed; opacity: 0.45; box-shadow: none; }
 .diagram-panel span { position: absolute; z-index: 1; padding: 4px 6px; border-radius: 5px; background: var(--bg-0); color: var(--text-1); font-size: 12px; }
 .resource-search { display: flex; align-items: center; gap: 6px; border: 1px solid var(--glass-border); border-radius: var(--r-md); padding: 6px; background: var(--glass-1); }
 .resource-search input { width: 100%; border: 0; background: transparent; outline: 0; color: var(--text-1); }
-.custom-html-frame { width: 100%; min-height: 180px; border: 1px solid var(--glass-border); border-radius: var(--r-md); background: rgba(10, 10, 10, 0.85); overflow: hidden; box-shadow: var(--shadow-md); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+.custom-html-frame { width: 100%; flex: 1 1 auto; min-height: 180px; border: 1px solid var(--glass-border); border-radius: var(--r-md); background: rgba(10, 10, 10, 0.85); overflow: hidden; box-shadow: var(--shadow-md); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
 .custom-html-frame-canvas { min-height: 0; height: 100%; width: 100%; border: 0; border-radius: 0; background: transparent; color: #fafafa; color-scheme: dark; }
 .warning-text { color: var(--st-risk); }
 .ok-text { color: var(--text-1); }
@@ -1047,3 +1047,84 @@ button:disabled { cursor: not-allowed; opacity: 0.45; box-shadow: none; }
 /* ===== Theme Toggle Button ===== */
 .theme-toggle { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--glass-border); border-radius: var(--r-sm); background: var(--glass-1); color: var(--text-2); cursor: pointer; transition: all var(--dur-fast) var(--ease-soft); }
 .theme-toggle:hover { color: var(--text-1); border-color: var(--glass-border-hi); background: var(--glass-2); }
+/* Tweak: Enhance subtle grid and animations */
+.canvas-shell {
+  background: radial-gradient(circle at center, var(--text-faint) 0.5px, transparent 1px), var(--bg-canvas);
+  background-size: 20px 20px, auto;
+}
+.canvas-shell::before {
+  opacity: 0.15;
+}
+
+/* Tweak: Elegant native-like scrollbars */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border: 1px solid transparent;
+  border-radius: 99px;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+  border: 0;
+}
+
+/* Tweak: Enhance buttons and hover states for serious app feel */
+button {
+  transition: background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast), transform var(--dur-fast) var(--ease-spring);
+}
+button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+/* Tweak: Chat Bubble refine */
+.message-text, .msg-bubble {
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+  font-weight: 400;
+}
+.message.user .message-text, .msg.user .msg-bubble {
+  background: var(--text-1);
+  color: var(--bg-0);
+  border: none;
+  font-weight: 500;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Ensure focus highlights are purely structural, no fuzzy glows */
+*:focus-visible {
+  outline: 2px solid var(--text-3);
+  outline-offset: 2px;
+}
+/* Tweak: Restore missing appwin-body flex constraints that caused half-cut windows */
+.appwin-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--sp-4, 16px);
+}
+.appwin:has(.native-app-body-custom) .appwin-body,
+.canvas-app:has(.native-app-body-custom) .appwin-body,
+.appwin:has(.native-app-body-image) .appwin-body,
+.canvas-app:has(.native-app-body-image) .appwin-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.native-app-body {
+  min-height: 100%;
+  padding: 0;
+  color: var(--text-1);
+}
+.native-app-body-custom {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  background: transparent;
+}

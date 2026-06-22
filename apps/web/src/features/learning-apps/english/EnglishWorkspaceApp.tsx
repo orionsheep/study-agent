@@ -113,10 +113,10 @@ export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
         />
       ) : mode === 'stats' ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid #262626', background: 'var(--bg-1)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--glass-border)', background: 'var(--bg-1)' }}>
             <button
               onClick={() => setMode('dashboard')}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, background: 'transparent', color: '#a3a3a3' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, background: 'transparent', color: 'var(--text-3)' }}
               title="返回单词工作区"
             >
               <ChevronLeft size={14} /> 返回工作区
@@ -128,10 +128,10 @@ export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
         </div>
       ) : mode === 'quiz' ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid #262626', background: 'var(--bg-1)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--glass-border)', background: 'var(--bg-1)' }}>
             <button
               onClick={() => setMode('dashboard')}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, background: 'transparent', color: '#a3a3a3' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, background: 'transparent', color: 'var(--text-3)' }}
               title="返回单词工作区"
             >
               <ChevronLeft size={14} /> 返回工作区
@@ -186,7 +186,7 @@ function DashboardMode({
       {isLeftSidebarOpen ? (
         <>
           <Panel defaultSize={20} minSize={15} maxSize={32} style={{ background: 'var(--bg-1)' }}>
-            <div style={{ height: '100%', borderRight: '1px solid #171717' }}>
+            <div style={{ height: '100%', borderRight: '1px solid var(--border)' }}>
               <WordList onWordSelect={onSelectWord} selectedWord={selectedWord} />
             </div>
           </Panel>
@@ -196,10 +196,10 @@ function DashboardMode({
 
       {/* Middle column: Word Detail + history nav */}
       <Panel defaultSize={40} minSize={28} style={{ background: 'var(--bg-1)' }}>
-        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', borderRight: '1px solid #171717' }}>
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)' }}>
           {/* Nav header */}
           <div style={{
-            height: 44, flexShrink: 0, borderBottom: '1px solid #171717',
+            height: 44, flexShrink: 0, borderBottom: '1px solid var(--border)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '0 10px', background: 'rgba(10,10,10,0.6)', backdropFilter: 'blur(8px)',
           }}>
@@ -269,7 +269,7 @@ function DashboardMode({
         tutor chat / agent is handled by the shell-level Hermes on the right). */}
     <div style={{
       flexShrink: 0, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 14px', borderTop: '1px solid #171717', background: 'var(--bg-1)',
+      padding: '0 14px', borderTop: '1px solid var(--border)', background: 'var(--bg-1)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <button onClick={onOpenStats} style={footerBtnStyle} title="英语学习统计">
@@ -591,7 +591,7 @@ function DraggableWindow({
 
 const resizeHandleStyle: React.CSSProperties = {
   width: 4,
-  background: '#171717',
+  background: 'var(--border)',
   cursor: 'col-resize',
   transition: 'background 0.15s',
 };
@@ -604,7 +604,7 @@ const navBtnStyle: React.CSSProperties = {
 
 const navArrowStyle = (enabled: boolean): React.CSSProperties => ({
   padding: 4, borderRadius: 6, border: 'none', cursor: enabled ? 'pointer' : 'not-allowed',
-  background: 'transparent', color: enabled ? '#a3a3a3' : '#404040',
+  background: 'transparent', color: enabled ? 'var(--text-3)' : '#404040',
   display: 'flex', alignItems: 'center', transition: 'color 0.15s, background 0.15s',
 });
 
@@ -613,7 +613,7 @@ const navArrowStyle = (enabled: boolean): React.CSSProperties => ({
 const footerBtnStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
   borderRadius: 8, border: '1px solid var(--glass-border)', background: 'rgba(23,23,23,0.6)',
-  color: '#a3a3a3', fontSize: 12, cursor: 'pointer', transition: 'color 0.15s, background 0.15s',
+  color: 'var(--text-3)', fontSize: 12, cursor: 'pointer', transition: 'color 0.15s, background 0.15s',
 };
 
 // Immersive floating-window header button (minimize / close).
@@ -645,7 +645,7 @@ const immersiveToggleInlineStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 6,
   padding: '6px 12px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.12)',
   background: 'rgba(10,10,10,0.7)', backdropFilter: 'blur(10px)',
-  color: '#a3a3a3', fontSize: 12, cursor: 'pointer', transition: 'color 0.15s',
+  color: 'var(--text-3)', fontSize: 12, cursor: 'pointer', transition: 'color 0.15s',
 };
 
 const reopenBtnStyle: React.CSSProperties = {
