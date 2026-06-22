@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
+import { useTheme } from '../../../../lib/state/useTheme';
 import ForceGraph2D from 'react-force-graph-2d';
 import { forceCollide } from 'd3-force';
 import { RefreshCw, Maximize2, ZoomIn, ZoomOut, Eye, EyeOff, Settings, X } from 'lucide-react';
@@ -78,6 +79,8 @@ function visibleLabelLayout(node: any, globalScale: number, settings: GraphSetti
 }
 
 export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: FissionGraphProps) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const [data, setData] = useState<{ nodes: any[]; links: any[]; definitions?: Record<string, string> }>({ nodes: [], links: [] });
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [hoveredNode, setHoveredNode] = useState<any>(null);
@@ -307,7 +310,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       vy: (Math.random() - 0.5) * 0.3,
       size: Math.random() * 2 + 0.3,
       opacity: Math.random() * 0.4 + 0.1,
-      color: ['#ffffff', '#ffffff', '#3b82f6', '#8b5cf6', '#ec4899', '#a78bfa'][Math.floor(Math.random() * 6)],
+      color: isDark ? ['#ffffff', '#ffffff', '#3b82f6', '#8b5cf6', '#ec4899', '#a78bfa'][Math.floor(Math.random() * 6)] : ['#18181b', '#18181b', '#2563eb', '#7e22ce', '#db2777', '#9333ea'][Math.floor(Math.random() * 6)],
     }));
     setParticles(newParticles);
   }, [dimensions]);
@@ -318,7 +321,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
 
   if (!word) {
     return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#737373', background: '#000', fontWeight: 300, letterSpacing: '0.05em' }}>
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)', background: 'var(--bg-0)', fontWeight: 300, letterSpacing: '0.05em' }}>
         选择一个单词查看裂变图
       </div>
     );
@@ -328,7 +331,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
     <div
       ref={containerRef}
       className="fission-graph-container"
-      style={{ position: 'absolute', inset: 0, background: '#000', overflow: 'hidden' }}
+      style={{ position: 'absolute', inset: 0, background: 'var(--bg-0)', overflow: 'hidden' }}
       onClickCapture={(event) => {
         // react-force-graph can treat a tiny mouse movement as a drag and skip
         // onNodeClick even though hover hit-testing correctly found a node.
@@ -338,7 +341,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       }}
     >
       {/* Gradient Background */}
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, #0a0a0a 0%, #000 100%)', opacity: 0.6, pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, var(--bg-1) 0%, var(--bg-0) 100%)', opacity: 0.6, pointerEvents: 'none' }} />
 
       {/* Controls */}
       <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -369,10 +372,10 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
 
       {/* Settings Panel */}
       {showSettings && (
-        <div style={{ position: 'absolute', top: 16, right: 64, zIndex: 20, width: 260, background: 'rgba(23, 23, 23, 0.95)', backdropFilter: 'blur(12px)', border: '1px solid #262626', borderRadius: 12, padding: 16, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+        <div style={{ position: 'absolute', top: 16, right: 64, zIndex: 20, width: 260, background: 'var(--glass-bg)', backdropFilter: 'blur(12px)', border: '1px solid var(--glass-border)', borderRadius: 12, padding: 16, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: '1px solid #262626', paddingBottom: 8 }}>
-            <h3 style={{ color: '#fff', fontWeight: 500, fontSize: 14, margin: 0 }}>图设置</h3>
-            <button onClick={() => setShowSettings(false)} style={{ color: '#a3a3a3', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+            <h3 style={{ color: 'var(--text-1)', fontWeight: 500, fontSize: 14, margin: 0 }}>图设置</h3>
+            <button onClick={() => setShowSettings(false)} style={{ color: 'var(--text-2)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
               <X size={16} />
             </button>
           </div>
@@ -388,7 +391,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
             <SliderControl label="碰撞间距" value={uiSettings.collisionRadius} min={10} max={100} step={5} unit="px" onChange={(v) => setUiSettings({ ...uiSettings, collisionRadius: v })} onCommit={() => setSettings(uiSettings)} />
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid #262626' }}>
-              <span style={{ fontSize: 12, color: '#a3a3a3' }}>拖拽后锁定</span>
+              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>拖拽后锁定</span>
               <button
                 onClick={() => { const newSettings = { ...uiSettings, lockNodeOnDrag: !uiSettings.lockNodeOnDrag }; setUiSettings(newSettings); setSettings(newSettings); }}
                 style={{ position: 'relative', width: 40, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer', background: uiSettings.lockNodeOnDrag ? '#2563eb' : '#404040', transition: 'background 0.2s' }}
@@ -397,7 +400,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
               </button>
             </div>
 
-            <button onClick={resetToDefaults} style={{ width: '100%', marginTop: 8, padding: '8px 12px', background: '#262626', color: '#d4d4d4', border: '1px solid #404040', borderRadius: 8, fontSize: 12, cursor: 'pointer', transition: 'all 0.15s' }}>
+            <button onClick={resetToDefaults} style={{ width: '100%', marginTop: 8, padding: '8px 12px', background: '#262626', color: 'var(--text-1)', border: '1px solid #404040', borderRadius: 8, fontSize: 12, cursor: 'pointer', transition: 'all 0.15s' }}>
               恢复默认
             </button>
           </div>
@@ -405,8 +408,8 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       )}
 
       {/* Floating Legend */}
-      <div style={{ position: 'absolute', bottom: 16, left: 16, zIndex: 20, background: 'rgba(23, 23, 23, 0.9)', backdropFilter: 'blur(12px)', borderRadius: 8, padding: 12, border: '1px solid #262626', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', maxWidth: 280 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: '#a3a3a3', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>连接含义</div>
+      <div style={{ position: 'absolute', bottom: 16, left: 16, zIndex: 20, background: 'var(--glass-bg)', backdropFilter: 'blur(12px)', borderRadius: 8, padding: 12, border: '1px solid var(--glass-border)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', maxWidth: 280 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>连接含义</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
             '#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316',
@@ -418,9 +421,9 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
               <div key={index} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ width: 12, height: 12, borderRadius: '50%', marginTop: 2, flexShrink: 0, background: color }} />
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: '#d4d4d4' }}>类型 {meaningNum}</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-1)' }}>类型 {meaningNum}</span>
                   {definition && (
-                    <span style={{ fontSize: 10, color: '#737373', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={definition}>
+                    <span style={{ fontSize: 10, color: 'var(--text-3)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={definition}>
                       {definition.replace(/^SKM:.*?\|/, '')}
                     </span>
                   )}
@@ -434,7 +437,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       {/* Loading */}
       {dimensions.width === 0 && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ color: '#737373', animation: 'pulse 2s infinite' }}>初始化中...</div>
+          <div style={{ color: 'var(--text-3)', animation: 'pulse 2s infinite' }}>初始化中...</div>
         </div>
       )}
 
@@ -480,7 +483,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
           }}
           linkColor="color"
           linkWidth={1.5}
-          backgroundColor="#000000"
+          backgroundColor={isDark ? '#000000' : '#ffffff'}
           d3VelocityDecay={0.15}
           // Scale the simulation cooldown to the graph size: a 29-node graph (hello)
           // settles quickly, but a 100+ node graph (world) needs many more ticks to
@@ -544,7 +547,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
               ctx.arc(x, y, node.val * 3 * pulse, 0, 2 * Math.PI);
               ctx.fill();
 
-              ctx.fillStyle = '#ffffff';
+              ctx.fillStyle = isDark ? '#ffffff' : '#18181b';
               ctx.shadowColor = '#ffffff';
               ctx.shadowBlur = 15 * pulse;
               ctx.beginPath();
@@ -552,7 +555,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
               ctx.fill();
               ctx.shadowBlur = 0;
 
-              ctx.strokeStyle = node.color || '#3b82f6';
+              ctx.strokeStyle = node.color || (isDark ? '#3b82f6' : '#2563eb');
               ctx.lineWidth = 3 / globalScale;
               ctx.beginPath();
               ctx.arc(x, y, node.val * 1.1 * scale, 0, 2 * Math.PI);
@@ -564,7 +567,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
               const glowSize = isLevel1 ? 4.0 : 2.5;
 
               const gradient = ctx.createRadialGradient(x, y, 0, x, y, node.val * glowSize * scale * sizeMultiplier);
-              const nodeColor = node.color || '#fff';
+              const nodeColor = node.color || (isDark ? '#ffffff' : '#18181b');
               gradient.addColorStop(0, nodeColor);
               gradient.addColorStop(1, 'rgba(0,0,0,0)');
               ctx.globalAlpha = brightness * (isHovered || isNeighbor ? 1.2 : 1);
@@ -578,7 +581,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
               ctx.arc(x, y, node.val * 0.9 * scale * sizeMultiplier, 0, 2 * Math.PI);
               ctx.fill();
 
-              ctx.fillStyle = '#fff';
+              ctx.fillStyle = isDark ? '#ffffff' : '#ffffff';
               ctx.beginPath();
               ctx.arc(x, y, node.val * 0.35 * scale * sizeMultiplier, 0, 2 * Math.PI);
               ctx.fill();
@@ -592,7 +595,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
             if (!showLevel2 && (start.level === 2 || end.level === 2)) return;
 
             const isHighlighted = hoveredNode && (start.id === hoveredNode.id || end.id === hoveredNode.id);
-            const linkColor = (link as any).color || '#555';
+            const linkColor = (link as any).color || (isDark ? '#555' : 'rgba(0,0,0,0.15)');
             ctx.strokeStyle = linkColor;
             ctx.lineWidth = (isHighlighted ? 2.5 : 1.5) / globalScale;
             ctx.globalAlpha = isHighlighted ? 0.9 : 0.6;
@@ -617,14 +620,14 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
                 const textWidth = textMetrics.width;
                 const textHeight = layout.fontSize * 1.2;
 
-                ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+                ctx.fillStyle = isDark ? 'rgba(0, 0, 0, 1)' : 'rgba(255, 255, 255, 0.95)';
                 ctx.fillRect(
                   layout.labelX - textWidth / 2 - layout.labelPadding,
                   layout.labelY - textHeight / 2 - layout.labelPadding,
                   textWidth + layout.labelPadding * 2,
                   textHeight + layout.labelPadding * 2,
                 );
-                ctx.strokeStyle = node.level === 0 ? '#3b82f6' : 'rgba(255, 255, 255, 0.3)';
+                ctx.strokeStyle = node.level === 0 ? (isDark ? '#3b82f6' : '#2563eb') : (isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.15)');
                 ctx.lineWidth = 1 / globalScale;
                 ctx.strokeRect(
                   layout.labelX - textWidth / 2 - layout.labelPadding,
@@ -634,7 +637,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
                 );
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillStyle = '#ffffff';
+                ctx.fillStyle = isDark ? '#ffffff' : '#18181b';
                 ctx.fillText(nodeName, layout.labelX, layout.labelY);
               }
             });
@@ -663,13 +666,13 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       {/* HTML Tooltip Overlay */}
       {hoveredNode && (
         <div ref={tooltipRef} style={{ position: 'absolute', pointerEvents: 'none', zIndex: 50, left: 0, top: 0 }}>
-          <div style={{ background: 'rgba(23, 23, 23, 0.95)', backdropFilter: 'blur(12px)', border: '1px solid #262626', borderRadius: 8, padding: '8px 12px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', maxWidth: 240 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 4 }}>{hoveredNode.name}</div>
+          <div style={{ background: 'var(--glass-bg)', backdropFilter: 'blur(12px)', border: '1px solid var(--glass-border)', borderRadius: 8, padding: '8px 12px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', maxWidth: 240 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)', marginBottom: 4 }}>{hoveredNode.name}</div>
             {hoveredNode.phonetic && (
-              <div style={{ fontSize: 12, color: '#a3a3a3', fontFamily: 'monospace', marginBottom: 4 }}>/{hoveredNode.phonetic}/</div>
+              <div style={{ fontSize: 12, color: 'var(--text-2)', fontFamily: 'monospace', marginBottom: 4 }}>/{hoveredNode.phonetic}/</div>
             )}
             {hoveredNode.translation && (
-              <div style={{ fontSize: 12, color: '#d4d4d4', lineHeight: 1.5 }}>{hoveredNode.translation}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-1)', lineHeight: 1.5 }}>{hoveredNode.translation}</div>
             )}
           </div>
         </div>
@@ -687,9 +690,9 @@ function ControlButton({ onClick, title, active, children }: { onClick: () => vo
       style={{
         padding: 8,
         background: active ? '#2563eb' : 'rgba(23, 23, 23, 0.8)',
-        color: '#fff',
+        color: 'var(--text-1)',
         borderRadius: 8,
-        border: '1px solid #262626',
+        border: '1px solid var(--glass-border)',
         cursor: 'pointer',
         backdropFilter: 'blur(8px)',
         transition: 'all 0.15s',
@@ -718,7 +721,7 @@ function SliderControl({ label, value, min, max, step, unit, onChange, onCommit 
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#a3a3a3' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-2)' }}>
         <span>{label}</span>
         <span>{value.toFixed(step < 1 ? 1 : 0)}{unit}</span>
       </div>
