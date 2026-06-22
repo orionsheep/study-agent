@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Search, Folder, ChevronLeft, CheckSquare, Square, Play, Circle, Settings } from 'lucide-react';
 
+
+const isDark = () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 interface WordListProps {
   onWordSelect: (word: string) => void;
   selectedWord: string | null;
@@ -222,10 +224,10 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
   };
 
   const getProgressColor = (score: number | undefined) => {
-    if (score === undefined) return 'var(--text-3)';
-    if (score >= 2) return 'var(--st-done)';
-    if (score === 1) return 'var(--st-weak)';
-    return 'var(--st-risk)';
+    if (score === undefined) return (isDark() ? '#a3a3a3' : 'var(--text-3)');
+    if (score >= 2) return '#22c55e';
+    if (score === 1) return '#eab308';
+    return '#ef4444';
   };
 
   const renderCollinsStars = (collins: string | undefined) => {
@@ -235,7 +237,7 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginLeft: 8 }} title={`柯林斯星级: ${stars}`}>
         {[...Array(stars)].map((_, i) => (
-          <svg key={i} style={{ width: 12, height: 12, color: 'var(--st-weak)', fill: 'currentColor' }} viewBox="0 0 24 24">
+          <svg key={i} style={{ width: 12, height: 12, color: '#eab308', fill: 'currentColor' }} viewBox="0 0 24 24">
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
           </svg>
         ))}
@@ -248,23 +250,23 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
   };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-1)', borderRight: '1px solid var(--border)' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: (isDark() ? '#0a0a0a' : 'var(--bg-1)'), borderRight: '1px solid #262626' }}>
       {/* Search Header */}
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid #262626' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {viewMode === 'words' && (
             <button
               onClick={handleBackToLibraries}
-              style={{ padding: 8, color: 'var(--text-3)', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 8, transition: 'all 0.15s' }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--bg-0)'; e.currentTarget.style.background = 'var(--ew-bg-hover)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-3)'; e.currentTarget.style.background = 'none'; }}
+              style={{ padding: 8, color: (isDark() ? '#a3a3a3' : 'var(--text-3)'), background: 'none', border: 'none', cursor: 'pointer', borderRadius: 8, transition: 'all 0.15s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = (isDark() ? '#fff' : 'var(--text-1)'); e.currentTarget.style.background = (isDark() ? (isDark() ? 'rgba(255,255,255,0.05)' : 'var(--glass-2)') : 'var(--glass-2)'); }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = (isDark() ? '#a3a3a3' : 'var(--text-3)'); e.currentTarget.style.background = 'none'; }}
               title="返回"
             >
               <ChevronLeft size={20} />
             </button>
           )}
           <div style={{ position: 'relative', flex: 1 }}>
-            <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)', width: 16, height: 16, pointerEvents: 'none' }} />
+            <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: (isDark() ? '#737373' : 'var(--text-faint)'), width: 16, height: 16, pointerEvents: 'none' }} />
             <input
               type="text"
               placeholder="搜索单词..."
@@ -272,20 +274,20 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
                 width: '100%',
-                background: 'var(--bg-2)',
-                color: 'var(--ew-text-1)',
+                background: (isDark() ? '#171717' : 'var(--glass-1)'),
+                color: '#e5e5e5',
                 paddingLeft: 36,
                 paddingRight: 16,
                 paddingTop: 8,
                 paddingBottom: 8,
                 borderRadius: 8,
-                border: '1px solid var(--glass-border)',
+                border: '1px solid #262626',
                 fontSize: 13,
                 outline: 'none',
                 boxSizing: 'border-box',
               }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--glass-border-hi)'; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--glass-border)'; }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = (isDark() ? '#404040' : 'var(--glass-border-hi)'); }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = (isDark() ? '#262626' : 'var(--glass-border)'); }}
             />
           </div>
         </div>
@@ -293,14 +295,14 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
 
       {/* Navigation Header for Words View */}
       {viewMode === 'words' && !searchQuery && currentLibraryName && (
-        <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border)', gap: 8 }}>
+        <div style={{ padding: '8px 16px', borderBottom: '1px solid #262626', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 13, color: 'var(--text-3)', fontWeight: 500 }}>{currentLibraryName}</span>
+              <span style={{ fontSize: 13, color: (isDark() ? '#a3a3a3' : 'var(--text-3)'), fontWeight: 500 }}>{currentLibraryName}</span>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                style={{ background: 'var(--bg-2)', color: 'var(--text-3)', fontSize: 11, border: '1px solid var(--glass-border)' }}
+                style={{ background: (isDark() ? '#171717' : 'var(--glass-1)'), color: (isDark() ? '#a3a3a3' : 'var(--text-3)'), fontSize: 11, border: '1px solid #262626', borderRadius: 4, padding: '2px 6px', outline: 'none' }}
               >
                 <option value="default">默认</option>
                 <option value="familiarity_asc">熟悉度升序</option>
@@ -314,8 +316,8 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
                 borderRadius: 4,
                 border: 'none',
                 cursor: 'pointer',
-                background: isSelectMode ? 'var(--ew-accent-bg)' : 'transparent',
-                color: isSelectMode ? 'var(--text-1)' : 'var(--text-faint)',
+                background: isSelectMode ? 'rgba(37, 99, 235, 0.2)' : 'transparent',
+                color: isSelectMode ? (isDark() ? '#3b82f6' : 'var(--text-1)') : (isDark() ? '#737373' : 'var(--text-faint)'),
                 transition: 'all 0.15s',
               }}
               title="选择单词"
@@ -328,7 +330,7 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
             <select
               value={selectedGroupIndex}
               onChange={(e) => setSelectedGroupIndex(Number(e.target.value))}
-              style={{ width: '100%', background: 'var(--bg-2)', color: 'var(--text-2)', fontSize: 11, border: '1px solid var(--glass-border)' }}
+              style={{ width: '100%', background: (isDark() ? '#171717' : 'var(--glass-1)'), color: (isDark() ? '#d4d4d4' : 'var(--text-2)'), fontSize: 11, border: '1px solid #262626', borderRadius: 4, padding: '4px 8px', outline: 'none' }}
             >
               {groups.map((group) => (
                 <option key={group.index} value={group.index}>{group.label}</option>
@@ -337,12 +339,12 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
           )}
 
           {isSelectMode && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-2)', padding: 8, borderRadius: 6, border: '1px solid var(--glass-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: (isDark() ? '#171717' : 'var(--glass-1)'), padding: 8, borderRadius: 6, border: '1px solid #262626' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>已选 {selectedWordsForQuiz.size} 个</span>
+                <span style={{ fontSize: 12, color: (isDark() ? '#a3a3a3' : 'var(--text-3)') }}>已选 {selectedWordsForQuiz.size} 个</span>
                 <button
                   onClick={toggleSelectAll}
-                  style={{ fontSize: 11, color: 'var(--text-1)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                  style={{ fontSize: 11, color: (isDark() ? '#3b82f6' : 'var(--text-1)'), background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
                 >
                   {selectedWordsForQuiz.size === sortedWords.length ? '取消全选' : '全选'}
                 </button>
@@ -361,8 +363,8 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
                   alignItems: 'center',
                   gap: 4,
                   fontSize: 11,
-                  background: selectedWordsForQuiz.size === 0 ? 'var(--glass-border)' : '#2563eb',
-                  color: 'var(--bg-0)',
+                  background: selectedWordsForQuiz.size === 0 ? (isDark() ? '#262626' : 'var(--glass-border)') : '#2563eb',
+                  color: (isDark() ? '#fff' : 'var(--text-1)'),
                   border: 'none',
                   borderRadius: 4,
                   padding: '4px 8px',
@@ -380,13 +382,13 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
       {/* Content Area */}
       <div style={{ flex: 1, overflow: 'auto' }} ref={parentRef}>
         {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 14, color: 'var(--text-faint)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 14, color: (isDark() ? '#737373' : 'var(--text-faint)') }}>
             {/* Indeterminate progress bar — gives immediate visual feedback while the
                 word list loads from the backend (7508 words can take a moment). */}
-            <div style={{ width: '70%', height: 4, borderRadius: 999, background: 'var(--ew-border)', overflow: 'hidden' }}>
+            <div style={{ width: '70%', height: 4, borderRadius: 999, background: '#1a1a1a', overflow: 'hidden' }}>
               <div style={{
                 height: '100%', width: '40%', borderRadius: 999,
-                background: 'var(--ew-accent)',
+                background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
                 animation: 'lf-wordload 1.1s ease-in-out infinite',
               }} />
             </div>
@@ -425,28 +427,28 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
                   background: item.type === 'directory' ? 'rgba(59, 130, 246, 0.1)' : item.source === 'user' ? 'rgba(168, 85, 247, 0.1)' : 'rgba(34, 197, 94, 0.1)',
                 }}>
                   {item.type === 'directory' ? (
-                    <Folder size={16} style={{ color: 'var(--text-1)' }} />
+                    <Folder size={16} style={{ color: (isDark() ? '#3b82f6' : 'var(--text-1)') }} />
                   ) : (
-                    <svg width={16} height={16} style={{ color: item.source === 'user' ? 'var(--ew-accent)' : 'var(--st-done)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg width={16} height={16} style={{ color: item.source === 'user' ? '#a855f7' : '#22c55e' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   )}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--ew-text-1)' }}>{item.name.replace('.csv', '')}</span>
+                    <span style={{ fontSize: 14, fontWeight: 500, color: '#e5e5e5' }}>{item.name.replace('.csv', '')}</span>
                     {item.source === 'user' && (
-                      <span style={{ fontSize: 10, padding: '2px 6px', background: 'var(--ew-accent-bg)', color: 'var(--ew-text-2)', borderRadius: 4 }}>我的库</span>
+                      <span style={{ fontSize: 10, padding: '2px 6px', background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', borderRadius: 4 }}>我的库</span>
                     )}
                   </div>
-                  <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
+                  <span style={{ fontSize: 12, color: (isDark() ? '#737373' : 'var(--text-faint)') }}>
                     {item.type === 'directory' ? '文件夹' : item.source === 'user' ? `${item.wordCount || 0} 个单词` : '文件'}
                   </span>
                 </div>
               </button>
             ))}
             {libraryItems.length === 0 && (
-              <div style={{ textAlign: 'center', color: 'var(--text-faint)', fontSize: 14, padding: '32px 0' }}>
+              <div style={{ textAlign: 'center', color: (isDark() ? '#737373' : 'var(--text-faint)'), fontSize: 14, padding: '32px 0' }}>
                 空目录
               </div>
             )}
@@ -492,7 +494,7 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
                       alignItems: 'center',
                       padding: '0 16px',
                       background: isActive ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
-                      borderBottom: '1px solid var(--border)',
+                      borderBottom: '1px solid rgba(38, 38, 38, 0.5)',
                       cursor: isSelectMode ? 'pointer' : 'default',
                       transition: 'background 0.15s',
                     }}
@@ -501,8 +503,8 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
                     onClick={() => isSelectMode && toggleWordSelection(wordString)}
                   >
                     {isSelectMode ? (
-                      <div style={{ marginRight: 12, color: 'var(--text-faint)' }}>
-                        {isSelected ? <CheckSquare size={16} style={{ color: 'var(--text-1)' }} /> : <Square size={16} />}
+                      <div style={{ marginRight: 12, color: (isDark() ? '#737373' : 'var(--text-faint)') }}>
+                        {isSelected ? <CheckSquare size={16} style={{ color: (isDark() ? '#3b82f6' : 'var(--text-1)') }} /> : <Square size={16} />}
                       </div>
                     ) : showScore ? (
                       <Circle size={8} style={{ marginRight: 12, color: getProgressColor(score), fill: 'currentColor', flexShrink: 0 }} />
@@ -532,7 +534,7 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
                       <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
                         <span style={{
                           fontSize: 14,
-                          color: isActive ? 'var(--bg-0)' : 'var(--text-3)',
+                          color: isActive ? (isDark() ? '#fff' : 'var(--text-1)') : (isDark() ? '#a3a3a3' : 'var(--text-3)'),
                           fontWeight: isActive ? 500 : 'normal',
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
@@ -541,14 +543,14 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
                           {wordString}
                         </span>
                         {phonetic && (
-                          <span style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace', marginLeft: 8, flexShrink: 0 }}>
+                          <span style={{ fontSize: 11, color: (isDark() ? '#737373' : 'var(--text-faint)'), fontFamily: 'monospace', marginLeft: 8, flexShrink: 0 }}>
                             /{phonetic}/
                           </span>
                         )}
                         {renderCollinsStars(collins)}
                       </div>
                       {showChinese && definition && (
-                        <span style={{ fontSize: 12, color: 'var(--ew-text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+                        <span style={{ fontSize: 12, color: '#525252', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
                           {definition}
                         </span>
                       )}

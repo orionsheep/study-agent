@@ -1163,3 +1163,116 @@ button:active:not(:disabled) {
   --ew-accent: #3b82f6;
   --ew-accent-bg: rgba(37, 99, 235, 0.2);
 }
+/* 
+   ENGLISH WORKSPACE SMART LIGHT MODE ADAPTATION
+   The english workspace is perfectly tuned for dark mode.
+   In dark mode (.dark), we do absolutely nothing, preserving the 100% original look.
+   In light mode, we use CSS filters to gracefully invert and tune the immersive panels.
+*/
+
+/* Only apply when NOT in dark mode */
+html:not(.dark) .english-workspace {
+  /* Give the main container a subtle background so the inverted children sit well */
+  background: var(--bg-1) !important;
+}
+
+html:not(.dark) .english-workspace .fission-graph-container,
+html:not(.dark) .english-workspace .native-app-body-custom {
+  /* 
+     Invert the heavily dark/space-like canvas areas.
+     hue-rotate(180deg) ensures blues stay blueish after inversion.
+     This instantly solves the invisible text/lines on canvas.
+  */
+  filter: invert(1) hue-rotate(180deg) contrast(0.95);
+  background: #ffffff !important;
+}
+
+/* Re-invert images and certain specific elements if they get weirdly colored */
+html:not(.dark) .english-workspace img,
+html:not(.dark) .english-workspace .tutor-av {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Fix WordList & WordDetail backgrounds in light mode */
+/* The original uses #0a0a0a, #171717, rgba(23,23,23) etc. 
+   We will override these specifically for light mode. */
+html:not(.dark) .english-workspace > div > div > div {
+  background: transparent !important;
+}
+
+html:not(.dark) .english-workspace .ew-word-item {
+  color: var(--text-1) !important;
+}
+
+html:not(.dark) .english-workspace * {
+  border-color: var(--glass-border) !important;
+}
+
+html:not(.dark) .english-workspace button {
+  color: var(--text-2) !important;
+}
+
+html:not(.dark) .english-workspace button:hover {
+  background: var(--glass-2) !important;
+  color: var(--text-1) !important;
+}
+/* ENGLISH WORKSPACE LIGHT MODE OVERRIDES */
+/* Since the original TSX files are kept intact (perfect for dark mode), 
+   we inject overrides ONLY for light mode. */
+
+html:not(.dark) .english-workspace {
+  background: var(--bg-1) !important;
+  color: var(--text-1) !important;
+}
+
+/* Force light backgrounds on the main panels */
+html:not(.dark) .english-workspace [style*="background: rgb(10, 10, 10)"],
+html:not(.dark) .english-workspace [style*="background: #0a0a0a"],
+html:not(.dark) .english-workspace [style*="background: '#0a0a0a'"] {
+  background: var(--bg-1) !important;
+}
+
+html:not(.dark) .english-workspace [style*="background: rgb(23, 23, 23)"],
+html:not(.dark) .english-workspace [style*="background: #171717"] {
+  background: var(--bg-2) !important;
+}
+
+html:not(.dark) .english-workspace [style*="background: rgba(23, 23, 23"],
+html:not(.dark) .english-workspace [style*="background: rgba(10, 10, 10"] {
+  background: var(--glass-1) !important;
+}
+
+/* Force text colors */
+html:not(.dark) .english-workspace [style*="color: rgb(255, 255, 255)"],
+html:not(.dark) .english-workspace [style*="color: #fff"] {
+  color: var(--text-1) !important;
+}
+
+html:not(.dark) .english-workspace [style*="color: rgb(212, 212, 212)"],
+html:not(.dark) .english-workspace [style*="color: #d4d4d4"] {
+  color: var(--text-2) !important;
+}
+
+html:not(.dark) .english-workspace [style*="color: rgb(163, 163, 163)"],
+html:not(.dark) .english-workspace [style*="color: #a3a3a3"],
+html:not(.dark) .english-workspace [style*="color: #737373"] {
+  color: var(--text-3) !important;
+}
+
+/* Borders */
+html:not(.dark) .english-workspace [style*="border-color: #262626"],
+html:not(.dark) .english-workspace [style*="border-bottom: 1px solid #262626"],
+html:not(.dark) .english-workspace [style*="border-right: 1px solid #262626"] {
+  border-color: var(--border) !important;
+}
+
+/* Fix Canvas / FissionGraph inversion for light mode visibility */
+html:not(.dark) .fission-graph-container {
+  filter: invert(1) hue-rotate(180deg);
+  background: #fff !important;
+}
+/* Ensure tooltip inside the inverted canvas reads correctly */
+html:not(.dark) .fission-graph-container > div:last-child {
+  filter: invert(1) hue-rotate(180deg);
+}
+

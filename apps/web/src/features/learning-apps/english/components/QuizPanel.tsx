@@ -128,11 +128,11 @@ export default function QuizPanel({ word, onComplete }: Props) {
                 padding: "8px 12px",
                 borderRadius: 8,
                 background: a.correct ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)",
-                border: `1px solid ${a.correct ? "var(--glass-border-hi)" : "var(--st-risk-dim)"}`,
+                border: `1px solid ${a.correct ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.2)"}`,
                 fontSize: 12,
               }}
             >
-              {a.correct ? <CheckCircle2 size={14} style={{ color: "var(--text-1)", flexShrink: 0, marginTop: 2 }} /> : <XCircle size={14} style={{ color: "var(--st-risk)", flexShrink: 0, marginTop: 2 }} />}
+              {a.correct ? <CheckCircle2 size={14} style={{ color: "#10b981", flexShrink: 0, marginTop: 2 }} /> : <XCircle size={14} style={{ color: "#ef4444", flexShrink: 0, marginTop: 2 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ color: "var(--text-2)", marginBottom: 2 }}>{a.question}</div>
                 {!a.correct && (
@@ -188,7 +188,7 @@ export default function QuizPanel({ word, onComplete }: Props) {
             style={{
               padding: "5px 12px",
               borderRadius: 6,
-              border: "1px solid var(--glass-border)",
+              border: "1px solid var(--border-1)",
               background: mode === m ? "var(--accent-grad)" : "var(--glass-1)",
               color: mode === m ? "#fff" : "var(--text-2)",
               fontSize: 12,
@@ -230,7 +230,7 @@ export default function QuizPanel({ word, onComplete }: Props) {
                 style={{
                   padding: "10px 14px",
                   borderRadius: 8,
-                  border: "1px solid var(--glass-border)",
+                  border: "1px solid var(--border-1)",
                   background: "var(--glass-1)",
                   color: "var(--text-1)",
                   fontSize: 13,
@@ -244,7 +244,7 @@ export default function QuizPanel({ word, onComplete }: Props) {
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = "var(--glass-1)";
-                  e.currentTarget.style.borderColor = "var(--glass-border)";
+                  e.currentTarget.style.borderColor = "var(--border-1)";
                 }}
               >
                 <span style={{ display: "inline-block", width: 20, fontWeight: 600, color: "var(--text-3)" }}>
@@ -271,7 +271,7 @@ export default function QuizPanel({ word, onComplete }: Props) {
                 flex: 1,
                 padding: "10px 14px",
                 borderRadius: 8,
-                border: "1px solid var(--glass-border)",
+                border: "1px solid var(--border-1)",
                 background: "var(--glass-1)",
                 color: "var(--text-1)",
                 fontSize: 14,
@@ -308,7 +308,7 @@ export default function QuizPanel({ word, onComplete }: Props) {
               style={{
                 padding: "10px 14px",
                 borderRadius: 8,
-                border: "1px solid var(--glass-border)",
+                border: "1px solid var(--border-1)",
                 background: "var(--glass-1)",
                 color: "var(--text-1)",
                 fontSize: 13,
