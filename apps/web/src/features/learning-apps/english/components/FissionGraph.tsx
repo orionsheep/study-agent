@@ -184,24 +184,18 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
     // Polling fallback: ResizeObserver occasionally fails to fire when the container
     // lives inside a react-resizable-panels Panel whose layout settles asynchronously.
     // A short polling interval catches the final size and then idles once stable.
-    let stableCount = 0;
     let lastW = 0, lastH = 0;
     const pollInterval = setInterval(() => {
       if (!containerRef.current) return;
-      // Same offsetWidth/offsetHeight fix as updateDimensions — see comment there.
       const width = containerRef.current.offsetWidth;
       const height = containerRef.current.offsetHeight;
       if (width > 0 && height > 0) {
         if (Math.round(width) !== lastW || Math.round(height) !== lastH) {
           lastW = Math.round(width); lastH = Math.round(height);
           setDimensions({ width, height });
-          stableCount = 0;
-        } else {
-          stableCount++;
-          if (stableCount > 8) clearInterval(pollInterval); // stable for ~1.6s, stop
         }
       }
-    }, 200);
+    }, 150);
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'h' && !e.repeat && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
@@ -258,22 +252,22 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
         if (!fgRef.current) return;
         try {
           if (data.nodes.length < 5) {
-            fgRef.current.centerAt(0, 0, 500);
-            fgRef.current.zoom(1.2, 500);
+            fgRef.current.centerAt(0, 0, 300);
+            fgRef.current.zoom(1.2, 300);
           } else {
-            fgRef.current.zoomToFit(600, 60);
-            // zoomToFit 把整群节点 fit 进视口（视口中心 = 节点质心），但质心通常
-            // 不在 graph 原点，导致固定在 (0,0) 的中心词偏离画布中心。fit 完成后
-            // 强制把视口中心对齐 graph 原点，让中心词回到正中。
+            fgRef.current.zoomToFit(400, 60);
             setTimeout(() => {
-              try { fgRef.current?.centerAt(0, 0, 300); } catch { /* instance torn down */ }
-            }, 700);
+              try { if (fgRef.current) fgRef.current.centerAt(0, 0, 300); } catch {}
+            }, 450);
           }
-        } catch {
-          // fgRef may briefly point at a tearing-down instance; ignore.
-        }
+        } catch {}
       }, fitDelay);
-      return () => clearTimeout(timer);
+      
+      const resizeTimer = setTimeout(() => {
+         try { if (fgRef.current) fgRef.current.centerAt(0, 0, 200); } catch {}
+      }, 150);
+      
+      return () => { clearTimeout(timer); clearTimeout(resizeTimer); }
     }
   }, [data, dimensions]);
 

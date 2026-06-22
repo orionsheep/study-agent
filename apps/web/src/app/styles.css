@@ -1374,429 +1374,120 @@ html:not(.dark) .fission-graph-container > div:not(.force-graph-container) * {
 
 
 /* =====================================================================
-   Global Glass Effect Toggle
-   Controlled by .enable-glass class on <html>
-   By default (no class), apps use solid pure backgrounds.
-   ===================================================================== */
-:root {
-  /* Default solid backgrounds for active panes */
-  --panel-bg: var(--bg-0);
-  --panel-bg-sec: var(--bg-1);
-}
-
-.dark {
-  --panel-bg: var(--bg-1);
-  --panel-bg-sec: var(--bg-2);
-}
-
-/* When glass mode is activated */
-.enable-glass {
-  --panel-bg: var(--glass-bg);
-  --panel-bg-sec: var(--glass-1);
-}
-
-/* Apply adaptive backgrounds to heavy windows instead of forced glass */
-.appwin,
-.canvas-app {
-  background: var(--panel-bg);
-  /* The blur only does something if background has alpha */
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
-}
-
-.native-app-body-workspace {
-  background: var(--panel-bg);
-}
-
-.notebooklm-workspace {
-  background: var(--panel-bg);
-}
-
-.nblm-source-rail {
-  background: var(--panel-bg-sec);
-}
 
 /* =====================================================================
-   THE ULTIMATE LIGHT MODE REWRITE
-   For extreme readability and elegant "Light Liquid Glass" aesthetics.
+   THE PERFECT LIGHT MODE (No Flashing, No Invert)
    ===================================================================== */
 
-/* 1. Global Light Mode Base Variables
-   We redefine these strictly to ensure NO dirty grays and HIGH readability.
-*/
-:root {
-  --light-bg-base: #f4f5f7;           /* Main app background outside of canvas */
-  --light-bg-canvas: #f8fafc;         /* Canvas background */
-  --light-panel-solid: #ffffff;       /* Solid fallback for panels */
-  --light-glass-panel: rgba(255, 255, 255, 0.72); /* The core glass material */
-  --light-glass-hover: rgba(255, 255, 255, 0.95);
-  --light-glass-border: rgba(0, 0, 0, 0.06);      /* Outer subtle shadow line */
-  --light-glass-rim: rgba(255, 255, 255, 0.8);    /* Inner light reflection */
-  
-  /* Typography - using Zinc scale for professional cool-tone blacks */
-  --light-text-main: #18181b;         /* Primary readability */
-  --light-text-sec: #52525b;          /* Secondary descriptions */
-  --light-text-muted: #a1a1aa;        /* Hints and placeholders */
-  
-  /* Brand / Accents */
-  --light-accent-blue: #2563eb;       /* Primary interactive blue */
-  --light-accent-bg: rgba(37, 99, 235, 0.1);
-  --light-danger: #dc2626;
-}
-
-/* 2. Apply to entire English Workspace in Light Mode */
-html:not(.dark) .english-workspace {
-  background: var(--light-bg-canvas) !important;
-  color: var(--light-text-main) !important;
-}
-
-/* 3. The "Light Liquid Glass" Panels 
-   This targets the 3 columns in the dashboard mode and the main views.
-*/
-html:not(.dark) .english-workspace [style*="background: var(--ew-bg-panel)"],
-html:not(.dark) .english-workspace [style*="background: var(--ew-bg-main)"] {
-  background: var(--light-glass-panel) !important;
-  backdrop-filter: blur(24px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
-  box-shadow: 0 4px 24px -6px rgba(0, 0, 0, 0.05), inset 0 1px 1px var(--light-glass-rim) !important;
-}
-
-/* 4. Fix ALL Text Visibility */
-html:not(.dark) .english-workspace h1,
-html:not(.dark) .english-workspace h2,
-html:not(.dark) .english-workspace h3,
-html:not(.dark) .english-workspace strong,
-html:not(.dark) .english-workspace [style*="color: var(--ew-text-1)"] {
-  color: var(--light-text-main) !important;
-  font-weight: 600 !important;
-}
-
-html:not(.dark) .english-workspace span,
-html:not(.dark) .english-workspace p,
-html:not(.dark) .english-workspace [style*="color: var(--ew-text-2)"] {
-  color: var(--light-text-sec) !important;
-}
-
-html:not(.dark) .english-workspace small,
-html:not(.dark) .english-workspace [style*="color: var(--ew-text-3)"] {
-  color: var(--light-text-muted) !important;
-}
-
-/* 5. Fix Accent Colors (Buttons, Links, Highlights) */
-html:not(.dark) .english-workspace [style*="color: var(--ew-accent)"],
-html:not(.dark) .english-workspace .ew-word-item.active {
-  color: var(--light-accent-blue) !important;
-}
-
-html:not(.dark) .english-workspace [style*="background: var(--ew-accent-bg)"] {
-  background: var(--light-accent-bg) !important;
-}
-
-/* 6. Fix Borders to be elegant and not blocky */
-html:not(.dark) .english-workspace [style*="border"] {
-  border-color: var(--light-glass-border) !important;
-}
-
-/* 7. Hover States */
-html:not(.dark) .english-workspace [style*="background: var(--ew-bg-hover)"],
-html:not(.dark) .english-workspace button:hover {
-  background: var(--light-glass-hover) !important;
-}
-
-/* 8. Fix the FissionGraph Canvas (The Star Map) */
-/* Instead of using a terrible 'invert' filter, we just force the container to be white,
-   but we don't invert the canvas. The canvas is drawn in JS. 
-   BUT since we modified JS to use 'isDark()' previously, the canvas will naturally draw 
-   black text on a white background in light mode!
-*/
-html:not(.dark) .fission-graph-container {
-  background: var(--light-panel-solid) !important;
-  border: 1px solid var(--light-glass-border) !important;
-  border-radius: var(--r-md) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
-  filter: none !important; /* REMOVE the ugly invert */
-}
-
-/* Remove any invert from tooltips */
-html:not(.dark) .fission-graph-container * {
-  filter: none !important;
-}
-/* =====================================================================
-   PRO LIGHT MODE FOR ENGLISH WORKSPACE
-   True Liquid Glass aesthetics, zero 'invert' filters, perfect contrast.
-   ===================================================================== */
-
-:root {
-  --light-glass-bg: rgba(255, 255, 255, 0.75);
-  --light-glass-blur: blur(24px) saturate(160%);
-  --light-glass-border: rgba(0, 0, 0, 0.08);
-  --light-glass-rim: rgba(255, 255, 255, 0.9);
-  --light-glass-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.08);
-  
-  --light-text-1: #18181b;
-  --light-text-2: #52525b;
-  --light-text-3: #a1a1aa;
-  --light-accent: #2563eb;
-}
-
-html:not(.dark) .english-workspace {
-  background: #f4f5f8 !important;
-}
-
-/* Apply Liquid Glass to the 3 main columns */
-html:not(.dark) .english-workspace [style*="var(--ew-bg-panel)"],
-html:not(.dark) .english-workspace [style*="var(--ew-bg-main)"] {
-  background: var(--light-glass-bg) !important;
-  backdrop-filter: var(--light-glass-blur) !important;
-  -webkit-backdrop-filter: var(--light-glass-blur) !important;
-  border-color: var(--light-glass-border) !important;
-  box-shadow: inset 0 1px 1px var(--light-glass-rim), var(--light-glass-shadow) !important;
-}
-
-/* Fix Text Contrast */
-html:not(.dark) .english-workspace [style*="var(--ew-text-1)"],
-html:not(.dark) .english-workspace h1,
-html:not(.dark) .english-workspace h2,
-html:not(.dark) .english-workspace strong {
-  color: var(--light-text-1) !important;
-}
-
-html:not(.dark) .english-workspace [style*="var(--ew-text-2)"],
-html:not(.dark) .english-workspace p {
-  color: var(--light-text-2) !important;
-}
-
-html:not(.dark) .english-workspace [style*="var(--ew-text-3)"],
-html:not(.dark) .english-workspace [style*="var(--ew-text-faint)"],
-html:not(.dark) .english-workspace small {
-  color: var(--light-text-3) !important;
-}
-
-/* Accents & Active States */
-html:not(.dark) .english-workspace [style*="var(--ew-accent)"] {
-  color: var(--light-accent) !important;
-}
-
-html:not(.dark) .english-workspace [style*="var(--ew-accent-bg)"] {
-  background: rgba(37, 99, 235, 0.1) !important;
-}
-
-/* Hover States */
-html:not(.dark) .english-workspace [style*="var(--ew-bg-hover)"]:hover,
-html:not(.dark) .english-workspace button:hover {
-  background: rgba(0, 0, 0, 0.04) !important;
-}
-
-/* Active buttons / Selected tabs */
-html:not(.dark) .english-workspace [style*="var(--ew-bg-active)"] {
-  background: rgba(0, 0, 0, 0.06) !important;
-  border-color: rgba(0, 0, 0, 0.12) !important;
-}
-
-/* Borders */
-html:not(.dark) .english-workspace [style*="var(--ew-border)"],
-html:not(.dark) .english-workspace [style*="var(--ew-border-hi)"] {
-  border-color: var(--light-glass-border) !important;
-}
-
-/* 
-   FISSION GRAPH CANVAS
-   It draws itself correctly in JS now, we just give it a solid container.
-   NO INVERT FILTER!
-*/
-html:not(.dark) .fission-graph-container {
-  background: #ffffff !important;
-  border-radius: var(--r-md) !important;
-  border: 1px solid var(--light-glass-border) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
-  filter: none !important;
-}
-
-/* Ensure legend and popups inside graph look good in light mode */
-html:not(.dark) .fission-graph-container > div:not(.force-graph-container) {
-  background: var(--light-glass-bg) !important;
-  backdrop-filter: var(--light-glass-blur) !important;
-  -webkit-backdrop-filter: var(--light-glass-blur) !important;
-  border: 1px solid var(--light-glass-border) !important;
-  color: var(--light-text-1) !important;
-  box-shadow: var(--light-glass-shadow) !important;
-}
-
-html:not(.dark) .fission-graph-container > div:not(.force-graph-container) * {
-  color: var(--light-text-2) !important;
-}
-html:not(.dark) .fission-graph-container > div:not(.force-graph-container) [style*="font-weight: 500"] {
-  color: var(--light-text-1) !important;
-}
-
-/* Fix WordDetail markdown text */
-html:not(.dark) .english-workspace .markdown-body code {
-  background: rgba(0, 0, 0, 0.05) !important;
-  color: var(--light-accent) !important;
-}
-html:not(.dark) .english-workspace .markdown-body pre {
-  background: #f8fafc !important;
-  border: 1px solid var(--light-glass-border) !important;
-}
-html:not(.dark) .english-workspace .markdown-body pre code {
-  color: var(--light-text-2) !important;
-}
-
-/* =====================================================================
-   GLOBAL LIQUID GLASS SETTINGS
-   Ensuring transparency is maintained for internal workspaces.
-   ===================================================================== */
-
-/* By default, we let the app window's glass background shine through.
-   We make internal heavy panels transparent so they don't block the glass. */
-.notebooklm-workspace,
-.native-app-body-custom,
-.native-app-body-workspace {
+/* 1. Global Glass Effects (Controlled by Water Drop) */
+html.enable-glass .notebooklm-workspace,
+html.enable-glass .native-app-body-custom,
+html.enable-glass .native-app-body-workspace {
   background: transparent !important;
 }
 
-/* NotebookLM side rail and detail panel shouldn't block the glass */
-.nblm-source-rail {
-  background: rgba(0, 0, 0, 0.15) !important;
-}
-html:not(.dark) .nblm-source-rail {
-  background: rgba(255, 255, 255, 0.4) !important;
+html.enable-glass .nblm-source-rail {
+  background: rgba(128, 128, 128, 0.1) !important;
 }
 
-/* When FULLSCREEN, we remove ALL transparency and revert to solid colors
-   for absolute focus and immersion. */
-.canvas-app.fullscreen, 
-.appwin.fullscreen {
-  background: var(--bg-0) !important;
-  backdrop-filter: none !important;
+/* 2. English Workspace Ultimate Light Mode Override */
+html:not(.dark) .english-workspace {
+  background: var(--bg-1) !important;
+  color: #18181b !important;
 }
 
-.canvas-app.fullscreen .notebooklm-workspace,
-.appwin.fullscreen .notebooklm-workspace,
-.canvas-app.fullscreen .native-app-body-custom,
-.appwin.fullscreen .native-app-body-custom {
+/* Make backgrounds elegant glass/white instead of solid black */
+html:not(.dark) .english-workspace [style*="background: #0a0a0a"],
+html:not(.dark) .english-workspace [style*="background: '#0a0a0a'"] {
   background: var(--bg-0) !important;
 }
 
-.canvas-app.fullscreen .nblm-source-rail,
-.appwin.fullscreen .nblm-source-rail {
+html:not(.dark) .english-workspace [style*="background: #000"],
+html:not(.dark) .english-workspace [style*="background: '#000'"],
+html:not(.dark) .english-workspace [style*="background: #000000"] {
   background: var(--bg-1) !important;
 }
 
-.canvas-app.fullscreen .english-workspace,
-.appwin.fullscreen .english-workspace {
-  background: var(--bg-0) !important;
+html:not(.dark) .english-workspace [style*="background: #171717"] {
+  background: var(--glass-1) !important;
 }
 
-/* If the user disables the glass effect globally (.disable-glass on HTML) */
-html.disable-glass .appwin,
-html.disable-glass .canvas-app {
-  background: var(--bg-0) !important;
-  backdrop-filter: none !important;
+/* Fix text colors completely for readability */
+html:not(.dark) .english-workspace [style*="color: #fff"],
+html:not(.dark) .english-workspace [style*="color: #ffffff"],
+html:not(.dark) .english-workspace [style*="color: rgba(255, 255, 255, 0.9)"] {
+  color: #18181b !important;
 }
 
-html.disable-glass .nblm-source-rail {
-  background: var(--bg-1) !important;
+html:not(.dark) .english-workspace [style*="color: #d4d4d4"],
+html:not(.dark) .english-workspace [style*="color: #a3a3a3"] {
+  color: #52525b !important;
 }
 
-/* =====================================================================
-   Ultimate FissionGraph Light Mode (No Invert Filter)
-   Preserves all transparency, layers, and shadows.
-   ===================================================================== */
-
-/* Force light background on container but keep it structurally intact */
-html:not(.dark) .fission-graph-container {
-  background: var(--light-panel-solid) !important;
-  border-radius: var(--r-md) !important;
-  border: 1px solid var(--light-glass-border) !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
+html:not(.dark) .english-workspace [style*="color: #737373"] {
+  color: #a1a1aa !important;
 }
 
-/* Force text colors inside the graph container */
-html:not(.dark) .fission-graph-container * {
-  color: var(--light-text-1) !important;
+/* Fix Borders */
+html:not(.dark) .english-workspace [style*="border-color: #262626"],
+html:not(.dark) .english-workspace [style*="border-bottom: 1px solid #262626"],
+html:not(.dark) .english-workspace [style*="border-right: 1px solid #262626"] {
+  border-color: var(--glass-border-hi) !important;
 }
 
-/* Make sure the floating tooltips and legends use elegant glass */
-html:not(.dark) .fission-graph-container > div:not(.force-graph-container) {
-  background: var(--light-glass-panel) !important;
-  backdrop-filter: var(--light-glass-blur) !important;
-  -webkit-backdrop-filter: var(--light-glass-blur) !important;
-  border: 1px solid var(--light-glass-border) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08) !important;
-  color: var(--light-text-1) !important;
-}
-
-/* Specifically target muted text in legends */
-html:not(.dark) .fission-graph-container > div:not(.force-graph-container) [style*="color: rgb(163, 163, 163)"],
-html:not(.dark) .fission-graph-container > div:not(.force-graph-container) [style*="color: #a3a3a3"] {
-  color: var(--light-text-sec) !important;
-}
-
-/* In light mode, the canvas is drawing white text on a white background.
-   We can't easily change the canvas fillText with CSS.
-   BUT, we can invert JUST the canvas element! This doesn't break the container's z-index.
-*/
-html:not(.dark) .force-graph-container canvas {
-  filter: invert(1) hue-rotate(180deg) brightness(1.05) contrast(0.95);
-}
-
-/* Since the canvas is inverted, we need to ensure the parent's background is black 
-   so it inverts to white, matching the container. */
-html:not(.dark) .fission-graph-container > div:first-child {
-  background: #000 !important;
-}
-
-/* The gradient background div should also stay black so it inverts cleanly */
-html:not(.dark) .fission-graph-container > div:nth-child(2) {
-  background: radial-gradient(ellipse at center, #0a0a0a 0%, #000 100%) !important;
-}
-
-
-/* =====================================================================
-   Global Glass Integration for English Workspace
-   When .enable-glass is active on the HTML element (toggled via Droplet button),
-   we make the deeply nested dark backgrounds transparent so the shell's glass shows.
-   ===================================================================== */
-
-/* 
-  If glass is enabled, remove the hardcoded background colors from 
-  the nested panels in both dark and light modes, letting the parent's glass shine through.
-*/
-html.enable-glass .english-workspace [style*="background: #0a0a0a"],
-html.enable-glass .english-workspace [style*="background: rgb(10, 10, 10)"],
-html.enable-glass .english-workspace [style*="background: #171717"],
-html.enable-glass .english-workspace [style*="background: rgb(23, 23, 23)"] {
-  background: transparent !important;
-}
-
-html.enable-glass .english-workspace [style*="background: rgba(23, 23, 23, 0.6)"] {
-  background: rgba(255, 255, 255, 0.05) !important;
-}
-
-/* Ensure borders are delicate when glass is on */
-html.enable-glass .english-workspace [style*="border-color: #262626"],
-html.enable-glass .english-workspace [style*="border-bottom: 1px solid #262626"],
-html.enable-glass .english-workspace [style*="border-right: 1px solid #262626"] {
+html:not(.dark) .english-workspace [style*="border-top: 1px solid #171717"] {
   border-color: var(--glass-border) !important;
 }
 
-/* 
-   For light mode specifically, if glass is enabled, we use a very soft white
-   to maintain readability without blocking the blur.
-*/
+/* 3. FissionGraph specifically (The Star Map) */
+/* We don't invert the canvas. It will be a cool dark map on a light workspace. 
+   But its container and popups must be readable! */
+html:not(.dark) .fission-graph-container {
+  /* Give the map a container so it doesn't bleed */
+  background: #000000 !important;
+  border-radius: var(--r-md) !important;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
+}
+
+/* But any popups (like the legend) inside it must be light glass! */
+html:not(.dark) .fission-graph-container > div:not(.force-graph-container) {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid var(--glass-border-hi) !important;
+  color: #18181b !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.08) !important;
+}
+
+html:not(.dark) .fission-graph-container > div:not(.force-graph-container) * {
+  color: #18181b !important;
+}
+
+html:not(.dark) .fission-graph-container > div:not(.force-graph-container) [style*="color: #a3a3a3"],
+html:not(.dark) .fission-graph-container > div:not(.force-graph-container) [style*="color: #737373"] {
+  color: #52525b !important;
+}
+
+/* 4. Fix English Markdown rendering */
+html:not(.dark) .english-workspace .markdown-body pre {
+  background: var(--bg-2) !important;
+  border: 1px solid var(--border) !important;
+}
+html:not(.dark) .english-workspace .markdown-body code {
+  color: #2563eb !important;
+  background: rgba(0,0,0,0.04) !important;
+}
+html:not(.dark) .english-workspace .markdown-body pre code {
+  color: #52525b !important;
+  background: transparent !important;
+}
+
+/* 5. Support Glass Toggle in Light Mode English Workspace */
 html.enable-glass:not(.dark) .english-workspace [style*="background: #0a0a0a"],
-html.enable-glass:not(.dark) .english-workspace [style*="background: rgb(10, 10, 10)"],
-html.enable-glass:not(.dark) .english-workspace [style*="background: #171717"],
-html.enable-glass:not(.dark) .english-workspace [style*="background: rgb(23, 23, 23)"] {
+html.enable-glass:not(.dark) .english-workspace [style*="background: '#0a0a0a'"],
+html.enable-glass:not(.dark) .english-workspace [style*="background: #000"],
+html.enable-glass:not(.dark) .english-workspace [style*="background: '#000'"],
+html.enable-glass:not(.dark) .english-workspace [style*="background: #000000"] {
   background: rgba(255, 255, 255, 0.4) !important;
 }
-
-/* Force borders in light mode */
-html:not(.dark) .english-workspace [style*="border-color: #262626"],
-html:not(.dark) .english-workspace [style*="border-bottom: 1px solid #262626"],
-html:not(.dark) .english-workspace [style*="border-right: 1px solid #262626"],
-html:not(.dark) .english-workspace [style*="border-top: 1px solid #171717"] {
-  border-color: rgba(0, 0, 0, 0.08) !important;
-}
-
