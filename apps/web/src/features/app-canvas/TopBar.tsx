@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Brain, ChevronDown, Cpu, Download, LogOut, PanelLeftClose, PanelLeftOpen, User } from "lucide-react";
+import { Brain, ChevronDown, Cpu, Download, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Sun, User } from "lucide-react";
 import type { TraceItem } from "../../lib/events/agentEvents";
 import { logoutAccount } from "../../lib/api/client";
+import type { ThemeMode } from "../../lib/state/useTheme";
 
 type Props = {
   isStreaming: boolean;
@@ -11,11 +12,13 @@ type Props = {
   currentTopic?: string;
   courseLabel?: string;
   learningObjective?: string;
+  theme: ThemeMode;
+  onToggleTheme: () => void;
   onToggleCanvas?: () => void;
   onLogout?: () => void;
 };
 
-export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, currentTopic, courseLabel, learningObjective, onToggleCanvas, onLogout }: Props) {
+export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, currentTopic, courseLabel, learningObjective, theme, onToggleTheme, onToggleCanvas, onLogout }: Props) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -111,6 +114,15 @@ export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, c
           {canvasHidden ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
         </button>
       ) : null}
+
+      <button
+        className="theme-toggle"
+        title={theme === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+        aria-label={theme === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
+        onClick={onToggleTheme}
+      >
+        {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+      </button>
 
       <button className="btn btn-icon" title="导出">
         <Download size={16} />

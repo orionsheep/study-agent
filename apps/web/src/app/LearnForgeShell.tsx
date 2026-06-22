@@ -24,6 +24,7 @@ import {
 } from "../lib/api/client";
 import { applyAgentEvent, applyTraceEvent, type ChatMessage, type TraceItem } from "../lib/events/agentEvents";
 import { loadJson, saveJson } from "../lib/state/localStorage";
+import { useTheme } from "../lib/state/useTheme";
 import { buildResourceCanvasAppRequest } from "./LearnForgeApp";
 
 // #15: append a chat→canvas link to the rail, deduping by link_id and capping to the
@@ -60,6 +61,7 @@ function notebookLMContextLabel(context: NotebookLMContext): string {
 }
 
 export function LearnForgeShell({ sessionContext, onLogout }: Props) {
+  const { theme, toggleTheme } = useTheme();
   const [apps, setApps] = useState<CanvasApp[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSnapshot | undefined>();
   const [shellMessages, setShellMessages] = useState<ChatMessage[]>([
@@ -665,6 +667,8 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
         currentTopic={learningFocus.topic}
         courseLabel={learningFocus.courseLabel}
         learningObjective={learningFocus.objective}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
       <main
         ref={shellRef}

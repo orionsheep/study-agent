@@ -12,6 +12,7 @@ import {
   type SessionContext
 } from "../lib/api/client";
 import type { ChatMessage } from "../lib/events/agentEvents";
+import { useTheme } from "../lib/state/useTheme";
 
 type Props = {
   auth: AuthPayload;
@@ -21,6 +22,7 @@ type Props = {
 };
 
 export function OnboardingFlow({ auth, context, onComplete, onLogout }: Props) {
+  const { theme, toggleTheme } = useTheme();
   const name = auth.user.display_name || "同学";
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -65,7 +67,7 @@ export function OnboardingFlow({ auth, context, onComplete, onLogout }: Props) {
 
   return (
     <div className="lf-root">
-      <TopBar isStreaming={isStreaming} traceLatest={undefined} />
+      <TopBar isStreaming={isStreaming} traceLatest={undefined} theme={theme} onToggleTheme={toggleTheme} onLogout={onLogout} />
       <main className="learnforge-shell canvas-hidden onboarding-chat-shell">
         <TutorChat
           messages={messages}
