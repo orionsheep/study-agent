@@ -32,6 +32,8 @@ interface Props {
 
 type Mode = 'dashboard' | 'immersive' | 'stats' | 'quiz';
 
+
+const isDark = () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
   const [selectedWord, setSelectedWord] = useState<string | null>(
     String(app.payload?.incoming_word ?? app.payload?.selected_word ?? '') || null
@@ -95,7 +97,7 @@ export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
   }, []);
 
   return (
-    <div style={{ position: 'relative', height: '100%', width: '100%', background: '#000', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', height: '100%', width: '100%', background: (isDark()?'#000':'transparent'), overflow: 'hidden' }}>
       {mode === 'dashboard' ? (
         <DashboardMode
           selectedWord={selectedWord}
@@ -113,10 +115,10 @@ export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
         />
       ) : mode === 'stats' ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid #262626', background: '#0a0a0a' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid #262626', background: (isDark()?'#0a0a0a':'transparent') }}>
             <button
               onClick={() => setMode('dashboard')}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, background: 'transparent', color: '#a3a3a3' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, background: 'transparent', color: (isDark()?'#a3a3a3':'var(--text-3)') }}
               title="返回单词工作区"
             >
               <ChevronLeft size={14} /> 返回工作区
@@ -128,19 +130,19 @@ export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
         </div>
       ) : mode === 'quiz' ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid #262626', background: '#0a0a0a' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid #262626', background: (isDark()?'#0a0a0a':'transparent') }}>
             <button
               onClick={() => setMode('dashboard')}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, background: 'transparent', color: '#a3a3a3' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, background: 'transparent', color: (isDark()?'#a3a3a3':'var(--text-3)') }}
               title="返回单词工作区"
             >
               <ChevronLeft size={14} /> 返回工作区
             </button>
-            <span style={{ fontSize: 13, color: '#d4d4d4', fontWeight: 500 }}>
+            <span style={{ fontSize: 13, color: (isDark()?'#d4d4d4':'var(--text-2)'), fontWeight: 500 }}>
               {selectedWord ? `测验 · ${selectedWord}` : '单词测验'}
             </span>
           </div>
-          <div style={{ flex: 1, minHeight: 0, overflow: 'auto', background: '#0a0a0a' }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'auto', background: (isDark()?'#0a0a0a':'transparent') }}>
             <QuizPanel word={selectedWord} />
           </div>
         </div>
@@ -185,7 +187,7 @@ function DashboardMode({
       {/* Left column: Word List */}
       {isLeftSidebarOpen ? (
         <>
-          <Panel defaultSize={20} minSize={15} maxSize={32} style={{ background: '#0a0a0a' }}>
+          <Panel defaultSize={20} minSize={15} maxSize={32} style={{ background: (isDark()?'#0a0a0a':'transparent') }}>
             <div style={{ height: '100%', borderRight: '1px solid #171717' }}>
               <WordList onWordSelect={onSelectWord} selectedWord={selectedWord} />
             </div>
@@ -195,13 +197,13 @@ function DashboardMode({
       ) : null}
 
       {/* Middle column: Word Detail + history nav */}
-      <Panel defaultSize={40} minSize={28} style={{ background: '#0a0a0a' }}>
+      <Panel defaultSize={40} minSize={28} style={{ background: (isDark()?'#0a0a0a':'transparent') }}>
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column', borderRight: '1px solid #171717' }}>
           {/* Nav header */}
           <div style={{
             height: 44, flexShrink: 0, borderBottom: '1px solid #171717',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '0 10px', background: 'rgba(10,10,10,0.6)', backdropFilter: 'blur(8px)',
+            padding: '0 10px', background: (isDark()?'rgba(10,10,10,0.6)':'var(--glass-1)'), backdropFilter: 'blur(8px)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {isLeftSidebarOpen ? (
@@ -213,7 +215,7 @@ function DashboardMode({
                   <PanelLeftOpen size={16} />
                 </button>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'rgba(23,23,23,0.6)', borderRadius: 8, padding: 2, border: '1px solid #262626' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: (isDark()?'rgba(23,23,23,0.6)':'var(--glass-2)'), borderRadius: 8, padding: 2, border: '1px solid #262626' }}>
                 <button onClick={onBack} disabled={!canBack} style={navArrowStyle(canBack)} title="上一个">
                   <ChevronLeft size={16} />
                 </button>
@@ -231,7 +233,7 @@ function DashboardMode({
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }} title={`在右侧导师对话中讨论 ${selectedWord}`}>
                   <MessageSquareText size={11} style={{ flexShrink: 0 }} />
-                  右侧讨论：<strong style={{ color: '#fff', fontWeight: 600 }}>{selectedWord}</strong>
+                  右侧讨论：<strong style={{ color: (isDark()?'#fff':'var(--text-1)'), fontWeight: 600 }}>{selectedWord}</strong>
                 </span>
               ) : null}
             </div>
@@ -247,11 +249,11 @@ function DashboardMode({
       <PanelResizeHandle style={resizeHandleStyle} />
 
       {/* Right column: Fission Graph */}
-      <Panel defaultSize={40} minSize={28} style={{ background: '#000', position: 'relative' }}>
+      <Panel defaultSize={40} minSize={28} style={{ background: (isDark()?'#000':'transparent'), position: 'relative' }}>
         {/* Radial vignette, matching the original dashboard right column */}
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
-          background: 'radial-gradient(ellipse at center, rgba(38,38,38,0.2) 0%, #000 70%)',
+          background: (isDark()?'radial-gradient(ellipse at center, rgba(38,38,38,0.2) 0%, #000 70%)':'transparent'),
         }} />
         <div style={{ position: 'absolute', inset: 0 }}>
           <FissionGraph word={selectedWord} onNodeClick={onSelectWord} mode="dashboard" />
@@ -269,7 +271,7 @@ function DashboardMode({
         tutor chat / agent is handled by the shell-level Hermes on the right). */}
     <div style={{
       flexShrink: 0, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 14px', borderTop: '1px solid #171717', background: '#0a0a0a',
+      padding: '0 14px', borderTop: '1px solid #171717', background: (isDark()?'#0a0a0a':'transparent'),
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <button onClick={onOpenStats} style={footerBtnStyle} title="英语学习统计">
@@ -312,7 +314,7 @@ function ImmersiveMode({ selectedWord, onSelectWord, onToggleMode, onBack, onFor
   const [showDetail, setShowDetail] = useState(true);
 
   return (
-    <div style={{ position: 'absolute', inset: 0, background: '#000', overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', inset: 0, background: (isDark()?'#000':'transparent'), overflow: 'hidden' }}>
       {/* Background fission graph */}
       <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
         <FissionGraph word={selectedWord} onNodeClick={onSelectWord} mode="immersive" />
@@ -507,7 +509,7 @@ function DraggableWindow({
         }}
       >
         <span style={{ width: 12, height: 12, borderRadius: '50%', background: 'rgba(234,179,8,0.85)' }} />
-        <span style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.9)' }}>{title}</span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: (isDark()?'rgba(255,255,255,0.9)':'var(--text-1)') }}>{title}</span>
       </div>
     );
   }
@@ -541,7 +543,7 @@ function DraggableWindow({
             </div>
           ) : null}
           <span style={{
-            fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.9)', letterSpacing: '0.02em',
+            fontSize: 13, fontWeight: 600, color: (isDark()?'rgba(255,255,255,0.9)':'var(--text-1)'), letterSpacing: '0.02em',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {title}
@@ -560,10 +562,10 @@ function DraggableWindow({
             <button
               onClick={onClose}
               onPointerDown={(e) => e.stopPropagation()}
-              style={{ ...headerBtnStyle, color: 'rgba(255,255,255,0.6)' }}
+              style={{ ...headerBtnStyle, color: (isDark()?'rgba(255,255,255,0.6)':'var(--text-3)') }}
               title="关闭"
               onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.color = '#f87171'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = (isDark()?'rgba(255,255,255,0.6)':'var(--text-3)'); }}
             >
               <X size={14} />
             </button>
@@ -591,20 +593,20 @@ function DraggableWindow({
 
 const resizeHandleStyle: React.CSSProperties = {
   width: 4,
-  background: '#171717',
+  background: (isDark()?'#171717':'var(--glass-border)'),
   cursor: 'col-resize',
   transition: 'background 0.15s',
 };
 
 const navBtnStyle: React.CSSProperties = {
   padding: 6, borderRadius: 8, border: 'none', cursor: 'pointer',
-  background: 'transparent', color: '#737373', display: 'flex', alignItems: 'center',
+  background: 'transparent', color: (isDark()?'#737373':'var(--text-faint)'), display: 'flex', alignItems: 'center',
   transition: 'color 0.15s, background 0.15s',
 };
 
 const navArrowStyle = (enabled: boolean): React.CSSProperties => ({
   padding: 4, borderRadius: 6, border: 'none', cursor: enabled ? 'pointer' : 'not-allowed',
-  background: 'transparent', color: enabled ? '#a3a3a3' : '#404040',
+  background: 'transparent', color: enabled ? (isDark()?'#a3a3a3':'var(--text-3)') : (isDark()?'#404040':'var(--glass-border-hi)'),
   display: 'flex', alignItems: 'center', transition: 'color 0.15s, background 0.15s',
 });
 
@@ -612,21 +614,21 @@ const navArrowStyle = (enabled: boolean): React.CSSProperties => ({
 // action look: compact, muted, hover-brightens.
 const footerBtnStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
-  borderRadius: 8, border: '1px solid #262626', background: 'rgba(23,23,23,0.6)',
-  color: '#a3a3a3', fontSize: 12, cursor: 'pointer', transition: 'color 0.15s, background 0.15s',
+  borderRadius: 8, border: '1px solid #262626', background: (isDark()?'rgba(23,23,23,0.6)':'var(--glass-2)'),
+  color: (isDark()?'#a3a3a3':'var(--text-3)'), fontSize: 12, cursor: 'pointer', transition: 'color 0.15s, background 0.15s',
 };
 
 // Immersive floating-window header button (minimize / close).
 const headerBtnStyle: React.CSSProperties = {
   width: 28, height: 28, padding: 0, border: 'none', borderRadius: 999,
-  background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer',
+  background: 'transparent', color: (isDark()?'rgba(255,255,255,0.6)':'var(--text-3)'), cursor: 'pointer',
   display: 'grid', placeItems: 'center', transition: 'background 0.15s, color 0.15s',
 };
 
 // Immersive history nav arrows (back/forward in the WordDetail floating window).
 const immersiveNavArrowStyle = (enabled: boolean): React.CSSProperties => ({
   width: 26, height: 26, padding: 0, border: 'none', borderRadius: 999,
-  background: 'transparent', color: enabled ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.2)',
+  background: 'transparent', color: enabled ? (isDark()?'rgba(255,255,255,0.85)':'var(--text-2)') : (isDark()?'rgba(255,255,255,0.2)':'var(--glass-border)'),
   cursor: enabled ? 'pointer' : 'not-allowed', display: 'grid', placeItems: 'center',
   transition: 'background 0.15s',
 });
@@ -645,19 +647,19 @@ const immersiveToggleInlineStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 6,
   padding: '6px 12px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.12)',
   background: 'rgba(10,10,10,0.7)', backdropFilter: 'blur(10px)',
-  color: '#a3a3a3', fontSize: 12, cursor: 'pointer', transition: 'color 0.15s',
+  color: (isDark()?'#a3a3a3':'var(--text-3)'), fontSize: 12, cursor: 'pointer', transition: 'color 0.15s',
 };
 
 const reopenBtnStyle: React.CSSProperties = {
   padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)',
   background: 'rgba(10,10,10,0.7)', backdropFilter: 'blur(10px)',
-  color: '#fff', fontSize: 13, cursor: 'pointer',
+  color: (isDark()?'#fff':'var(--text-1)'), fontSize: 13, cursor: 'pointer',
 };
 
 const immersiveExitStyle: React.CSSProperties = {
   position: 'absolute', bottom: 24, right: 24, zIndex: 50,
   width: 52, height: 52, borderRadius: '50%', border: 'none', cursor: 'pointer',
-  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff',
+  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: (isDark()?'#fff':'var(--text-1)'),
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   boxShadow: '0 10px 30px -5px rgba(99,102,241,0.5)',
 };

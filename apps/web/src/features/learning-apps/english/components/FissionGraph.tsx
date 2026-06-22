@@ -80,6 +80,10 @@ function visibleLabelLayout(node: any, globalScale: number, settings: GraphSetti
 export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: FissionGraphProps) {
   const [data, setData] = useState<{ nodes: any[]; links: any[]; definitions?: Record<string, string> }>({ nodes: [], links: [] });
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  
+  // Custom click detection to solve the fragile drag vs click issue
+  const pointerRef = useRef<{ x: number, y: number, time: number, isDragging: boolean }>({ x: 0, y: 0, time: 0, isDragging: false });
+
   const [hoveredNode, setHoveredNode] = useState<any>(null);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [showSettings, setShowSettings] = useState(false);
@@ -184,24 +188,18 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
     // Polling fallback: ResizeObserver occasionally fails to fire when the container
     // lives inside a react-resizable-panels Panel whose layout settles asynchronously.
     // A short polling interval catches the final size and then idles once stable.
-    let stableCount = 0;
     let lastW = 0, lastH = 0;
     const pollInterval = setInterval(() => {
       if (!containerRef.current) return;
-      // Same offsetWidth/offsetHeight fix as updateDimensions — see comment there.
       const width = containerRef.current.offsetWidth;
       const height = containerRef.current.offsetHeight;
       if (width > 0 && height > 0) {
         if (Math.round(width) !== lastW || Math.round(height) !== lastH) {
           lastW = Math.round(width); lastH = Math.round(height);
           setDimensions({ width, height });
-          stableCount = 0;
-        } else {
-          stableCount++;
-          if (stableCount > 8) clearInterval(pollInterval); // stable for ~1.6s, stop
         }
       }
-    }, 200);
+    }, 150);
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'h' && !e.repeat && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
@@ -246,11 +244,9 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
     }
   }, [data]);
 
-  // Auto-fit graph to viewport. Re-runs when data loads or the container size settles
-  // (dimensions updates from 0 → real size). The delay scales with node count: large
-  // graphs (world, 100+ nodes) need longer for the force simulation to converge before
-  // zoomToFit captures stable node bounds; calling it too early fits to a clump of
-  // nodes that are still drifting toward their final positions.
+  // Auto-fit graph to viewport. Re-runs when data loads or the container size settles.
+  // We use a debounced approach: every time the dimensions change (like resizing the panel 
+  // or opening the app), we wait a tiny bit and recenter to ensure the center word stays exactly in the middle.
   useEffect(() => {
     if (fgRef.current && data.nodes.length > 0 && dimensions.width > 0) {
       const fitDelay = data.nodes.length > 60 ? 1200 : 400;
@@ -258,22 +254,34 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
         if (!fgRef.current) return;
         try {
           if (data.nodes.length < 5) {
-            fgRef.current.centerAt(0, 0, 500);
-            fgRef.current.zoom(1.2, 500);
+            // For small graphs, just center and zoom
+            fgRef.current.centerAt(0, 0, 300);
+            fgRef.current.zoom(1.2, 300);
           } else {
-            fgRef.current.zoomToFit(600, 60);
-            // zoomToFit 把整群节点 fit 进视口（视口中心 = 节点质心），但质心通常
-            // 不在 graph 原点，导致固定在 (0,0) 的中心词偏离画布中心。fit 完成后
-            // 强制把视口中心对齐 graph 原点，让中心词回到正中。
+            // First zoom to fit to ensure all nodes are visible
+            fgRef.current.zoomToFit(400, 60);
+            
+            // Then force the origin (0,0) which is our root word to the exact center of the new dimensions
             setTimeout(() => {
-              try { fgRef.current?.centerAt(0, 0, 300); } catch { /* instance torn down */ }
-            }, 700);
+              try { 
+                if (fgRef.current) fgRef.current.centerAt(0, 0, 300); 
+              } catch { /* instance torn down */ }
+            }, 450);
           }
         } catch {
-          // fgRef may briefly point at a tearing-down instance; ignore.
+          // ignore
         }
       }, fitDelay);
-      return () => clearTimeout(timer);
+      
+      // Also add a safety net: if this is a resize event, recenter immediately without the long initial delay
+      const resizeTimer = setTimeout(() => {
+         try { if (fgRef.current) fgRef.current.centerAt(0, 0, 200); } catch {}
+      }, 100);
+      
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(resizeTimer);
+      }
     }
   }, [data, dimensions]);
 
@@ -335,13 +343,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       ref={containerRef}
       className="fission-graph-container"
       style={{ position: 'absolute', inset: 0, background: '#000', overflow: 'hidden' }}
-      onClickCapture={(event) => {
-        // react-force-graph can treat a tiny mouse movement as a drag and skip
-        // onNodeClick even though hover hit-testing correctly found a node.
-        // If the click landed on the graph canvas, use the current hovered node
-        // as a fallback so label clicks reliably navigate to the word detail.
-        if (event.target instanceof HTMLCanvasElement) selectGraphNode(hoveredNodeRef.current);
-      }}
+
     >
       {/* Gradient Background */}
       <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, #0a0a0a 0%, #000 100%)', opacity: 0.6, pointerEvents: 'none' }} />
@@ -496,6 +498,8 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
           cooldownTicks={Math.max(150, data.nodes.length * 3)}
           warmupTicks={Math.max(100, data.nodes.length * 2)}
           linkDirectionalParticleSpeed={0.003}
+          // Record pointer down to differentiate click from drag
+          onBackgroundClick={() => {}} 
           onNodeHover={(node: any) => {
             if (!showLevel2 && node?.level === 2) {
               hoveredNodeRef.current = null;
@@ -507,13 +511,20 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
             setHoveredNode(node || null);
             if (containerRef.current) containerRef.current.style.cursor = node ? 'pointer' : 'default';
           }}
-          onNodeClick={(node: any) => {
-            selectGraphNode(node);
+          onNodeClick={(node: any, event) => {
+            // react-force-graph usually handles basic clicks, but it's very strict.
+            // If it manages to fire, it's definitely a click.
+            if (!pointerRef.current.isDragging) {
+              selectGraphNode(node);
+            }
           }}
           onNodeDrag={(node: any) => {
+            pointerRef.current.isDragging = true;
             if (!showLevel2 && node?.level === 2) return false;
           }}
           onNodeDragEnd={(node: any) => {
+            // Give it a tiny delay to prevent the 'click' event from firing immediately after dropping
+            setTimeout(() => { pointerRef.current.isDragging = false; }, 50);
             if (settings.lockNodeOnDrag && node) {
               node.fx = node.x;
               node.fy = node.y;
@@ -527,8 +538,8 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
             const time = Date.now() / 1000;
 
             if (node.level === 0) {
-              node.fx = 0;
-              node.fy = 0;
+              node.fx = 0; node.vx = 0;
+              node.fy = 0; node.vy = 0;
             }
 
             const isHovered = hoveredNode && hoveredNode.id === node.id;

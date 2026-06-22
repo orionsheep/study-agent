@@ -31,6 +31,8 @@ interface ChineseData {
   collins?: string;
 }
 
+
+const isDark = () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }: WordDetailProps) {
   const [content, setContent] = useState<string | null>(null);
   const [chineseData, setChineseData] = useState<ChineseData | null>(null);
@@ -214,7 +216,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginLeft: 8 }} title={`柯林斯星级: ${stars}`}>
         {[...Array(stars)].map((_, i) => (
-          <svg key={i} style={{ width: 14, height: 14, color: '#eab308', fill: 'currentColor' }} viewBox="0 0 24 24">
+          <svg key={i} style={{ width: 14, height: 14, color: (isDark()?'#eab308':'var(--text-2)'), fill: 'currentColor' }} viewBox="0 0 24 24">
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
           </svg>
         ))}
@@ -230,10 +232,10 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#737373',
+          color: (isDark()?'#737373':'var(--text-faint)'),
           fontWeight: 300,
           letterSpacing: '0.05em',
-          background: '#0a0a0a',
+          background: (isDark()?'#0a0a0a':'transparent'),
         }}
       >
         选择一个单词查看详情
@@ -248,15 +250,15 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
         minHeight: '100%',
         display: 'flex',
         flexDirection: 'column',
-        background: '#0a0a0a',
-        color: '#e5e5e5',
+        background: (isDark()?'#0a0a0a':'transparent'),
+        color: (isDark()?'#e5e5e5':'var(--text-1)'),
       }}
     >
       {/* Header with Word Title */}
       <div style={{ padding: '24px 24px 16px', borderBottom: '1px solid #171717' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <h1 style={{ fontSize: 36, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em', margin: 0 }}>
+            <h1 style={{ fontSize: 36, fontWeight: 700, color: (isDark()?'#fff':'var(--text-1)'), letterSpacing: '-0.02em', margin: 0 }}>
               {word}
             </h1>
           </div>
@@ -266,8 +268,8 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
               style={{
                 padding: '8px 12px',
                 borderRadius: 9999,
-                background: '#171717',
-                color: '#a3a3a3',
+                background: (isDark()?'#171717':'transparent'),
+                color: (isDark()?'#a3a3a3':'var(--text-3)'),
                 border: 'none',
                 cursor: 'pointer',
                 display: 'flex',
@@ -277,8 +279,8 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                 transition: 'all 0.15s',
               }}
               title="美式发音 (J)"
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#262626'; e.currentTarget.style.color = '#60a5fa'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#171717'; e.currentTarget.style.color = '#a3a3a3'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = (isDark()?'#262626':'var(--glass-border)'); e.currentTarget.style.color = (isDark()?'#60a5fa':'var(--text-2)'); }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = (isDark()?'#171717':'transparent'); e.currentTarget.style.color = (isDark()?'#a3a3a3':'var(--text-3)'); }}
             >
               <span style={{ fontWeight: 700 }}>US</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -292,8 +294,8 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
               style={{
                 padding: '8px 12px',
                 borderRadius: 9999,
-                background: '#171717',
-                color: '#a3a3a3',
+                background: (isDark()?'#171717':'transparent'),
+                color: (isDark()?'#a3a3a3':'var(--text-3)'),
                 border: 'none',
                 cursor: 'pointer',
                 display: 'flex',
@@ -303,8 +305,8 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                 transition: 'all 0.15s',
               }}
               title="英式发音 (K)"
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#262626'; e.currentTarget.style.color = '#f87171'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#171717'; e.currentTarget.style.color = '#a3a3a3'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = (isDark()?'#262626':'var(--glass-border)'); e.currentTarget.style.color = '#f87171'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = (isDark()?'#171717':'transparent'); e.currentTarget.style.color = (isDark()?'#a3a3a3':'var(--text-3)'); }}
             >
               <span style={{ fontWeight: 700 }}>UK</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -319,12 +321,12 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
         {/* Pronunciation & Concise Definition */}
         {chineseData && (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#a3a3a3', fontFamily: 'monospace', fontSize: 14, marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: (isDark()?'#a3a3a3':'var(--text-3)'), fontFamily: 'monospace', fontSize: 14, marginBottom: 8 }}>
               <span>/{chineseData.phonetic || chineseData.pronunciation}/</span>
               {renderCollinsStars(chineseData.collins)}
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-              <div style={{ flex: 1, fontSize: 18, color: '#d4d4d4', fontWeight: 500 }}>
+              <div style={{ flex: 1, fontSize: 18, color: (isDark()?'#d4d4d4':'var(--text-2)'), fontWeight: 500 }}>
                 {chineseData.concise_definition}
               </div>
               <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -338,8 +340,8 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                     borderRadius: 6,
                     fontSize: 12,
                     border: '1px solid #262626',
-                    background: showAddNote ? '#2563eb' : '#171717',
-                    color: showAddNote ? '#fff' : '#a3a3a3',
+                    background: showAddNote ? '#2563eb' : (isDark()?'#171717':'transparent'),
+                    color: showAddNote ? (isDark()?'#fff':'var(--text-1)') : (isDark()?'#a3a3a3':'var(--text-3)'),
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
                     transition: 'all 0.15s',
@@ -358,14 +360,14 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                     borderRadius: 6,
                     fontSize: 12,
                     border: '1px solid #262626',
-                    background: '#171717',
-                    color: '#a3a3a3',
+                    background: (isDark()?'#171717':'transparent'),
+                    color: (isDark()?'#a3a3a3':'var(--text-3)'),
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
                     transition: 'all 0.15s',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = '#404040'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = '#a3a3a3'; e.currentTarget.style.borderColor = '#262626'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = (isDark()?'#fff':'var(--text-1)'); e.currentTarget.style.borderColor = (isDark()?'#404040':'var(--glass-border-hi)'); }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = (isDark()?'#a3a3a3':'var(--text-3)'); e.currentTarget.style.borderColor = (isDark()?'#262626':'var(--glass-border)'); }}
                 >
                   <ArrowDown size={12} />
                   <span>查看笔记</span>
@@ -380,7 +382,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
       <div style={{ flex: 1, overflow: 'auto', padding: '24px 24px 32px' }}>
         {/* Markdown Content */}
         {loading && (
-          <div style={{ marginBottom: 24, color: '#737373', fontSize: 14 }}>
+          <div style={{ marginBottom: 24, color: (isDark()?'#737373':'var(--text-faint)'), fontSize: 14 }}>
             加载 {word} 中...
           </div>
         )}
@@ -410,7 +412,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                       e.stopPropagation();
                     }}
                     style={{
-                      color: '#60a5fa',
+                      color: (isDark()?'#60a5fa':'var(--text-2)'),
                       background: 'transparent',
                       border: 0,
                       padding: 0,
@@ -426,16 +428,16 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                   </button>
                 ),
                 small: (props) => (
-                  <span {...props} style={{ fontSize: 10, color: '#737373', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, margin: '0 4px' }} />
+                  <span {...props} style={{ fontSize: 10, color: (isDark()?'#737373':'var(--text-faint)'), textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, margin: '0 4px' }} />
                 ),
                 p: (props) => (
-                  <div {...props} style={{ marginBottom: 8, color: '#d4d4d4', lineHeight: 1.75 }} />
+                  <div {...props} style={{ marginBottom: 8, color: (isDark()?'#d4d4d4':'var(--text-2)'), lineHeight: 1.75 }} />
                 ),
                 strong: (props) => (
-                  <strong {...props} style={{ color: '#fef08a', fontWeight: 700 }} />
+                  <strong {...props} style={{ color: (isDark()?'#fef08a':'var(--text-2)'), fontWeight: 700 }} />
                 ),
                 em: (props) => (
-                  <em {...props} style={{ color: '#a3a3a3' }} />
+                  <em {...props} style={{ color: (isDark()?'#a3a3a3':'var(--text-3)') }} />
                 ),
               }}
             >
@@ -447,8 +449,8 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
         {/* Word Forms */}
         {chineseData?.forms && Object.keys(chineseData.forms).length > 0 && (
           <div style={{ borderTop: '1px solid #171717', paddingTop: 24, marginBottom: 32 }}>
-            <h3 style={{ fontSize: 20, fontWeight: 600, color: '#fff', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 4, height: 24, background: '#22c55e', borderRadius: 4 }} />
+            <h3 style={{ fontSize: 20, fontWeight: 600, color: (isDark()?'#fff':'var(--text-1)'), marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 4, height: 24, background: (isDark()?'#22c55e':'var(--text-1)'), borderRadius: 4 }} />
               词形变化
             </h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
@@ -464,10 +466,10 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                     padding: '8px 12px',
                   }}
                 >
-                  <span style={{ color: '#737373', fontSize: 11, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', marginRight: 8 }}>
+                  <span style={{ color: (isDark()?'#737373':'var(--text-faint)'), fontSize: 11, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', marginRight: 8 }}>
                     {key}
                   </span>
-                  <span style={{ color: '#e5e5e5', fontWeight: 500 }}>{value}</span>
+                  <span style={{ color: (isDark()?'#e5e5e5':'var(--text-1)'), fontWeight: 500 }}>{value}</span>
                 </div>
               ))}
             </div>
@@ -477,8 +479,8 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
         {/* Detailed Definitions */}
         {chineseData?.definitions && chineseData.definitions.length > 0 && (
           <div style={{ borderTop: '1px solid #171717', paddingTop: 24, marginBottom: 32 }}>
-            <h3 style={{ fontSize: 20, fontWeight: 600, color: '#fff', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 4, height: 24, background: '#3b82f6', borderRadius: 4 }} />
+            <h3 style={{ fontSize: 20, fontWeight: 600, color: (isDark()?'#fff':'var(--text-1)'), marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 4, height: 24, background: (isDark()?'#3b82f6':'var(--accent)'), borderRadius: 4 }} />
               详细释义
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -496,8 +498,8 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                     <span
                       style={{
                         padding: '2px 8px',
-                        background: '#262626',
-                        color: '#a3a3a3',
+                        background: (isDark()?'#262626':'var(--glass-border)'),
+                        color: (isDark()?'#a3a3a3':'var(--text-3)'),
                         fontSize: 11,
                         borderRadius: 4,
                         textTransform: 'uppercase',
@@ -510,12 +512,12 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div>
-                      <p style={{ color: '#e5e5e5', margin: '0 0 4px' }}>{def.explanation_en}</p>
-                      <p style={{ color: '#737373', fontSize: 14, margin: 0 }}>{def.explanation_cn}</p>
+                      <p style={{ color: (isDark()?'#e5e5e5':'var(--text-1)'), margin: '0 0 4px' }}>{def.explanation_en}</p>
+                      <p style={{ color: (isDark()?'#737373':'var(--text-faint)'), fontSize: 14, margin: 0 }}>{def.explanation_cn}</p>
                     </div>
                     <div style={{ paddingLeft: 12, borderLeft: '2px solid #404040' }}>
-                      <p style={{ color: '#d4d4d4', fontStyle: 'italic', margin: '0 0 4px' }}>"{def.example_en}"</p>
-                      <p style={{ color: '#737373', fontSize: 14, margin: 0 }}>{def.example_cn}</p>
+                      <p style={{ color: (isDark()?'#d4d4d4':'var(--text-2)'), fontStyle: 'italic', margin: '0 0 4px' }}>"{def.example_en}"</p>
+                      <p style={{ color: (isDark()?'#737373':'var(--text-faint)'), fontSize: 14, margin: 0 }}>{def.example_cn}</p>
                     </div>
                   </div>
                 </div>
@@ -527,8 +529,8 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
         {/* Comparisons */}
         {chineseData?.comparison && chineseData.comparison.length > 0 && (
           <div style={{ borderTop: '1px solid #171717', paddingTop: 24, marginBottom: 32 }}>
-            <h3 style={{ fontSize: 20, fontWeight: 600, color: '#fff', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 4, height: 24, background: '#a855f7', borderRadius: 4 }} />
+            <h3 style={{ fontSize: 20, fontWeight: 600, color: (isDark()?'#fff':'var(--text-1)'), marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 4, height: 24, background: (isDark()?'#a855f7':'var(--text-1)'), borderRadius: 4 }} />
               近义词辨析
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -543,10 +545,10 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-                    <span style={{ color: '#c084fc', fontWeight: 700, fontSize: 18 }}>{comp.word_to_compare}</span>
-                    <span style={{ color: '#737373', fontSize: 14 }}>vs {word}</span>
+                    <span style={{ color: (isDark()?'#c084fc':'var(--text-2)'), fontWeight: 700, fontSize: 18 }}>{comp.word_to_compare}</span>
+                    <span style={{ color: (isDark()?'#737373':'var(--text-faint)'), fontSize: 14 }}>vs {word}</span>
                   </div>
-                  <p style={{ color: '#d4d4d4', lineHeight: 1.7, fontSize: 14, margin: 0 }}>{comp.analysis}</p>
+                  <p style={{ color: (isDark()?'#d4d4d4':'var(--text-2)'), lineHeight: 1.7, fontSize: 14, margin: 0 }}>{comp.analysis}</p>
                 </div>
               ))}
             </div>
@@ -555,8 +557,8 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
 
         {/* Notes Section */}
         <div ref={notesRef} style={{ borderTop: '1px solid #171717', paddingTop: 24, paddingBottom: 32 }}>
-          <h3 style={{ fontSize: 20, fontWeight: 600, color: '#fff', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 4, height: 24, background: '#f97316', borderRadius: 4 }} />
+          <h3 style={{ fontSize: 20, fontWeight: 600, color: (isDark()?'#fff':'var(--text-1)'), marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 4, height: 24, background: (isDark()?'#f97316':'var(--text-2)'), borderRadius: 4 }} />
             笔记
           </h3>
           {myNotes.length > 0 ? (
@@ -571,17 +573,17 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                     borderRadius: 8,
                   }}
                 >
-                  <p style={{ fontSize: 14, color: '#d4d4d4', lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: 0 }}>
+                  <p style={{ fontSize: 14, color: (isDark()?'#d4d4d4':'var(--text-2)'), lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: 0 }}>
                     {note.content}
                   </p>
-                  <p style={{ fontSize: 12, color: '#525252', marginTop: 8 }}>
+                  <p style={{ fontSize: 12, color: (isDark()?'#525252':'var(--text-3)'), marginTop: 8 }}>
                     {new Date(note.createdAt).toLocaleDateString('zh-CN')}
                   </p>
                 </div>
               ))}
             </div>
           ) : (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: '#737373' }}>暂无笔记</div>
+            <div style={{ textAlign: 'center', padding: '32px 0', color: (isDark()?'#737373':'var(--text-faint)') }}>暂无笔记</div>
           )}
         </div>
       </div>
