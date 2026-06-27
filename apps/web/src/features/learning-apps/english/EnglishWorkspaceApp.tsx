@@ -95,7 +95,7 @@ export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
   }, []);
 
   return (
-    <div style={{ position: 'relative', height: '100%', width: '100%', background: 'var(--ew-bg-main, #000)', overflow: 'hidden' }}>
+    <div className="english-workspace" style={{ position: 'relative', height: '100%', width: '100%', background: 'var(--ew-bg-main)', overflow: 'hidden' }}>
       {mode === 'dashboard' ? (
         <DashboardMode
           selectedWord={selectedWord}
@@ -113,7 +113,7 @@ export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
         />
       ) : mode === 'stats' ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid #262626', background: 'var(--ew-bg-panel, #0a0a0a)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--ew-border)', background: 'var(--ew-bg-panel)' }}>
             <button
               onClick={() => setMode('dashboard')}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, background: 'transparent', color: 'var(--ew-text-3, #a3a3a3)' }}
@@ -128,7 +128,7 @@ export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
         </div>
       ) : mode === 'quiz' ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid #262626', background: 'var(--ew-bg-panel, #0a0a0a)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--ew-border)', background: 'var(--ew-bg-panel)' }}>
             <button
               onClick={() => setMode('dashboard')}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, background: 'transparent', color: 'var(--ew-text-3, #a3a3a3)' }}
@@ -140,7 +140,7 @@ export function EnglishWorkspaceApp({ app, onEvent, sessionContext }: Props) {
               {selectedWord ? `测验 · ${selectedWord}` : '单词测验'}
             </span>
           </div>
-          <div style={{ flex: 1, minHeight: 0, overflow: 'auto', background: 'var(--ew-bg-panel, #0a0a0a)' }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'auto', background: 'var(--ew-bg-panel)' }}>
             <QuizPanel word={selectedWord} />
           </div>
         </div>
@@ -185,8 +185,8 @@ function DashboardMode({
       {/* Left column: Word List */}
       {isLeftSidebarOpen ? (
         <>
-          <Panel defaultSize={20} minSize={15} maxSize={32} style={{ background: 'var(--ew-bg-panel, #0a0a0a)' }}>
-            <div style={{ height: '100%', borderRight: '1px solid #171717' }}>
+          <Panel defaultSize={20} minSize={15} maxSize={32} style={{ background: 'var(--ew-bg-panel)' }}>
+            <div style={{ height: '100%', borderRight: '1px solid var(--ew-border)' }}>
               <WordList onWordSelect={onSelectWord} selectedWord={selectedWord} />
             </div>
           </Panel>
@@ -195,13 +195,13 @@ function DashboardMode({
       ) : null}
 
       {/* Middle column: Word Detail + history nav */}
-      <Panel defaultSize={40} minSize={28} style={{ background: 'var(--ew-bg-panel, #0a0a0a)' }}>
-        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', borderRight: '1px solid #171717' }}>
+      <Panel defaultSize={40} minSize={28} style={{ background: 'var(--ew-bg-panel)' }}>
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--ew-border)' }}>
           {/* Nav header */}
           <div style={{
-            height: 44, flexShrink: 0, borderBottom: '1px solid #171717',
+            height: 44, flexShrink: 0, borderBottom: '1px solid var(--ew-border)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '0 10px', background: 'var(--ew-bg-header, rgba(10,10,10,0.6))', backdropFilter: 'blur(8px)',
+            padding: '0 10px', background: 'var(--ew-bg-header)', backdropFilter: 'blur(8px)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {isLeftSidebarOpen ? (
@@ -213,7 +213,7 @@ function DashboardMode({
                   <PanelLeftOpen size={16} />
                 </button>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'var(--ew-bg-active, rgba(23,23,23,0.6))', borderRadius: 8, padding: 2, border: '1px solid #262626' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'var(--ew-bg-active)', borderRadius: 8, padding: 2, border: '1px solid var(--ew-border)' }}>
                 <button onClick={onBack} disabled={!canBack} style={navArrowStyle(canBack)} title="上一个">
                   <ChevronLeft size={16} />
                 </button>
@@ -247,11 +247,11 @@ function DashboardMode({
       <PanelResizeHandle style={resizeHandleStyle} />
 
       {/* Right column: Fission Graph */}
-      <Panel defaultSize={40} minSize={28} style={{ background: 'var(--ew-bg-main, #000)', position: 'relative' }}>
+      <Panel defaultSize={40} minSize={28} style={{ background: 'var(--ew-bg-main)', position: 'relative' }}>
         {/* Radial vignette, matching the original dashboard right column */}
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
-          background: 'radial-gradient(ellipse at center, rgba(38,38,38,0.2) 0%, #000 70%)',
+          background: 'radial-gradient(ellipse at center, var(--ew-bg-header) 0%, var(--ew-bg-main) 70%)',
         }} />
         <div style={{ position: 'absolute', inset: 0 }}>
           <FissionGraph word={selectedWord} onNodeClick={onSelectWord} mode="dashboard" />
@@ -269,7 +269,7 @@ function DashboardMode({
         tutor chat / agent is handled by the shell-level Hermes on the right). */}
     <div style={{
       flexShrink: 0, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 14px', borderTop: '1px solid #171717', background: 'var(--ew-bg-panel, #0a0a0a)',
+      padding: '0 14px', borderTop: '1px solid var(--ew-border)', background: 'var(--ew-bg-panel)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <button onClick={onOpenStats} style={footerBtnStyle} title="英语学习统计">
@@ -312,7 +312,7 @@ function ImmersiveMode({ selectedWord, onSelectWord, onToggleMode, onBack, onFor
   const [showDetail, setShowDetail] = useState(true);
 
   return (
-    <div style={{ position: 'absolute', inset: 0, background: 'var(--ew-bg-main, #000)', overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', inset: 0, background: 'var(--ew-bg-main)', overflow: 'hidden' }}>
       {/* Background fission graph */}
       <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
         <FissionGraph word={selectedWord} onNodeClick={onSelectWord} mode="immersive" />
@@ -501,8 +501,8 @@ function DraggableWindow({
           position: 'absolute', left: pos.x, top: pos.y, zIndex: 50,
           display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
           borderRadius: 14, cursor: 'pointer',
-          background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(16px)',
-          border: '1px solid rgba(255,255,255,0.2)',
+          background: 'var(--ew-glass-bg)', backdropFilter: 'blur(16px)',
+          border: '1px solid var(--ew-glass-border)',
           boxShadow: '0 20px 40px -10px rgba(0,0,0,0.5)',
         }}
       >
@@ -517,10 +517,10 @@ function DraggableWindow({
       style={{
         position: 'absolute', left: pos.x, top: pos.y, width: size.width, height: size.height,
         zIndex: 40, display: 'flex', flexDirection: 'column', borderRadius: 16, overflow: 'hidden',
-        // Apple-style glassmorphism — more transparent than the dashboard so the
-        // background fission graph shows through, with stronger blur + saturation.
-        background: 'rgba(20,20,20,0.25)', backdropFilter: 'blur(20px) saturate(180%)',
-        border: '1px solid rgba(255,255,255,0.08)',
+        // Apple-style glassmorphism — translucent so the background fission graph
+        // shows through, with blur + saturation.
+        background: 'var(--ew-glass-bg, rgba(20,20,20,0.25))', backdropFilter: 'blur(20px) saturate(180%)',
+        border: '1px solid var(--ew-glass-border, rgba(255,255,255,0.08))',
         boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
       }}
     >
@@ -530,8 +530,8 @@ function DraggableWindow({
         style={{
           height: 44, flexShrink: 0, cursor: 'grab', userSelect: 'none',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '0 12px', borderBottom: '1px solid rgba(255,255,255,0.06)',
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.05), transparent)',
+          padding: '0 12px', borderBottom: '1px solid var(--ew-glass-border)',
+          background: 'linear-gradient(180deg, var(--ew-glass-highlight), transparent)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -591,7 +591,7 @@ function DraggableWindow({
 
 const resizeHandleStyle: React.CSSProperties = {
   width: 4,
-  background: 'var(--ew-bg-card, #171717)',
+  background: 'var(--ew-bg-card)',
   cursor: 'col-resize',
   transition: 'background 0.15s',
 };
@@ -612,8 +612,8 @@ const navArrowStyle = (enabled: boolean): React.CSSProperties => ({
 // action look: compact, muted, hover-brightens.
 const footerBtnStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
-  borderRadius: 8, border: '1px solid #262626', background: 'var(--ew-bg-active, rgba(23,23,23,0.6))',
-  color: 'var(--ew-text-3, #a3a3a3)', fontSize: 12, cursor: 'pointer', transition: 'color 0.15s, background 0.15s',
+  borderRadius: 8, border: '1px solid var(--ew-border)', background: 'var(--ew-bg-active)',
+  color: 'var(--ew-text-3)', fontSize: 12, cursor: 'pointer', transition: 'color 0.15s, background 0.15s',
 };
 
 // Immersive floating-window header button (minimize / close).
@@ -643,15 +643,15 @@ const resizeCornerStyle: React.CSSProperties = {
 const immersiveToggleInlineStyle: React.CSSProperties = {
   position: 'absolute', top: 12, right: 12, zIndex: 20,
   display: 'flex', alignItems: 'center', gap: 6,
-  padding: '6px 12px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.12)',
-  background: 'rgba(10,10,10,0.7)', backdropFilter: 'blur(10px)',
-  color: 'var(--ew-text-3, #a3a3a3)', fontSize: 12, cursor: 'pointer', transition: 'color 0.15s',
+  padding: '6px 12px', borderRadius: 999, border: '1px solid var(--ew-glass-border)',
+  background: 'var(--ew-glass-bg)', backdropFilter: 'blur(10px)',
+  color: 'var(--ew-text-3)', fontSize: 12, cursor: 'pointer', transition: 'color 0.15s',
 };
 
 const reopenBtnStyle: React.CSSProperties = {
-  padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)',
-  background: 'rgba(10,10,10,0.7)', backdropFilter: 'blur(10px)',
-  color: 'var(--ew-text-1, #fff)', fontSize: 13, cursor: 'pointer',
+  padding: '8px 14px', borderRadius: 8, border: '1px solid var(--ew-glass-border)',
+  background: 'var(--ew-glass-bg)', backdropFilter: 'blur(10px)',
+  color: 'var(--ew-text-1)', fontSize: 13, cursor: 'pointer',
 };
 
 const immersiveExitStyle: React.CSSProperties = {

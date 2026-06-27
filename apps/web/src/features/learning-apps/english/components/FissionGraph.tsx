@@ -81,6 +81,31 @@ function visibleLabelLayout(node: any, globalScale: number, settings: GraphSetti
 export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: FissionGraphProps) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  // Canvas fillStyle/shadowColor cannot read CSS variables — pick concrete colors.
+  // Dark = exact original english-word-fission palette; Light = clean readable palette.
+  const C = isDark
+    ? {
+        bg: '#000000',
+        panel: 'rgba(23, 23, 23, 0.95)',
+        panelFloat: 'rgba(23, 23, 23, 0.9)',
+        text1: '#ffffff', text2: '#d4d4d4', text3: '#a3a3a3', textFaint: '#737373',
+        border: '#262626', borderHi: '#404040',
+        coreNode: '#ffffff', innerHi: '#ffffff',
+        labelBox: 'rgba(0, 0, 0, 1)', labelBorder: 'rgba(255, 255, 255, 0.3)', labelText: '#ffffff',
+        vignetteFrom: '#0a0a0a', vignetteTo: '#000000',
+        particles: ['#ffffff', '#ffffff', '#3b82f6', '#8b5cf6', '#ec4899', '#a78bfa'],
+      }
+    : {
+        bg: '#fafafa',
+        panel: 'rgba(255, 255, 255, 0.96)',
+        panelFloat: 'rgba(255, 255, 255, 0.92)',
+        text1: '#111827', text2: '#374151', text3: '#6b7280', textFaint: '#9ca3af',
+        border: '#e5e7eb', borderHi: '#d1d5db',
+        coreNode: '#1f2937', innerHi: '#ffffff',
+        labelBox: 'rgba(255, 255, 255, 0.92)', labelBorder: 'rgba(17, 24, 39, 0.25)', labelText: '#111827',
+        vignetteFrom: '#ffffff', vignetteTo: '#f3f4f6',
+        particles: ['#9ca3af', '#9ca3af', '#3b82f6', '#8b5cf6', '#ec4899', '#a78bfa'],
+      };
   const [data, setData] = useState<{ nodes: any[]; links: any[]; definitions?: Record<string, string> }>({ nodes: [], links: [] });
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [hoveredNode, setHoveredNode] = useState<any>(null);
@@ -316,7 +341,9 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       vy: (Math.random() - 0.5) * 0.3,
       size: Math.random() * 2 + 0.3,
       opacity: Math.random() * 0.4 + 0.1,
-      color: ['var(--ew-text-1, #ffffff)', 'var(--ew-text-1, #ffffff)', '#3b82f6', '#8b5cf6', '#ec4899', '#a78bfa'][Math.floor(Math.random() * 6)],
+      color: isDark
+        ? ['#ffffff', '#ffffff', '#3b82f6', '#8b5cf6', '#ec4899', '#a78bfa'][Math.floor(Math.random() * 6)]
+        : ['#9ca3af', '#9ca3af', '#3b82f6', '#8b5cf6', '#ec4899', '#a78bfa'][Math.floor(Math.random() * 6)],
     }));
     setParticles(newParticles);
   }, [dimensions]);
@@ -327,7 +354,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
 
   if (!word) {
     return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ew-text-faint, #737373)', background: 'var(--ew-bg-main, #000)', fontWeight: 300, letterSpacing: '0.05em' }}>
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ew-text-faint)', background: 'var(--ew-bg-main)', fontWeight: 300, letterSpacing: '0.05em' }}>
         选择一个单词查看裂变图
       </div>
     );
@@ -347,23 +374,24 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       }}
     >
       {/* Gradient Background */}
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, #0a0a0a 0%, #000 100%)', opacity: 0.6, pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse at center, ${C.vignetteFrom} 0%, ${C.vignetteTo} 100%)`, opacity: 0.6, pointerEvents: 'none' }} />
 
       {/* Controls */}
       <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <ControlButton onClick={handleRefresh} title="刷新">
+        <ControlButton onClick={handleRefresh} title="刷新" C={C}>
           <RefreshCw size={18} />
         </ControlButton>
-        <ControlButton onClick={handleZoomIn} title="放大">
+        <ControlButton onClick={handleZoomIn} title="放大" C={C}>
           <ZoomIn size={18} />
         </ControlButton>
-        <ControlButton onClick={handleZoomOut} title="缩小">
+        <ControlButton onClick={handleZoomOut} title="缩小" C={C}>
           <ZoomOut size={18} />
         </ControlButton>
         <ControlButton
           onClick={() => setShowLevel2(!showLevel2)}
           title={`切换二级节点 (H)`}
           active={!showLevel2}
+          C={C}
         >
           {showLevel2 ? <Eye size={18} /> : <EyeOff size={18} />}
         </ControlButton>
@@ -371,6 +399,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
           onClick={() => setShowSettings(!showSettings)}
           title="设置"
           active={showSettings}
+          C={C}
         >
           <Settings size={18} />
         </ControlButton>
@@ -378,35 +407,35 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
 
       {/* Settings Panel */}
       {showSettings && (
-        <div style={{ position: 'absolute', top: 16, right: 64, zIndex: 20, width: 260, background: 'var(--ew-bg-panel, rgba(23, 23, 23, 0.95))', backdropFilter: 'blur(12px)', border: '1px solid #262626', borderRadius: 12, padding: 16, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: '1px solid #262626', paddingBottom: 8 }}>
-            <h3 style={{ color: 'var(--ew-text-1, #fff)', fontWeight: 500, fontSize: 14, margin: 0 }}>图设置</h3>
-            <button onClick={() => setShowSettings(false)} style={{ color: 'var(--ew-text-3, #a3a3a3)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+        <div style={{ position: 'absolute', top: 16, right: 64, zIndex: 20, width: 260, background: C.panel, backdropFilter: 'blur(12px)', border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: `1px solid ${C.border}`, paddingBottom: 8 }}>
+            <h3 style={{ color: C.text1, fontWeight: 500, fontSize: 14, margin: 0 }}>图设置</h3>
+            <button onClick={() => setShowSettings(false)} style={{ color: C.text3, background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
               <X size={16} />
             </button>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <SliderControl label="一级节点大小" value={uiSettings.level1Size} min={0.5} max={3.0} step={0.1} unit="x" onChange={(v) => setUiSettings({ ...uiSettings, level1Size: v })} onCommit={() => setSettings(uiSettings)} />
-            <SliderControl label="二级节点大小" value={uiSettings.level2Size} min={0.3} max={2.0} step={0.1} unit="x" onChange={(v) => setUiSettings({ ...uiSettings, level2Size: v })} onCommit={() => setSettings(uiSettings)} />
-            <SliderControl label="一级字体" value={uiSettings.level1FontSize} min={8} max={24} step={1} unit="px" onChange={(v) => setUiSettings({ ...uiSettings, level1FontSize: v })} onCommit={() => setSettings(uiSettings)} />
-            <SliderControl label="二级字体" value={uiSettings.level2FontSize} min={6} max={18} step={1} unit="px" onChange={(v) => setUiSettings({ ...uiSettings, level2FontSize: v })} onCommit={() => setSettings(uiSettings)} />
-            <SliderControl label="排斥力" value={uiSettings.chargeStrength} min={-15000} max={0} step={50} unit="" onChange={(v) => setUiSettings({ ...uiSettings, chargeStrength: v })} onCommit={() => setSettings(uiSettings)} />
-            <SliderControl label="一级距离" value={uiSettings.level1LinkDistance} min={50} max={600} step={1} unit="px" onChange={(v) => setUiSettings({ ...uiSettings, level1LinkDistance: v })} onCommit={() => setSettings(uiSettings)} />
-            <SliderControl label="二级距离" value={uiSettings.level2LinkDistance} min={20} max={400} step={5} unit="px" onChange={(v) => setUiSettings({ ...uiSettings, level2LinkDistance: v })} onCommit={() => setSettings(uiSettings)} />
-            <SliderControl label="碰撞间距" value={uiSettings.collisionRadius} min={10} max={100} step={5} unit="px" onChange={(v) => setUiSettings({ ...uiSettings, collisionRadius: v })} onCommit={() => setSettings(uiSettings)} />
+            <SliderControl label="一级节点大小" value={uiSettings.level1Size} min={0.5} max={3.0} step={0.1} unit="x" onChange={(v) => setUiSettings({ ...uiSettings, level1Size: v })} onCommit={() => setSettings(uiSettings)} C={C} />
+            <SliderControl label="二级节点大小" value={uiSettings.level2Size} min={0.3} max={2.0} step={0.1} unit="x" onChange={(v) => setUiSettings({ ...uiSettings, level2Size: v })} onCommit={() => setSettings(uiSettings)} C={C} />
+            <SliderControl label="一级字体" value={uiSettings.level1FontSize} min={8} max={24} step={1} unit="px" onChange={(v) => setUiSettings({ ...uiSettings, level1FontSize: v })} onCommit={() => setSettings(uiSettings)} C={C} />
+            <SliderControl label="二级字体" value={uiSettings.level2FontSize} min={6} max={18} step={1} unit="px" onChange={(v) => setUiSettings({ ...uiSettings, level2FontSize: v })} onCommit={() => setSettings(uiSettings)} C={C} />
+            <SliderControl label="排斥力" value={uiSettings.chargeStrength} min={-15000} max={0} step={50} unit="" onChange={(v) => setUiSettings({ ...uiSettings, chargeStrength: v })} onCommit={() => setSettings(uiSettings)} C={C} />
+            <SliderControl label="一级距离" value={uiSettings.level1LinkDistance} min={50} max={600} step={1} unit="px" onChange={(v) => setUiSettings({ ...uiSettings, level1LinkDistance: v })} onCommit={() => setSettings(uiSettings)} C={C} />
+            <SliderControl label="二级距离" value={uiSettings.level2LinkDistance} min={20} max={400} step={5} unit="px" onChange={(v) => setUiSettings({ ...uiSettings, level2LinkDistance: v })} onCommit={() => setSettings(uiSettings)} C={C} />
+            <SliderControl label="碰撞间距" value={uiSettings.collisionRadius} min={10} max={100} step={5} unit="px" onChange={(v) => setUiSettings({ ...uiSettings, collisionRadius: v })} onCommit={() => setSettings(uiSettings)} C={C} />
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid #262626' }}>
-              <span style={{ fontSize: 12, color: 'var(--ew-text-3, #a3a3a3)' }}>拖拽后锁定</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+              <span style={{ fontSize: 12, color: C.text3 }}>拖拽后锁定</span>
               <button
                 onClick={() => { const newSettings = { ...uiSettings, lockNodeOnDrag: !uiSettings.lockNodeOnDrag }; setUiSettings(newSettings); setSettings(newSettings); }}
-                style={{ position: 'relative', width: 40, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer', background: uiSettings.lockNodeOnDrag ? '#2563eb' : '#404040', transition: 'background 0.2s' }}
+                style={{ position: 'relative', width: 40, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer', background: uiSettings.lockNodeOnDrag ? '#2563eb' : C.borderHi, transition: 'background 0.2s' }}
               >
-                <span style={{ position: 'absolute', top: 2, left: 2, width: 16, height: 16, borderRadius: '50%', background: 'var(--ew-text-1, #fff)', transition: 'transform 0.2s', transform: uiSettings.lockNodeOnDrag ? 'translateX(20px)' : 'translateX(0)' }} />
+                <span style={{ position: 'absolute', top: 2, left: 2, width: 16, height: 16, borderRadius: '50%', background: C.text1, transition: 'transform 0.2s', transform: uiSettings.lockNodeOnDrag ? 'translateX(20px)' : 'translateX(0)' }} />
               </button>
             </div>
 
-            <button onClick={resetToDefaults} style={{ width: '100%', marginTop: 8, padding: '8px 12px', background: 'var(--ew-border, #262626)', color: 'var(--ew-text-2, #d4d4d4)', border: '1px solid #404040', borderRadius: 8, fontSize: 12, cursor: 'pointer', transition: 'all 0.15s' }}>
+            <button onClick={resetToDefaults} style={{ width: '100%', marginTop: 8, padding: '8px 12px', background: C.border, color: C.text2, border: `1px solid ${C.borderHi}`, borderRadius: 8, fontSize: 12, cursor: 'pointer', transition: 'all 0.15s' }}>
               恢复默认
             </button>
           </div>
@@ -414,8 +443,8 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       )}
 
       {/* Floating Legend */}
-      <div style={{ position: 'absolute', bottom: 16, left: 16, zIndex: 20, background: 'var(--ew-bg-panel, rgba(23, 23, 23, 0.9))', backdropFilter: 'blur(12px)', borderRadius: 8, padding: 12, border: '1px solid #262626', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', maxWidth: 280 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ew-text-3, #a3a3a3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>连接含义</div>
+      <div style={{ position: 'absolute', bottom: 16, left: 16, zIndex: 20, background: C.panelFloat, backdropFilter: 'blur(12px)', borderRadius: 8, padding: 12, border: `1px solid ${C.border}`, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', maxWidth: 280 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>连接含义</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
             '#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316',
@@ -427,9 +456,9 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
               <div key={index} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ width: 12, height: 12, borderRadius: '50%', marginTop: 2, flexShrink: 0, background: color }} />
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--ew-text-2, #d4d4d4)' }}>类型 {meaningNum}</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: C.text2 }}>类型 {meaningNum}</span>
                   {definition && (
-                    <span style={{ fontSize: 10, color: 'var(--ew-text-faint, #737373)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={definition}>
+                    <span style={{ fontSize: 10, color: C.textFaint, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={definition}>
                       {definition.replace(/^SKM:.*?\|/, '')}
                     </span>
                   )}
@@ -443,7 +472,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       {/* Loading */}
       {dimensions.width === 0 && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ color: 'var(--ew-text-faint, #737373)', animation: 'pulse 2s infinite' }}>初始化中...</div>
+          <div style={{ color: C.textFaint, animation: 'pulse 2s infinite' }}>初始化中...</div>
         </div>
       )}
 
@@ -489,7 +518,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
           }}
           linkColor="color"
           linkWidth={1.5}
-          backgroundColor={isDark ? '#000000' : 'var(--ew-text-1, #ffffff)'}
+          backgroundColor={C.bg}
           d3VelocityDecay={0.15}
           // Scale the simulation cooldown to the graph size: a 29-node graph (hello)
           // settles quickly, but a 100+ node graph (world) needs many more ticks to
@@ -545,16 +574,16 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
 
             if (node.level === 0) {
               const gradient = ctx.createRadialGradient(x, y, 0, x, y, node.val * 3 * pulse);
-              gradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-              gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.2)');
+              gradient.addColorStop(0, isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(31, 41, 55, 0.35)');
+              gradient.addColorStop(0.3, isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(31, 41, 55, 0.18)');
               gradient.addColorStop(1, 'rgba(0,0,0,0)');
               ctx.fillStyle = gradient;
               ctx.beginPath();
               ctx.arc(x, y, node.val * 3 * pulse, 0, 2 * Math.PI);
               ctx.fill();
 
-              ctx.fillStyle = '#ffffff';
-              ctx.shadowColor = 'var(--ew-text-1, #ffffff)';
+              ctx.fillStyle = C.coreNode;
+              ctx.shadowColor = C.coreNode;
               ctx.shadowBlur = 15 * pulse;
               ctx.beginPath();
               ctx.arc(x, y, node.val * 0.8 * scale, 0, 2 * Math.PI);
@@ -587,7 +616,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
               ctx.arc(x, y, node.val * 0.9 * scale * sizeMultiplier, 0, 2 * Math.PI);
               ctx.fill();
 
-              ctx.fillStyle = isDark ? '#ffffff' : '#18181b';
+              ctx.fillStyle = C.innerHi;
               ctx.beginPath();
               ctx.arc(x, y, node.val * 0.35 * scale * sizeMultiplier, 0, 2 * Math.PI);
               ctx.fill();
@@ -626,14 +655,14 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
                 const textWidth = textMetrics.width;
                 const textHeight = layout.fontSize * 1.2;
 
-                ctx.fillStyle = isDark ? 'rgba(0, 0, 0, 1)' : 'rgba(255, 255, 255, 0.9)';
+                ctx.fillStyle = C.labelBox;
                 ctx.fillRect(
                   layout.labelX - textWidth / 2 - layout.labelPadding,
                   layout.labelY - textHeight / 2 - layout.labelPadding,
                   textWidth + layout.labelPadding * 2,
                   textHeight + layout.labelPadding * 2,
                 );
-                ctx.strokeStyle = node.level === 0 ? '#3b82f6' : 'rgba(255, 255, 255, 0.3)';
+                ctx.strokeStyle = node.level === 0 ? '#3b82f6' : C.labelBorder;
                 ctx.lineWidth = 1 / globalScale;
                 ctx.strokeRect(
                   layout.labelX - textWidth / 2 - layout.labelPadding,
@@ -643,7 +672,7 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
                 );
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillStyle = '#ffffff';
+                ctx.fillStyle = C.labelText;
                 ctx.fillText(nodeName, layout.labelX, layout.labelY);
               }
             });
@@ -672,13 +701,13 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
       {/* HTML Tooltip Overlay */}
       {hoveredNode && (
         <div ref={tooltipRef} style={{ position: 'absolute', pointerEvents: 'none', zIndex: 50, left: 0, top: 0 }}>
-          <div style={{ background: 'var(--ew-bg-panel, rgba(23, 23, 23, 0.95))', backdropFilter: 'blur(12px)', border: '1px solid #262626', borderRadius: 8, padding: '8px 12px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', maxWidth: 240 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ew-text-1, #fff)', marginBottom: 4 }}>{hoveredNode.name}</div>
+          <div style={{ background: C.panel, backdropFilter: 'blur(12px)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', maxWidth: 240 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: C.text1, marginBottom: 4 }}>{hoveredNode.name}</div>
             {hoveredNode.phonetic && (
-              <div style={{ fontSize: 12, color: 'var(--ew-text-3, #a3a3a3)', fontFamily: 'monospace', marginBottom: 4 }}>/{hoveredNode.phonetic}/</div>
+              <div style={{ fontSize: 12, color: C.text3, fontFamily: 'monospace', marginBottom: 4 }}>/{hoveredNode.phonetic}/</div>
             )}
             {hoveredNode.translation && (
-              <div style={{ fontSize: 12, color: 'var(--ew-text-2, #d4d4d4)', lineHeight: 1.5 }}>{hoveredNode.translation}</div>
+              <div style={{ fontSize: 12, color: C.text2, lineHeight: 1.5 }}>{hoveredNode.translation}</div>
             )}
           </div>
         </div>
@@ -688,17 +717,17 @@ export default function FissionGraph({ word, onNodeClick, mode = 'dashboard' }: 
 }
 
 // Control Button component
-function ControlButton({ onClick, title, active, children }: { onClick: () => void; title: string; active?: boolean; children: React.ReactNode }) {
+function ControlButton({ onClick, title, active, children, C }: { onClick: () => void; title: string; active?: boolean; children: React.ReactNode; C: { panel: string; text1: string; border: string; borderHi: string } }) {
   return (
     <button
       onClick={onClick}
       title={title}
       style={{
         padding: 8,
-        background: active ? '#2563eb' : 'var(--ew-bg-panel, rgba(23, 23, 23, 0.8))',
-        color: 'var(--ew-text-1, #fff)',
+        background: active ? '#2563eb' : C.panel,
+        color: C.text1,
         borderRadius: 8,
-        border: '1px solid #262626',
+        border: `1px solid ${C.border}`,
         cursor: 'pointer',
         backdropFilter: 'blur(8px)',
         transition: 'all 0.15s',
@@ -706,8 +735,8 @@ function ControlButton({ onClick, title, active, children }: { onClick: () => vo
         alignItems: 'center',
         justifyContent: 'center',
       }}
-      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'rgba(38, 38, 38, 0.9)'; }}
-      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'var(--ew-bg-panel, rgba(23, 23, 23, 0.8))'; }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = C.borderHi; }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = C.panel; }}
     >
       {children}
     </button>
@@ -715,7 +744,7 @@ function ControlButton({ onClick, title, active, children }: { onClick: () => vo
 }
 
 // Slider Control component
-function SliderControl({ label, value, min, max, step, unit, onChange, onCommit }: {
+function SliderControl({ label, value, min, max, step, unit, onChange, onCommit, C }: {
   label: string;
   value: number;
   min: number;
@@ -724,10 +753,11 @@ function SliderControl({ label, value, min, max, step, unit, onChange, onCommit 
   unit: string;
   onChange: (val: number) => void;
   onCommit: () => void;
+  C: { text3: string; borderHi: string; text1: string };
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--ew-text-3, #a3a3a3)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.text3 }}>
         <span>{label}</span>
         <span>{value.toFixed(step < 1 ? 1 : 0)}{unit}</span>
       </div>
@@ -745,7 +775,7 @@ function SliderControl({ label, value, min, max, step, unit, onChange, onCommit 
           height: 4,
           borderRadius: 4,
           appearance: 'none',
-          background: '#404040',
+          background: C.borderHi,
           cursor: 'pointer',
           outline: 'none',
         }}

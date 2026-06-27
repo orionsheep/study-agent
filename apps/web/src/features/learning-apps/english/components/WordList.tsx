@@ -248,9 +248,9 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
   };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--ew-bg-panel, #0a0a0a)', borderRight: '1px solid #262626' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--ew-bg-panel, #0a0a0a)', borderRight: '1px solid var(--ew-border)' }}>
       {/* Search Header */}
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid #262626' }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--ew-border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {viewMode === 'words' && (
             <button
@@ -279,7 +279,7 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
                 paddingTop: 8,
                 paddingBottom: 8,
                 borderRadius: 8,
-                border: '1px solid #262626',
+                border: '1px solid var(--ew-border)',
                 fontSize: 13,
                 outline: 'none',
                 boxSizing: 'border-box',
@@ -293,14 +293,14 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
 
       {/* Navigation Header for Words View */}
       {viewMode === 'words' && !searchQuery && currentLibraryName && (
-        <div style={{ padding: '8px 16px', borderBottom: '1px solid #262626', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--ew-border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 13, color: 'var(--ew-text-3, #a3a3a3)', fontWeight: 500 }}>{currentLibraryName}</span>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                style={{ background: 'var(--ew-bg-card, #171717)', color: 'var(--ew-text-3, #a3a3a3)', fontSize: 11, border: '1px solid #262626', borderRadius: 4, padding: '2px 6px', outline: 'none' }}
+                style={{ background: 'var(--ew-bg-card, #171717)', color: 'var(--ew-text-3, #a3a3a3)', fontSize: 11, border: '1px solid var(--ew-border)', borderRadius: 4, padding: '2px 6px', outline: 'none' }}
               >
                 <option value="default">默认</option>
                 <option value="familiarity_asc">熟悉度升序</option>
@@ -328,7 +328,7 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
             <select
               value={selectedGroupIndex}
               onChange={(e) => setSelectedGroupIndex(Number(e.target.value))}
-              style={{ width: '100%', background: 'var(--ew-bg-card, #171717)', color: 'var(--ew-text-2, #d4d4d4)', fontSize: 11, border: '1px solid #262626', borderRadius: 4, padding: '4px 8px', outline: 'none' }}
+              style={{ width: '100%', background: 'var(--ew-bg-card, #171717)', color: 'var(--ew-text-2, #d4d4d4)', fontSize: 11, border: '1px solid var(--ew-border)', borderRadius: 4, padding: '4px 8px', outline: 'none' }}
             >
               {groups.map((group) => (
                 <option key={group.index} value={group.index}>{group.label}</option>
@@ -337,7 +337,7 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
           )}
 
           {isSelectMode && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--ew-bg-card, #171717)', padding: 8, borderRadius: 6, border: '1px solid #262626' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--ew-bg-card, #171717)', padding: 8, borderRadius: 6, border: '1px solid var(--ew-border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 12, color: 'var(--ew-text-3, #a3a3a3)' }}>已选 {selectedWordsForQuiz.size} 个</span>
                 <button
@@ -410,7 +410,7 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
                   textAlign: 'left',
                   transition: 'background 0.15s',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--ew-bg-hover)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
                 <div style={{
@@ -491,12 +491,12 @@ export default function WordList({ onWordSelect, selectedWord }: WordListProps) 
                       display: 'flex',
                       alignItems: 'center',
                       padding: '0 16px',
-                      background: isActive ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
-                      borderBottom: '1px solid rgba(38, 38, 38, 0.5)',
+                      background: isActive ? 'var(--ew-accent-bg)' : 'transparent',
+                      borderBottom: '1px solid var(--ew-border)',
                       cursor: isSelectMode ? 'pointer' : 'default',
                       transition: 'background 0.15s',
                     }}
-                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--ew-bg-hover)'; }}
                     onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                     onClick={() => isSelectMode && toggleWordSelection(wordString)}
                   >

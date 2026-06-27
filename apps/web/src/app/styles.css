@@ -1130,30 +1130,41 @@ button:active:not(:disabled) {
 }
 
 /* ===== English Workspace Local Theme ===== */
-/* Light Mode (Liquid Glass / Clean B/W) */
+/* Light Mode — Clean opaque white-based palette matching the original dark aesthetic */
 .english-workspace {
-  --ew-bg-main: transparent;
-  --ew-bg-panel: var(--glass-1);
-  --ew-bg-header: transparent;
-  --ew-bg-hover: var(--glass-2);
-  --ew-bg-active: var(--glass-3);
-  --ew-border: var(--glass-border);
-  --ew-border-hi: var(--glass-border-hi);
-  --ew-text-1: var(--text-1);
-  --ew-text-2: var(--text-2);
-  --ew-text-3: var(--text-3);
-  --ew-text-faint: var(--text-faint);
-  --ew-accent: var(--text-1);
-  --ew-accent-bg: var(--glass-2);
+  --ew-bg-main: #fafafa;
+  --ew-bg-panel: #ffffff;
+  --ew-bg-header: rgba(255, 255, 255, 0.94);
+  --ew-bg-hover: rgba(0, 0, 0, 0.04);
+  --ew-bg-active: rgba(0, 0, 0, 0.06);
+  --ew-bg-card: #f3f4f6;
+  --ew-border: #e5e7eb;
+  --ew-border-hi: #d1d5db;
+  --ew-text-1: #111827;
+  --ew-text-2: #374151;
+  --ew-text-3: #6b7280;
+  --ew-text-faint: #9ca3af;
+  --ew-accent: #2563eb;
+  --ew-accent-bg: rgba(37, 99, 235, 0.1);
+  --ew-accent-light: #3b82f6;
+  --ew-success: #16a34a;
+  --ew-warning: #d97706;
+  --ew-warning-light: #c2410c;
+  --ew-danger: #dc2626;
+  --ew-purple: #7c3aed;
+  --ew-purple-bg: rgba(124, 58, 237, 0.1);
+  --ew-purple-light: #6d28d9;
+  --ew-orange: #ea580c;
 }
 
-/* Dark Mode (100% Original Deep Dark Colors) */
+/* Dark Mode — exact match of the original english-word-fission project palette */
 .dark .english-workspace {
   --ew-bg-main: #000000;
   --ew-bg-panel: #0a0a0a;
   --ew-bg-header: #0a0a0a;
   --ew-bg-hover: rgba(255, 255, 255, 0.05);
   --ew-bg-active: rgba(23, 23, 23, 0.6);
+  --ew-bg-card: #171717;
   --ew-border: #262626;
   --ew-border-hi: #404040;
   --ew-text-1: #ffffff;
@@ -1162,217 +1173,56 @@ button:active:not(:disabled) {
   --ew-text-faint: #737373;
   --ew-accent: #3b82f6;
   --ew-accent-bg: rgba(37, 99, 235, 0.2);
+  --ew-accent-light: #60a5fa;
+  --ew-success: #22c55e;
+  --ew-warning: #eab308;
+  --ew-warning-light: #fef08a;
+  --ew-danger: #ef4444;
+  --ew-purple: #a855f7;
+  --ew-purple-bg: rgba(168, 85, 247, 0.2);
+  --ew-purple-light: #c084fc;
+  --ew-orange: #f97316;
 }
-/* 
-   ENGLISH WORKSPACE SMART LIGHT MODE ADAPTATION
-   The english workspace is perfectly tuned for dark mode.
-   In dark mode (.dark), we do absolutely nothing, preserving the 100% original look.
-   In light mode, we use CSS filters to gracefully invert and tune the immersive panels.
+
+/* ===== English Workspace — Light/Dark Mode Rules =====
+   All --ew-* variables are defined above (.english-workspace = light,
+   .dark .english-workspace = dark). Inline styles in the TSX consume them,
+   so no !important / attribute-selector / invert-filter hacks remain.
 */
 
-/* Only apply when NOT in dark mode */
-html:not(.dark) .english-workspace {
-  /* Give the main container a subtle background so the inverted children sit well */
-  background: var(--bg-1) !important;
-}
-
-html:not(.dark) .english-workspace .fission-graph-container,
-html:not(.dark) .english-workspace .native-app-body-custom {
-  /* 
-     Invert the heavily dark/space-like canvas areas.
-     hue-rotate(180deg) ensures blues stay blueish after inversion.
-     This instantly solves the invisible text/lines on canvas.
-  */
-  filter: invert(1) hue-rotate(180deg) contrast(0.95);
-  background: #ffffff !important;
-}
-
-/* Re-invert images and certain specific elements if they get weirdly colored */
-html:not(.dark) .english-workspace img,
-html:not(.dark) .english-workspace .tutor-av {
-  filter: invert(1) hue-rotate(180deg);
-}
-
-/* Fix WordList & WordDetail backgrounds in light mode */
-/* The original uses #0a0a0a, #171717, rgba(23,23,23) etc. 
-   We will override these specifically for light mode. */
-html:not(.dark) .english-workspace > div > div > div {
-  background: transparent !important;
-}
-
-html:not(.dark) .english-workspace .ew-word-item {
-  color: var(--text-1) !important;
-}
-
-html:not(.dark) .english-workspace * {
-  border-color: var(--glass-border) !important;
-}
-
-html:not(.dark) .english-workspace button {
-  color: var(--text-2) !important;
-}
-
-html:not(.dark) .english-workspace button:hover {
-  background: var(--glass-2) !important;
-  color: var(--text-1) !important;
-}
-/* ENGLISH WORKSPACE LIGHT MODE OVERRIDES */
-/* Since the original TSX files are kept intact (perfect for dark mode), 
-   we inject overrides ONLY for light mode. */
-
-html:not(.dark) .english-workspace {
-  background: var(--bg-1) !important;
-  color: var(--text-1) !important;
-}
-
-/* Force light backgrounds on the main panels */
-html:not(.dark) .english-workspace [style*="background: rgb(10, 10, 10)"],
-html:not(.dark) .english-workspace [style*="background: #0a0a0a"],
-html:not(.dark) .english-workspace [style*="background: '#0a0a0a'"] {
-  background: var(--bg-1) !important;
-}
-
-html:not(.dark) .english-workspace [style*="background: rgb(23, 23, 23)"],
-html:not(.dark) .english-workspace [style*="background: #171717"] {
-  background: var(--bg-2) !important;
-}
-
-html:not(.dark) .english-workspace [style*="background: rgba(23, 23, 23"],
-html:not(.dark) .english-workspace [style*="background: rgba(10, 10, 10"] {
-  background: var(--glass-1) !important;
-}
-
-/* Force text colors */
-html:not(.dark) .english-workspace [style*="color: rgb(255, 255, 255)"],
-html:not(.dark) .english-workspace [style*="color: #fff"] {
-  color: var(--text-1) !important;
-}
-
-html:not(.dark) .english-workspace [style*="color: rgb(212, 212, 212)"],
-html:not(.dark) .english-workspace [style*="color: #d4d4d4"] {
-  color: var(--text-2) !important;
-}
-
-html:not(.dark) .english-workspace [style*="color: rgb(163, 163, 163)"],
-html:not(.dark) .english-workspace [style*="color: #a3a3a3"],
-html:not(.dark) .english-workspace [style*="color: #737373"] {
-  color: var(--text-3) !important;
-}
-
-/* Borders */
-html:not(.dark) .english-workspace [style*="border-color: #262626"],
-html:not(.dark) .english-workspace [style*="border-bottom: 1px solid #262626"],
-html:not(.dark) .english-workspace [style*="border-right: 1px solid #262626"] {
-  border-color: var(--border) !important;
-}
-
-/* Fix Canvas / FissionGraph inversion for light mode visibility */
-html:not(.dark) .fission-graph-container {
-  filter: invert(1) hue-rotate(180deg);
-  background: #fff !important;
-}
-/* Ensure tooltip inside the inverted canvas reads correctly */
-html:not(.dark) .fission-graph-container > div:last-child {
-  filter: invert(1) hue-rotate(180deg);
-}
-
-
-/* =====================================================================
-
-/* =====================================================================
-   English Workspace & Native Apps - Light Mode Graceful Adaptation
-   No 'invert' filters. Just clean color mapping.
-   ===================================================================== */
-
-/* Force clean backgrounds in light mode */
-html:not(.dark) .english-workspace,
-html:not(.dark) .native-app-body-custom {
-  background: var(--bg-0) !important;
-  color: var(--text-1) !important;
-}
-
-/* Map specific hardcoded dark hex codes to light theme tokens */
-html:not(.dark) .english-workspace [style*="background: #0a0a0a"],
-html:not(.dark) .english-workspace [style*="background: '#0a0a0a'"] {
-  background: var(--bg-1) !important;
-}
-
-html:not(.dark) .english-workspace [style*="background: #000"],
-html:not(.dark) .english-workspace [style*="background: '#000'"],
-html:not(.dark) .english-workspace [style*="background: #000000"] {
-  background: var(--bg-0) !important;
-}
-
-html:not(.dark) .english-workspace [style*="background: #171717"] {
-  background: var(--glass-1) !important;
-}
-
-html:not(.dark) .english-workspace [style*="background: rgba(23, 23, 23"],
-html:not(.dark) .english-workspace [style*="background: rgba(10, 10, 10"] {
-  background: var(--glass-2) !important;
-}
-
-/* Map hardcoded dark mode borders to light mode */
-html:not(.dark) .english-workspace [style*="border-bottom: 1px solid #262626"],
-html:not(.dark) .english-workspace [style*="border-right: 1px solid #262626"],
-html:not(.dark) .english-workspace [style*="border: 1px solid #262626"],
-html:not(.dark) .english-workspace [style*="border-color: #262626"] {
-  border-color: var(--glass-border) !important;
-}
-
-html:not(.dark) .english-workspace [style*="border-bottom: 1px solid #171717"],
-html:not(.dark) .english-workspace [style*="border-right: 1px solid #171717"],
-html:not(.dark) .english-workspace [style*="border: 1px solid #171717"] {
-  border-color: var(--border) !important;
-}
-
-/* Map text colors */
-html:not(.dark) .english-workspace [style*="color: #fff"],
-html:not(.dark) .english-workspace [style*="color: #ffffff"],
-html:not(.dark) .english-workspace [style*="color: rgba(255, 255, 255, 0.9)"] {
-  color: var(--text-1) !important;
-}
-
-html:not(.dark) .english-workspace [style*="color: #d4d4d4"] {
-  color: var(--text-2) !important;
-}
-
-html:not(.dark) .english-workspace [style*="color: #a3a3a3"],
-html:not(.dark) .english-workspace [style*="color: rgba(255, 255, 255, 0.6)"] {
-  color: var(--text-3) !important;
-}
-
-html:not(.dark) .english-workspace [style*="color: #737373"] {
-  color: var(--text-faint) !important;
-}
-
-/* Specific component fixes for light mode */
-html:not(.dark) .english-workspace input,
-html:not(.dark) .english-workspace select {
-  color: var(--text-1) !important;
-}
-
-/* FissionGraph canvas background fix */
-/* The canvas itself can stay dark for the "star map" effect, 
-   but its container must have a clear boundary. */
-.fission-graph-container {
+/* Graph canvas container: never invert — the FissionGraph reads `theme`
+   from useTheme() and paints light/dark colors itself. */
+.english-workspace .fission-graph-container {
   border-radius: var(--r-md);
   overflow: hidden;
-  /* Prevent 'filter: invert' which caused the horrific artifacts */
   filter: none !important;
 }
 
-/* Ensure the floating settings/legend inside FissionGraph uses themes correctly */
-html:not(.dark) .fission-graph-container > div:not(.force-graph-container) {
-  background: var(--glass-bg) !important;
-  color: var(--text-1) !important;
-  border: 1px solid var(--glass-border) !important;
+/* English markdown rendering inherits --ew-text-* for legibility. */
+.english-workspace .english-markdown {
+  color: var(--ew-text-2);
 }
-html:not(.dark) .fission-graph-container > div:not(.force-graph-container) * {
-  color: var(--text-1) !important;
+.english-workspace .english-markdown h1,
+.english-workspace .english-markdown h2,
+.english-workspace .english-markdown h3 {
+  color: var(--ew-text-1);
 }
 
+/* Native inputs inside the workspace pick up the workspace palette. */
+.english-workspace input,
+.english-workspace select,
+.english-workspace textarea {
+  color: var(--ew-text-1);
+}
 
-/* =====================================================================
-
-/* =====================================================================
+/* Immmersive floating-window glass tokens (dark = dark glass, light = white glass). */
+.english-workspace {
+  --ew-glass-bg: rgba(255, 255, 255, 0.7);
+  --ew-glass-border: rgba(0, 0, 0, 0.08);
+  --ew-glass-highlight: rgba(255, 255, 255, 0.6);
+}
+.dark .english-workspace {
+  --ew-glass-bg: rgba(20, 20, 20, 0.25);
+  --ew-glass-border: rgba(255, 255, 255, 0.08);
+  --ew-glass-highlight: rgba(255, 255, 255, 0.05);
+}

@@ -253,7 +253,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
       }}
     >
       {/* Header with Word Title */}
-      <div style={{ padding: '24px 24px 16px', borderBottom: '1px solid #171717' }}>
+      <div style={{ padding: '24px 24px 16px', borderBottom: '1px solid var(--ew-border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <h1 style={{ fontSize: 36, fontWeight: 700, color: 'var(--ew-text-1, #fff)', letterSpacing: '-0.02em', margin: 0 }}>
@@ -337,7 +337,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                     padding: '4px 8px',
                     borderRadius: 6,
                     fontSize: 12,
-                    border: '1px solid #262626',
+                    border: '1px solid var(--ew-border)',
                     background: showAddNote ? '#2563eb' : 'var(--ew-bg-card, #171717)',
                     color: showAddNote ? 'var(--ew-text-1, #fff)' : 'var(--ew-text-3, #a3a3a3)',
                     cursor: 'pointer',
@@ -357,7 +357,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                     padding: '4px 8px',
                     borderRadius: 6,
                     fontSize: 12,
-                    border: '1px solid #262626',
+                    border: '1px solid var(--ew-border)',
                     background: 'var(--ew-bg-card, #171717)',
                     color: 'var(--ew-text-3, #a3a3a3)',
                     cursor: 'pointer',
@@ -446,7 +446,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
 
         {/* Word Forms */}
         {chineseData?.forms && Object.keys(chineseData.forms).length > 0 && (
-          <div style={{ borderTop: '1px solid #171717', paddingTop: 24, marginBottom: 32 }}>
+          <div style={{ borderTop: '1px solid var(--ew-border)', paddingTop: 24, marginBottom: 32 }}>
             <h3 style={{ fontSize: 20, fontWeight: 600, color: 'var(--ew-text-1, #fff)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ width: 4, height: 24, background: 'var(--ew-success, #22c55e)', borderRadius: 4 }} />
               词形变化
@@ -458,8 +458,8 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    background: 'rgba(23, 23, 23, 0.5)',
-                    border: '1px solid #262626',
+                    background: 'var(--ew-bg-card)',
+                    border: '1px solid var(--ew-border)',
                     borderRadius: 6,
                     padding: '8px 12px',
                   }}
@@ -476,7 +476,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
 
         {/* Detailed Definitions */}
         {chineseData?.definitions && chineseData.definitions.length > 0 && (
-          <div style={{ borderTop: '1px solid #171717', paddingTop: 24, marginBottom: 32 }}>
+          <div style={{ borderTop: '1px solid var(--ew-border)', paddingTop: 24, marginBottom: 32 }}>
             <h3 style={{ fontSize: 20, fontWeight: 600, color: 'var(--ew-text-1, #fff)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ width: 4, height: 24, background: 'var(--ew-accent, #3b82f6)', borderRadius: 4 }} />
               详细释义
@@ -486,10 +486,10 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                 <div
                   key={idx}
                   style={{
-                    background: 'rgba(23, 23, 23, 0.3)',
+                    background: 'var(--ew-bg-card)',
                     borderRadius: 8,
                     padding: 16,
-                    border: '1px solid rgba(38, 38, 38, 0.5)',
+                    border: '1px solid var(--ew-border)',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -513,7 +513,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                       <p style={{ color: 'var(--ew-text-1, #e5e5e5)', margin: '0 0 4px' }}>{def.explanation_en}</p>
                       <p style={{ color: 'var(--ew-text-faint, #737373)', fontSize: 14, margin: 0 }}>{def.explanation_cn}</p>
                     </div>
-                    <div style={{ paddingLeft: 12, borderLeft: '2px solid #404040' }}>
+                    <div style={{ paddingLeft: 12, borderLeft: '2px solid var(--ew-border-hi)' }}>
                       <p style={{ color: 'var(--ew-text-2, #d4d4d4)', fontStyle: 'italic', margin: '0 0 4px' }}>"{def.example_en}"</p>
                       <p style={{ color: 'var(--ew-text-faint, #737373)', fontSize: 14, margin: 0 }}>{def.example_cn}</p>
                     </div>
@@ -526,7 +526,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
 
         {/* Comparisons */}
         {chineseData?.comparison && chineseData.comparison.length > 0 && (
-          <div style={{ borderTop: '1px solid #171717', paddingTop: 24, marginBottom: 32 }}>
+          <div style={{ borderTop: '1px solid var(--ew-border)', paddingTop: 24, marginBottom: 32 }}>
             <h3 style={{ fontSize: 20, fontWeight: 600, color: 'var(--ew-text-1, #fff)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ width: 4, height: 24, background: 'var(--ew-purple, #a855f7)', borderRadius: 4 }} />
               近义词辨析
@@ -536,10 +536,10 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
                 <div
                   key={idx}
                   style={{
-                    background: 'rgba(23, 23, 23, 0.3)',
+                    background: 'var(--ew-bg-card)',
                     borderRadius: 8,
                     padding: 16,
-                    border: '1px solid rgba(38, 38, 38, 0.5)',
+                    border: '1px solid var(--ew-border)',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
@@ -554,7 +554,7 @@ export default function WordDetail({ word, onWordClick, onNextWord, onPrevWord }
         )}
 
         {/* Notes Section */}
-        <div ref={notesRef} style={{ borderTop: '1px solid #171717', paddingTop: 24, paddingBottom: 32 }}>
+        <div ref={notesRef} style={{ borderTop: '1px solid var(--ew-border)', paddingTop: 24, paddingBottom: 32 }}>
           <h3 style={{ fontSize: 20, fontWeight: 600, color: 'var(--ew-text-1, #fff)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 4, height: 24, background: 'var(--ew-orange, #f97316)', borderRadius: 4 }} />
             笔记
