@@ -1,7 +1,116 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { CanvasApp, DashboardSnapshot } from "@learnforge/app-protocol";
 
 const E2E_STUDENT_ID = `e2e-student-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const E2E_COURSE_ID = "ai-course";
+const E2E_NOW = "2026-06-04T00:00:00Z";
+
+function canvasApp(overrides: Partial<CanvasApp> & Pick<CanvasApp, "app_id" | "app_type" | "title">): CanvasApp {
+  return {
+    status: "ready",
+    render_mode: "native_react",
+    state: "window",
+    position: { x: 120, y: 120 },
+    size: { width: 360, height: 220 },
+    z_index: 30,
+    payload: {},
+    source: {},
+    source_refs: [],
+    actions: [],
+    created_at: E2E_NOW,
+    updated_at: E2E_NOW,
+    ...overrides
+  };
+}
+
+function e2eCanvasApps(): CanvasApp[] {
+  return [
+    canvasApp({
+      app_id: "app-profile",
+      app_type: "profile.dashboard",
+      title: "学习画像",
+      position: { x: 80, y: 120 },
+      size: { width: 360, height: 220 },
+      z_index: 40,
+      payload: { name: "E2E Learner", school: "LearnForge", progress: 100 }
+    }),
+    canvasApp({
+      app_id: "app-dashboard",
+      app_type: "dashboard.learning",
+      title: "学习仪表盘",
+      position: { x: 470, y: 120 },
+      size: { width: 420, height: 250 },
+      z_index: 41,
+      payload: { active_tab: "overview" }
+    }),
+    canvasApp({
+      app_id: "app-resource",
+      app_type: "resource.center",
+      title: "资源中心",
+      position: { x: 920, y: 120 },
+      size: { width: 430, height: 290 },
+      z_index: 42,
+      payload: {
+        topic: "问候与引导",
+        status: "已索引",
+        resources: [
+          {
+            resource_id: "res-diagnostic",
+            title: "诊断练习",
+            type: "quiz",
+            module: "练习",
+            recommended_level: "巩固",
+            tags: ["诊断", "练习"],
+            content: { summary: "用于确认资源中心和记忆证据的稳定渲染。" },
+            source_refs: [{ title: "diagnostic.pdf", page: 2 }]
+          }
+        ]
+      }
+    }),
+    canvasApp({
+      app_id: "app-energy",
+      app_type: "physics.work_energy_demo",
+      title: "打开动能定理演示",
+      state: "minimized",
+      position: { x: 650, y: 420 },
+      size: { width: 460, height: 320 },
+      z_index: 35,
+      payload: { topic: "动能定理", status: "可交互" },
+      actions: [{ label: "开始演示", action: "demo.start" }]
+    })
+  ];
+}
+
+function e2eDashboard(): DashboardSnapshot {
+  return {
+    student_id: E2E_STUDENT_ID,
+    profile: { display_name: "E2E Learner", school: "LearnForge" },
+    mastery: { "动能定理": 0.82, "资源检索": 0.68 },
+    weak_points: ["公式迁移"],
+    recommendations: [{ title: "打开动能定理演示", reason: "用交互演示理解功和动能变化", score: 0.92 }],
+    memory_evidence: [
+      {
+        id: "mem-e2e",
+        student_id: E2E_STUDENT_ID,
+        course_id: E2E_COURSE_ID,
+        memory_type: "learning_preference",
+        content: "偏好可视化演示与诊断练习。",
+        structured_payload: {},
+        confidence: 0.9,
+        effective_confidence: 0.9,
+        evidence_type: "chat",
+        source_agent: "hermes",
+        importance: 0.7,
+        decay_rate: 0.02,
+        tags: ["e2e"],
+        created_at: E2E_NOW,
+        updated_at: E2E_NOW
+      }
+    ],
+    recent_runs: [{ run_id: "run-e2e", task_type: "work_energy_demo", status: "completed" }],
+    path_progress: 0.72
+  };
+}
 
 function streamBody(events: Array<Record<string, unknown>>) {
   return events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("");
@@ -44,6 +153,8 @@ async function expectAppNearCanvasCenter(page: Page, appId: string) {
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("learnforge.auth.token", "e2e-token");
+    window.localStorage.setItem("learnforge.settings.theme", JSON.stringify("light"));
+    window.localStorage.setItem("learnforge.settings.wallpaper", JSON.stringify("sonoma"));
     window.localStorage.removeItem("learnforge.shell.splitPercent");
   });
   await page.route("**/api/**", async (route) => {
@@ -57,6 +168,27 @@ test.beforeEach(async ({ page }) => {
           student: { student_id: E2E_STUDENT_ID, course_id: E2E_COURSE_ID, profile_status: "completed" },
           onboarding: { status: "completed", current_step: "completed" }
         })
+      });
+      return;
+    }
+    if (url.includes("/api/canvas/apps?")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ apps: e2eCanvasApps() })
+      });
+      return;
+    }
+    if (url.includes("/api/dashboard/")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(e2eDashboard())
+      });
+      return;
+    }
+    if (url.includes("/api/resources")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ resources: e2eCanvasApps()[2].payload.resources ?? [] })
       });
       return;
     }
@@ -93,6 +225,25 @@ test("loads product with left canvas and right Tutor Chat", async ({ page }) => 
   await page.mouse.up();
   const after = await canvas.boundingBox();
   expect(Math.abs((after?.width ?? 0) - (before?.width ?? 0))).toBeGreaterThan(40);
+});
+
+test("appearance settings switch wallpaper and themed assets", async ({ page }) => {
+  await page.getByLabel("外观与壁纸设置").click();
+  const panel = page.getByRole("dialog", { name: "外观与壁纸设置" });
+  await expect(panel).toBeVisible();
+
+  await panel.getByRole("button", { name: "壁纸 Pure White" }).click();
+  await expect.poll(async () => page.evaluate(() => document.documentElement.dataset.wallpaper)).toBe("pure-white");
+  await expect.poll(async () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--lf-wallpaper-image").trim())).toBe("none");
+
+  await panel.getByRole("radio", { name: "暗色" }).click();
+  await expect.poll(async () => page.evaluate(() => document.documentElement.classList.contains("dark"))).toBe(true);
+  await expect(page.locator(".brand-mark img").first()).toHaveAttribute("src", /\/brand\/dark\/learnforge-logo\.png$/);
+  await expect(page.locator(".dock-app img").first()).toHaveAttribute("src", /\/icons\/dark\//);
+
+  await panel.getByRole("radio", { name: "亮色" }).click();
+  await expect.poll(async () => page.evaluate(() => document.documentElement.classList.contains("dark"))).toBe(false);
+  await expect(page.locator(".brand-mark img").first()).toHaveAttribute("src", /\/brand\/light\/learnforge-logo\.png$/);
 });
 
 test("chat stream creates AppLink and AppLink Flight focuses target App", async ({ page }) => {

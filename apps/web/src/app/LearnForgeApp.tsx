@@ -11,7 +11,9 @@ import {
   type AuthPayload,
   type SessionContext
 } from "../lib/api/client";
+import { themedBrandAsset } from "../lib/assets/appearanceAssets";
 import { loadJson, saveJson } from "../lib/state/localStorage";
+import { useTheme } from "../lib/state/useTheme";
 import { DEFAULT_BILIBILI_EMBED_OPTIONS, bilibiliEmbedUrl, extractBvidFromResource } from "../lib/video/bilibili";
 
 export function buildResourceCanvasAppRequest(resource: LearningResource) {
@@ -51,6 +53,7 @@ function sessionFromAuth(auth: AuthPayload): SessionContext {
 }
 
 export function LearnForgeApp() {
+  const { theme } = useTheme();
   const [auth, setAuth] = useState<AuthPayload | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [sessionContext, setSessionContext] = useState<SessionContext>(() => loadJson("learnforge.session.context", DEFAULT_SESSION_CONTEXT));
@@ -75,7 +78,7 @@ export function LearnForgeApp() {
   }, []);
 
   if (checkingAuth) {
-    return <div className="auth-screen"><section className="auth-panel"><div className="auth-copy"><img className="auth-brand-mark" src="/brand/learnforge-logo.png" alt="LearnForge" /><span>LearnForge V2</span><h1>正在检查登录状态</h1></div></section></div>;
+    return <div className="auth-screen"><section className="auth-panel"><div className="auth-copy"><img className="auth-brand-mark" src={themedBrandAsset("learnforge-logo", theme)} alt="LearnForge" /><span>LearnForge V2</span><h1>正在检查登录状态</h1></div></section></div>;
   }
 
   if (!auth) {

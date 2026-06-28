@@ -2,6 +2,8 @@
 
 import { Settings2, Route } from "lucide-react";
 import { MODEL_OPTIONS, type ModelProvider } from "../../lib/api/client";
+import { themedBrandAsset } from "../../lib/assets/appearanceAssets";
+import { useTheme } from "../../lib/state/useTheme";
 
 /* ── Types ── */
 
@@ -20,6 +22,7 @@ export function ChatHeader({
   onToggleSettings,
   onRegeneratePath,
 }: ChatHeaderProps) {
+  const { theme } = useTheme();
   const activeProvider = MODEL_OPTIONS.find((o) => o.provider === modelProvider) ?? MODEL_OPTIONS[0];
   const providerLabel = activeProvider.label;
 
@@ -28,7 +31,7 @@ export function ChatHeader({
       <header className="chat-header chat-head">
         <div className="tutor-id">
           <div className="tutor-av">
-            <img src="/brand/ai-tutor-avatar.png" alt="AI 学习导师" />
+            <img src={themedBrandAsset("ai-tutor-avatar", theme)} alt="AI 学习导师" />
           </div>
           <div className="tutor-meta">
             <span className="eyebrow">Tutor Chat</span>

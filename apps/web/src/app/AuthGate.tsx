@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { loginAccount, registerAccount, type AuthPayload } from "../lib/api/client";
+import { themedBrandAsset } from "../lib/assets/appearanceAssets";
+import { useTheme } from "../lib/state/useTheme";
 
 type Props = { onAuth: (auth: AuthPayload) => void };
 
 export function AuthGate({ onAuth }: Props) {
+  const { theme } = useTheme();
   const [mode, setMode] = useState<"login" | "register">("register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,7 +43,7 @@ export function AuthGate({ onAuth }: Props) {
     <div className="auth-screen">
       <section className="auth-panel">
         <div className="auth-copy">
-          <img className="auth-brand-mark" src="/brand/learnforge-logo.png" alt="LearnForge" />
+          <img className="auth-brand-mark" src={themedBrandAsset("learnforge-logo", theme)} alt="LearnForge" />
           <span>LearnForge V2</span>
           <h1>建立你的学习画像</h1>
           <p>登录后先通过资料上传和简短问答生成个人画像，再进入空间学习画布。</p>

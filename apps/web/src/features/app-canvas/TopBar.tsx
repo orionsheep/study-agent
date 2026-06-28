@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { Brain, ChevronDown, Cpu, Download, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Sun, User, Droplets, Droplet } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Brain, Check, ChevronDown, Cpu, Download, Droplet, Droplets, LogOut, Moon, Palette, PanelLeftClose, PanelLeftOpen, Sun, User } from "lucide-react";
 import type { TraceItem } from "../../lib/events/agentEvents";
 import { logoutAccount } from "../../lib/api/client";
 import type { ThemeMode } from "../../lib/state/useTheme";
+import { themedBrandAsset, WALLPAPERS, type WallpaperId, wallpaperCssValue } from "../../lib/assets/appearanceAssets";
 
 type Props = {
   isStreaming: boolean;
@@ -14,23 +15,33 @@ type Props = {
   learningObjective?: string;
   theme: ThemeMode;
   onToggleTheme: () => void;
+  onThemeChange: (theme: ThemeMode) => void;
   glassEnabled: boolean;
   onToggleGlass: () => void;
+  onGlassChange: (enabled: boolean) => void;
+  wallpaperId: WallpaperId;
+  onWallpaperChange: (wallpaperId: WallpaperId) => void;
   onToggleCanvas?: () => void;
   onLogout?: () => void;
 };
 
-export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, currentTopic, courseLabel, learningObjective, theme, onToggleTheme, glassEnabled, onToggleGlass, onToggleCanvas, onLogout }: Props) {
+export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, currentTopic, courseLabel, learningObjective, theme, onToggleTheme, onThemeChange, glassEnabled, onToggleGlass, onGlassChange, wallpaperId, onWallpaperChange, onToggleCanvas, onLogout }: Props) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const appearanceRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!userMenuOpen) return;
+    if (!userMenuOpen && !appearanceOpen) return;
     const onPointerDown = (event: MouseEvent | PointerEvent) => {
       if (!userMenuRef.current?.contains(event.target as Node)) setUserMenuOpen(false);
+      if (!appearanceRef.current?.contains(event.target as Node)) setAppearanceOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setUserMenuOpen(false);
+      if (event.key === "Escape") {
+        setUserMenuOpen(false);
+        setAppearanceOpen(false);
+      }
     };
     window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
@@ -38,7 +49,7 @@ export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, c
       window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [userMenuOpen]);
+  }, [appearanceOpen, userMenuOpen]);
 
   // 直接处理退出：清 token + 回调，即使后端 /api/auth/logout 报错也强制登出
   const handleLogout = () => {
@@ -54,11 +65,11 @@ export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, c
     <div className="topbar">
       <div className="brand">
         <div className="brand-mark">
-          <img src="/brand/learnforge-logo.png" alt="LearnForge" />
+          <img src={themedBrandAsset("learnforge-logo", theme)} alt="LearnForge" />
         </div>
         <div>
           <div className="brand-name">
-            学境 <span style={{ color: "var(--text-3)", fontWeight: 500, fontSize: 13 }}>LearnForge</span>
+            学境 <span style={{ color: "var(--text-3)", fontWeight: 500, fontSize: 12 }}>LearnForge</span>
           </div>
           <div className="brand-sub">V2 · SPATIAL LEARNING OS</div>
         </div>
@@ -126,7 +137,6 @@ export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, c
         {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
       </button>
 
-      
       <button
         className="theme-toggle"
         title={glassEnabled ? "关闭毛玻璃效果 (使用纯色背景)" : "开启毛玻璃效果 (液态玻璃质感)"}
@@ -135,6 +145,90 @@ export function TopBar({ isStreaming, traceLatest, memoryActive, canvasHidden, c
       >
         {glassEnabled ? <Droplets size={16} /> : <Droplet size={16} />}
       </button>
+
+      <div className="topbar-appearance-menu" ref={appearanceRef}>
+        <button
+          type="button"
+          className={`theme-toggle ${appearanceOpen ? "is-open" : ""}`}
+          title="外观与壁纸"
+          aria-label="外观与壁纸设置"
+          aria-haspopup="dialog"
+          aria-expanded={appearanceOpen}
+          onClick={() => {
+            setAppearanceOpen((open) => !open);
+            setUserMenuOpen(false);
+          }}
+        >
+          <Palette size={16} />
+        </button>
+        {appearanceOpen ? (
+          <section className="appearance-panel" role="dialog" aria-label="外观与壁纸设置">
+            <div className="appearance-panel-head">
+              <strong>外观</strong>
+              <span>桌面</span>
+            </div>
+
+            <div className="appearance-segmented" role="radiogroup" aria-label="主题">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={theme === "light"}
+                className={theme === "light" ? "active" : ""}
+                onClick={() => onThemeChange("light")}
+              >
+                <Sun size={14} />
+                <span>亮色</span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={theme === "dark"}
+                className={theme === "dark" ? "active" : ""}
+                onClick={() => onThemeChange("dark")}
+              >
+                <Moon size={14} />
+                <span>暗色</span>
+              </button>
+            </div>
+
+            <label className="appearance-switch">
+              <span>液态玻璃</span>
+              <input
+                type="checkbox"
+                checked={glassEnabled}
+                onChange={(event) => onGlassChange(event.target.checked)}
+              />
+              <i aria-hidden="true" />
+            </label>
+
+            <div className="appearance-wallpapers" aria-label="桌面壁纸">
+              {WALLPAPERS.map((wallpaper) => {
+                const active = wallpaper.id === wallpaperId;
+                const swatchStyle = {
+                  backgroundColor: wallpaper.accent,
+                  backgroundImage: wallpaperCssValue(wallpaper.id),
+                } as CSSProperties;
+                return (
+                  <button
+                    key={wallpaper.id}
+                    type="button"
+                    className={active ? "active" : ""}
+                    aria-pressed={active}
+                    aria-label={`壁纸 ${wallpaper.label}`}
+                    data-wallpaper-option={wallpaper.id}
+                    onClick={() => onWallpaperChange(wallpaper.id)}
+                  >
+                    <span className="wallpaper-swatch" style={swatchStyle}>
+                      {active ? <Check size={14} /> : null}
+                    </span>
+                    <span>{wallpaper.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+      </div>
 
       <button className="btn btn-icon" title="导出">
         <Download size={16} />

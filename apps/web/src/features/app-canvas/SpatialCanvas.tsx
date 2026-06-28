@@ -4,8 +4,19 @@ import type { CanvasApp, CanvasViewport, DashboardSnapshot, LearningResource } f
 import { Fullscreen, Grip, LocateFixed, Maximize2, Minus, Plus, Search, Shrink, Sparkles, Trash2, X } from "lucide-react";
 import { NativeAppRenderer } from "../learning-apps/NativeAppRenderer";
 import { isPinnedApp, isSystemModule, isRealTimeResource } from "./pinned";
+import { clampWindowPositionToViewport, samePoint } from "./windowBounds";
 import { patchApp, type SessionContext } from "../../lib/api/client";
+import {
+  APP_ICON_FILES,
+  FOLDER_ICON_FILES,
+  type FolderIconKey,
+  themedAppIcon,
+  themedIconAssetFromPath,
+} from "../../lib/assets/appearanceAssets";
 import { saveJson } from "../../lib/state/localStorage";
+import { useTheme } from "../../lib/state/useTheme";
+
+type FolderKey = FolderIconKey;
 
 type Props = {
   apps: CanvasApp[];
@@ -113,45 +124,9 @@ function appAccent(app: CanvasApp) {
   return palette[app.app_type] ?? "var(--accent-grad)";
 }
 
-type FolderKey = "notes" | "quiz" | "mindmap" | "infographic" | "image" | "code" | "ppt" | "video" | "demo" | "other";
-
-const APP_ICON_MAP: Record<string, string> = {
-  "profile.dashboard": "/icons/student_profile_app.png",
-  "learning.path": "/icons/learning_path_app.png",
-  "knowledge.graph": "/icons/knowledge_graph_app.png",
-  "mindmap.concept": "/icons/folder_mindmap_app.png",
-  "quiz.practice": "/icons/quiz_practice_app.png",
-  "physics.work_energy_demo": "/icons/work_energy_demo_app.png",
-  "math.gradient_descent_demo": "/icons/folder_demo_app.png",
-  "code.lab": "/icons/code_lab_app.png",
-  "notes.session": "/icons/session_notes_app.png",
-  "dashboard.learning": "/icons/learning_dashboard_app.png",
-  "resource.center": "/icons/resource_bundle_app.png",
-  "ppt.preview": "/icons/folder_ppt_app.png",
-  "image.explanation": "/icons/folder_image_app.png",
-  "video.script": "/icons/folder_video_app.png",
-  "custom.html": "/icons/folder_infographic_app.png",
-  "resource.folder": "/icons/folder_other_app.png",
-  "english.workspace": "/icons/folder_notes_app.png",
-  "notebooklm.workspace": "/icons/folder_mindmap_app.png",
-  "humanities.notebook": "/icons/folder_mindmap_app.png",
-};
-
-const FOLDER_ICON_MAP: Record<FolderKey, string> = {
-  notes: "/icons/folder_notes_app.png",
-  quiz: "/icons/folder_quiz_app.png",
-  mindmap: "/icons/folder_mindmap_app.png",
-  infographic: "/icons/folder_infographic_app.png",
-  image: "/icons/folder_image_app.png",
-  code: "/icons/folder_code_app.png",
-  ppt: "/icons/folder_ppt_app.png",
-  video: "/icons/folder_video_app.png",
-  demo: "/icons/folder_demo_app.png",
-  other: "/icons/folder_other_app.png",
-};
-
 function AppIcon({ appType, size = 22, className = "", srcOverride }: { appType: string; size?: number; className?: string; srcOverride?: string }) {
-  const src = srcOverride ?? APP_ICON_MAP[appType];
+  const { theme } = useTheme();
+  const src = srcOverride ? themedIconAssetFromPath(srcOverride, theme) : themedAppIcon(appType, theme);
   if (src) {
     return <img src={src} width={size} height={size} alt="" style={{ objectFit: "contain", borderRadius: 6, display: "block" }} className={className} />;
   }
@@ -178,7 +153,8 @@ type FolderPayload = {
 
 function folderIconSrc(app: CanvasApp) {
   const payload = app.payload as Partial<FolderPayload> | undefined;
-  return payload?.folderKey ? FOLDER_ICON_MAP[payload.folderKey] : FOLDER_ICON_MAP.other;
+  const file = payload?.folderKey ? FOLDER_ICON_FILES[payload.folderKey] : FOLDER_ICON_FILES.other;
+  return `/icons/${file}`;
 }
 
 function customHtmlIsPptDeck(app: CanvasApp): boolean {
@@ -442,6 +418,35 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
   const focusedApp = visibleApps.find((app) => !isFolderApp(app) && app.app_id === focusedId);
 
   const clampScale = (scale: number) => Math.min(1.8, Math.max(0.42, scale));
+  const viewportPixelSize = () => {
+    const rect = shellRef.current?.getBoundingClientRect();
+    return rect ? { width: rect.width, height: rect.height } : null;
+  };
+  const clampWindowPosition = (position: { x: number; y: number }, size: { width: number; height: number }) => {
+    const pixels = viewportPixelSize();
+    if (!pixels) return position;
+    return clampWindowPositionToViewport(position, size, viewportRef.current, pixels);
+  };
+  const bringWindowIntoView = (appId: string) => {
+    if (windowInteractionRef.current) return;
+    const app = appsRef.current.find((item) => item.app_id === appId);
+    if (!app || isPinnedApp(app) || isFolderApp(app)) return;
+    const size = displaySizeForApp(app);
+    const nextPosition = clampWindowPosition(app.position, size);
+    if (samePoint(app.position, nextPosition)) return;
+    const nextApp = { ...app, position: nextPosition, updated_at: new Date().toISOString() };
+    setApps(appsRef.current.map((item) => (item.app_id === app.app_id ? nextApp : item)));
+    void patchApp(app.app_id, { position: nextPosition, size: app.size, group_id: app.group_id }, sessionContext);
+  };
+
+  useEffect(() => {
+    if (!focusedId) return;
+    const raf = window.requestAnimationFrame(() => bringWindowIntoView(focusedId));
+    return () => window.cancelAnimationFrame(raf);
+  // Keep this tied to focus changes only; panning/zooming the canvas should not
+  // constantly move the user's windows back into the viewport.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedId]);
 
   const zoomAt = (clientX: number, clientY: number, nextScale: number) => {
     const rect = shellRef.current?.getBoundingClientRect();
@@ -506,12 +511,16 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
     document.removeEventListener("pointercancel", finishWindowInteraction, true);
     const app = appsRef.current.find((item) => item.app_id === interaction.appId);
     const frame = frameElementFor(interaction.appId);
-    const nextPosition = interaction.kind === "app"
+    const rawPosition = interaction.kind === "app"
       ? { x: interaction.nextX, y: interaction.nextY }
       : app?.position ?? { x: interaction.baseX, y: interaction.baseY };
     const nextSize = interaction.kind === "resize"
       ? { width: interaction.nextWidth, height: interaction.nextHeight }
       : app?.size ?? { width: interaction.baseWidth, height: interaction.baseHeight };
+    const clampSize = interaction.kind === "resize"
+      ? nextSize
+      : { width: interaction.baseWidth, height: interaction.baseHeight };
+    const nextPosition = clampWindowPosition(rawPosition, clampSize);
     if (frame) {
       frame.style.left = `${nextPosition.x}px`;
       frame.style.top = `${nextPosition.y}px`;
@@ -534,8 +543,12 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
     const dx = (event.clientX - interaction.startX) / interaction.scale;
     const dy = (event.clientY - interaction.startY) / interaction.scale;
     if (interaction.kind === "app") {
-      interaction.nextX = interaction.baseX + dx;
-      interaction.nextY = interaction.baseY + dy;
+      const nextPosition = clampWindowPosition(
+        { x: interaction.baseX + dx, y: interaction.baseY + dy },
+        { width: interaction.baseWidth, height: interaction.baseHeight },
+      );
+      interaction.nextX = nextPosition.x;
+      interaction.nextY = nextPosition.y;
     } else {
       const app = appsRef.current.find((item) => item.app_id === interaction.appId);
       const min = app ? minResizeSizeForApp(app) : { width: 260, height: 190 };
@@ -981,11 +994,12 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
                   onAppEvent(app.app_id, "system_module.create", { app_type: app.app_type });
                 } else {
                   openWindow(app.app_id);
+                  window.requestAnimationFrame(() => bringWindowIntoView(app.app_id));
                 }
               }}
               title={app.title}
               className="dock-app"
-              style={{ background: iconSrc || APP_ICON_MAP[app.app_type] ? "transparent" : appAccent(app) }}
+              style={{ background: iconSrc || APP_ICON_FILES[app.app_type] ? undefined : appAccent(app) }}
             >
               <AppIcon appType={app.app_type} size={36} srcOverride={iconSrc} />
               {isFolderApp(app) ? <span className="dock-badge">{(app.payload as FolderPayload).count}</span> : null}
@@ -1041,7 +1055,7 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
           data-fullscreen-mode={fullscreenMode ?? undefined}
           style={fullscreenMode === "page"
             ? { position: "fixed", inset: 0, zIndex: 1200 }
-            : { position: "absolute", inset: 0, zIndex: 500 }}
+            : { position: "fixed", top: "var(--topbar-h)", left: 0, bottom: 0, width: "var(--canvas-pane, 68%)", zIndex: 900 }}
         >
         <AppWindow
           key={fullscreenApp.app_id}
@@ -1131,6 +1145,7 @@ function AppWindow({ app, dimmed, isFullscreen, fixed, dashboard, onFocus, onDra
   // ("已保存到学习画布" / "问老师") and the duplicate type strip, and use a compact
   // titlebar so the app content — not the chrome — fills the window.
   const isWorkspaceApp = app.app_type === "english.workspace" || app.app_type === "notebooklm.workspace" || app.app_type === "humanities.notebook";
+  const appActions = Array.isArray(app.actions) ? app.actions : [];
   const posStyle = isFullscreen
     ? { position: "absolute" as const, inset: 0, width: "auto", height: "auto", zIndex: 500, borderRadius: 0 }
     : { width: "100%", height: "100%" };
@@ -1205,7 +1220,7 @@ function AppWindow({ app, dimmed, isFullscreen, fixed, dashboard, onFocus, onDra
         style={isFullscreen ? { cursor: "default" } : undefined}
       >
         {!isFullscreen && <Grip size={15} />}
-        <div className="appwin-ico" style={{ background: APP_ICON_MAP[app.app_type] ? "transparent" : appAccent(app) }}>
+        <div className="appwin-ico" style={{ background: APP_ICON_FILES[app.app_type] ? "transparent" : appAccent(app) }}>
           <AppIcon appType={app.app_type} size={28} />
         </div>
         <div className="appwin-title">
@@ -1255,11 +1270,11 @@ function AppWindow({ app, dimmed, isFullscreen, fixed, dashboard, onFocus, onDra
       {!isWorkspaceApp && (
         <footer className="appwin-foot">
           <span><Sparkles size={12} />已保存到学习画布</span>
-          {app.actions.length ? (
+          {appActions.length ? (
             <div className="app-action-row">
-              {(isCustomHtml && !app.actions.some((action) => String(action.action ?? "") === "custom.fullscreen")
-                ? [{ label: "全屏演示", action: "custom.fullscreen" }, ...app.actions]
-                : app.actions
+              {(isCustomHtml && !appActions.some((action) => String(action.action ?? "") === "custom.fullscreen")
+                ? [{ label: "全屏演示", action: "custom.fullscreen" }, ...appActions]
+                : appActions
               ).slice(0, 3).map((action, index) => (
                 <button
                   key={`${String(action.action ?? action.label)}-${index}`}

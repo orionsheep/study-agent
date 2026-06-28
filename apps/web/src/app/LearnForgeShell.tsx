@@ -60,8 +60,65 @@ function notebookLMContextLabel(context: NotebookLMContext): string {
   return context.sourceTitle || context.notebookTitle || context.notebookId || "当前来源";
 }
 
+function foundationApp(appId: string, appType: CanvasApp["app_type"], title: string, sessionContext: SessionContext): CanvasApp {
+  const isDashboard = appType === "dashboard.learning";
+  return {
+    app_id: appId,
+    app_type: appType,
+    title,
+    icon: isDashboard ? "Gauge" : appType === "profile.dashboard" ? "UserRound" : "BookOpen",
+    status: "ready",
+    render_mode: "native_react",
+    state: "window",
+    position: isDashboard ? { x: 1450, y: 60 } : appType === "profile.dashboard" ? { x: 40, y: 40 } : { x: 1860, y: 60 },
+    size: isDashboard ? { width: 410, height: 360 } : appType === "profile.dashboard" ? { width: 330, height: 250 } : { width: 380, height: 320 },
+    z_index: isDashboard ? 8 : appType === "profile.dashboard" ? 2 : 15,
+    group_id: "foundation",
+    payload: isDashboard
+      ? { student_id: sessionContext.studentId, available_tabs: ["overview", "english"], active_tab: "english" }
+      : appType === "resource.center"
+        ? { filters: ["document", "quiz", "code"] }
+        : { summary: "画像构建完成后会在这里展示你的学习状态。" },
+    source: {},
+    source_refs: [],
+    actions: isDashboard
+      ? [{ label: "刷新证据链", action: "dashboard.refresh" }]
+      : appType === "profile.dashboard"
+        ? [{ label: "更新画像", action: "profile.refresh" }]
+        : [{ label: "筛选资源", action: "resource.filter" }],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function ensureFoundationApps(apps: CanvasApp[], sessionContext: SessionContext): CanvasApp[] {
+  const foundations: Array<[string, CanvasApp["app_type"], string]> = [
+    ["app-profile", "profile.dashboard", "学习画像"],
+    ["app-dashboard", "dashboard.learning", "学习仪表盘"],
+    ["app-resource", "resource.center", "资源中心"],
+  ];
+  const next = apps.map((app) => {
+    if (app.app_type !== "dashboard.learning") return app;
+    return {
+      ...app,
+      payload: {
+        ...app.payload,
+        student_id: app.payload?.student_id ?? sessionContext.studentId,
+        available_tabs: ["overview", "english"],
+        active_tab: app.payload?.active_tab === "overview" ? "overview" : "english",
+      },
+    };
+  });
+  for (const [appId, appType, title] of foundations) {
+    if (!next.some((app) => app.app_id === appId || app.app_type === appType)) {
+      next.push(foundationApp(appId, appType, title, sessionContext));
+    }
+  }
+  return next;
+}
+
 export function LearnForgeShell({ sessionContext, onLogout }: Props) {
-  const { theme, glassEnabled, toggleTheme, toggleGlass } = useTheme();
+  const { theme, glassEnabled, wallpaperId, toggleTheme, toggleGlass, setTheme, setGlassEnabled, setWallpaperId } = useTheme();
   const [apps, setApps] = useState<CanvasApp[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSnapshot | undefined>();
   const [shellMessages, setShellMessages] = useState<ChatMessage[]>([
@@ -149,10 +206,13 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
     // new one, otherwise its events leak into the new conversation's state.
     streamAbortRef.current?.abort();
     streamAbortRef.current = null;
-    fetchApps(sessionContext).then(setApps).catch(() => setTrace((items) => [
+    fetchApps(sessionContext).then((items) => setApps(ensureFoundationApps(items, sessionContext))).catch(() => {
+      setApps(ensureFoundationApps([], sessionContext));
+      setTrace((items) => [
       ...items,
       { id: `backend-wait-${Date.now()}`, name: "backend", status: "running", detail: "等待连接", raw: "backend:running:等待连接" }
-    ]));
+      ]);
+    });
     fetchDashboard(sessionContext).then(setDashboard).catch(() => undefined);
     fetchChatMessages(sessionContext)
       .then((rows) => {
@@ -536,6 +596,21 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
       return;
     }
 
+    if (eventType === "english.open_dashboard") {
+      const dashboardApp = appsRef.current.find((item) => item.app_type === "dashboard.learning");
+      if (dashboardApp) {
+        const nextPayload = { ...dashboardApp.payload, active_tab: "english" };
+        setApps((current) => current.map((item) =>
+          item.app_id === dashboardApp.app_id ? { ...item, payload: nextPayload } : item
+        ));
+        patchApp(dashboardApp.app_id, { payload: nextPayload }, sessionContext).catch(() => undefined);
+        openWindow(dashboardApp.app_id);
+        focusWindow(dashboardApp.app_id);
+        setFullscreenId(dashboardApp.app_id);
+      }
+      return;
+    }
+
     if (eventType === "notebooklm.context_select") {
       const context = notebookLMContextFromPayload(payload);
       setNotebookLMContext(context);
@@ -669,8 +744,12 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
         learningObjective={learningFocus.objective}
         theme={theme}
         onToggleTheme={toggleTheme}
+        onThemeChange={setTheme}
         glassEnabled={glassEnabled}
         onToggleGlass={toggleGlass}
+        onGlassChange={setGlassEnabled}
+        wallpaperId={wallpaperId}
+        onWallpaperChange={setWallpaperId}
       />
       <main
         ref={shellRef}
