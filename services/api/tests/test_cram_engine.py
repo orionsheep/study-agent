@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from app.canvas.materializer import CanvasMaterializer
 from app.cram.engine import (
     CramSessionCreate,
     CramStage,
@@ -9,6 +12,22 @@ from app.cram.engine import (
     create_cram_session,
 )
 from app.cram.openstax_seed import OPENSTAX_CRAM_BOOKS, openstax_book_seed_payload
+from app.hermes_runtime.task_executor import HermesTaskResult
+
+
+class _FakeCramMaterializerStore:
+    def __init__(self) -> None:
+        self.sessions = []
+        self.apps = []
+
+    def create_cram_session(self, request):
+        session = create_cram_session(request)
+        self.sessions.append(session)
+        return session
+
+    def save_app(self, app, **_kwargs):
+        self.apps.append(app)
+        return app
 
 
 def test_openstax_seed_contains_at_least_twenty_verified_books():
@@ -126,3 +145,43 @@ def test_cram_dashboard_summary_projects_session_into_learning_dashboard():
     assert summary["kpis"]["openstax_books"] >= 20
     assert summary["kpis"]["must_know_coverage"] > 0
     assert summary["recommended_books"][0]["slug"]
+
+
+@pytest.mark.asyncio
+async def test_canvas_materializer_persists_hermes_exam_cram_as_cram_session():
+    store = _FakeCramMaterializerStore()
+    result = await CanvasMaterializer(store).materialize(
+        HermesTaskResult(
+            capability="exam_cram",
+            topic="管理学",
+            apps=[
+                {
+                    "app_type": "exam.cram",
+                    "title": "管理学期末速成",
+                    "payload": {
+                        "course_title": "管理学期末速成",
+                        "exam_types": ["简答题", "案例分析"],
+                        "must_know": ["期望理论", "公平理论"],
+                        "key_points": ["霍桑实验"],
+                        "textbook": "Principles of Management",
+                    },
+                }
+            ],
+        ),
+        student_id="stu-cram",
+        course_id="course-management",
+        conversation_id="conv-cram",
+        message_id="msg-cram",
+        run_id="run-cram",
+        fallback_refs=[],
+        capability="exam_cram",
+        source_material="帮我做管理学期末速成",
+    )
+
+    assert len(store.sessions) == 1
+    app = result.apps[0]
+    assert app.app_type == "exam.cram"
+    assert app.payload["session_id"] == store.sessions[0].session_id
+    assert app.payload["session"]["progress"]["total_points"] >= 6
+    assert app.payload["stage"] == "deconstruct"
+    assert app.source_refs[0]["source_id"] == "openstax:principles-management"

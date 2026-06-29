@@ -631,6 +631,7 @@ ICON_BY_APP_TYPE = {
     "math.gradient_descent_demo": "Gauge",
     "notes.session": "NotebookPen",
     "resource.center": "BookOpen",
+    "exam.cram": "BookOpen",
 }
 
 SIZE_BY_APP_TYPE = {
@@ -646,6 +647,7 @@ SIZE_BY_APP_TYPE = {
     "math.gradient_descent_demo": (470, 350),
     "notes.session": (430, 320),
     "resource.center": (430, 330),
+    "exam.cram": (560, 460),
 }
 
 POSITION_BY_APP_TYPE = {
@@ -664,6 +666,7 @@ POSITION_BY_APP_TYPE = {
     "video.script": (1655, 770),
     "video.player": (1655, 770),
     "resource.center": (1880, 40),
+    "exam.cram": (970, 730),
     "custom.html": (2045, 770),
 }
 
@@ -680,6 +683,7 @@ ACTIONS_BY_APP_TYPE = {
     "math.gradient_descent_demo": [{"label": "播放演示", "action": "demo.play"}, {"label": "让导师解释", "action": "tutor.explain"}],
     "notes.session": [{"label": "保存笔记", "action": "notes.save"}, {"label": "让导师总结", "action": "tutor.explain"}],
     "resource.center": [{"label": "筛选资源", "action": "resource.filter"}, {"label": "让导师推荐", "action": "tutor.explain"}],
+    "exam.cram": [{"label": "继续速成", "action": "cram.advance", "payload": {"action": "teach_next_batch"}}, {"label": "查看仪表盘", "action": "dashboard.refresh"}],
 }
 
 
@@ -743,6 +747,105 @@ class CanvasMaterializer:
         if resource_type == "code":
             data["type"] = "code_practice"
         return LearningResource.model_validate(data)
+
+    @staticmethod
+    def _text_list(value: Any) -> list[str]:
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, str):
+            return [part.strip() for part in re.split(r"[,\n，、;；]+", value) if part.strip()]
+        return []
+
+    @staticmethod
+    def _cram_priority_titles(payload: dict[str, Any], priority: str) -> list[str]:
+        points = payload.get("knowledge_points")
+        if not isinstance(points, list):
+            return []
+        titles: list[str] = []
+        for point in points:
+            if not isinstance(point, dict) or str(point.get("priority") or "") != priority:
+                continue
+            title = str(point.get("title") or point.get("label") or "").strip()
+            if title:
+                titles.append(title)
+        return titles
+
+    @staticmethod
+    def _textbook_from_refs(refs: list[dict[str, Any]]) -> str | None:
+        for ref in refs:
+            source_id = str(ref.get("source_id") or "")
+            if source_id.startswith("openstax:") and ref.get("title"):
+                return str(ref["title"])
+        return None
+
+    def bind_cram_session_app(
+        self,
+        app: CanvasApp,
+        *,
+        student_id: str,
+        course_id: str,
+        fallback_refs: list[dict[str, Any]],
+        source_material: str | None = None,
+    ) -> CanvasApp:
+        if app.app_type != "exam.cram":
+            return app
+        payload = dict(app.payload)
+        session_payload = payload.get("session")
+        if isinstance(session_payload, dict) and session_payload.get("session_id"):
+            return app
+        if not self.store or not hasattr(self.store, "create_cram_session"):
+            return app
+
+        from app.cram.engine import CramSessionCreate
+
+        topics = self._text_list(payload.get("topics") or payload.get("scope"))
+        must_know = (
+            self._text_list(payload.get("must_know") or payload.get("mustKnow"))
+            or self._cram_priority_titles(payload, "must_know")
+            or topics[:4]
+        )
+        key_points = (
+            self._text_list(payload.get("key_points") or payload.get("keyPoints"))
+            or self._cram_priority_titles(payload, "key_point")
+            or topics[4:]
+        )
+        if not must_know and not key_points:
+            fallback_topic = str(payload.get("topic") or payload.get("title") or app.title or source_material or "当前考试范围").strip()
+            must_know = [fallback_topic]
+
+        refs = app.source_refs or fallback_refs
+        textbook = (
+            str(payload.get("textbook") or payload.get("textbook_slug") or "").strip()
+            or self._textbook_from_refs(refs)
+        )
+        preferences = payload.get("preferences") if isinstance(payload.get("preferences"), dict) else {}
+        session = self.store.create_cram_session(
+            CramSessionCreate(
+                student_id=student_id,
+                course_id=course_id,
+                course_title=str(payload.get("course_title") or payload.get("courseTitle") or app.title or "期末速成"),
+                exam_types=self._text_list(payload.get("exam_types") or payload.get("examTypes") or payload.get("exam_format")),
+                must_know=must_know,
+                key_points=key_points,
+                textbook=textbook or None,
+                materials=[],
+                preferences=preferences,
+            )
+        )
+        payload.update(
+            {
+                "session": session.model_dump(mode="json"),
+                "session_id": session.session_id,
+                "course_title": session.course_title,
+                "stage": session.stage.value,
+                "exam_mode": session.exam_mode,
+                "next_actions": session.next_actions,
+            }
+        )
+        app.payload = payload
+        if session.source_refs:
+            app.source_refs = session.source_refs
+        return app
 
     def app_position(self, index: int) -> tuple[float, float]:
         col = index % 3
@@ -1019,6 +1122,13 @@ class CanvasMaterializer:
             return MaterializedBundle(resources=resources, apps=apps, trace=["validated_resources", *trace, "draft_canvas_apps", *bundle.trace])
         saved_apps: list[CanvasApp] = []
         for app in apps:
+            app = self.bind_cram_session_app(
+                app,
+                student_id=student_id,
+                course_id=course_id,
+                fallback_refs=app.source_refs or fallback_refs,
+                source_material=source_material,
+            )
             saved_app = self.store.save_app(app, student_id=student_id, course_id=course_id, agent="hermes_runtime", skill="canvas_materializer")
             saved_apps.append(saved_app)
         return MaterializedBundle(resources=resources, apps=saved_apps, trace=["validated_resources", *trace, "created_canvas_apps", *bundle.trace])
@@ -1058,5 +1168,12 @@ class CanvasMaterializer:
                     run_id=run_id,
                 )
                 app.payload = payload
+            app = self.bind_cram_session_app(
+                app,
+                student_id=student_id,
+                course_id=course_id,
+                fallback_refs=app.source_refs,
+                source_material=str(app.source.get("source_material") or ""),
+            )
             saved_apps.append(self.store.save_app(app, student_id=student_id, course_id=course_id, agent="hermes_runtime", skill="canvas_materializer"))
         return MaterializedBundle(resources=saved_resources, apps=saved_apps, trace=[*bundle.trace, "committed_canvas_apps"])
