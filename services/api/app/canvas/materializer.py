@@ -792,7 +792,30 @@ class CanvasMaterializer:
         payload = dict(app.payload)
         session_payload = payload.get("session")
         if isinstance(session_payload, dict) and session_payload.get("session_id"):
+            payload.setdefault("session_id", str(session_payload.get("session_id")))
+            app.payload = payload
             return app
+        existing_session_id = str(payload.get("session_id") or payload.get("sessionId") or "").strip()
+        if existing_session_id and self.store and hasattr(self.store, "get_cram_session"):
+            try:
+                existing_session = self.store.get_cram_session(existing_session_id, student_id=student_id, course_id=course_id)
+            except TypeError:
+                existing_session = self.store.get_cram_session(existing_session_id)
+            if existing_session:
+                payload.update(
+                    {
+                        "session": existing_session.model_dump(mode="json"),
+                        "session_id": existing_session.session_id,
+                        "course_title": existing_session.course_title,
+                        "stage": existing_session.stage.value,
+                        "exam_mode": existing_session.exam_mode,
+                        "next_actions": existing_session.next_actions,
+                    }
+                )
+                app.payload = payload
+                if existing_session.source_refs:
+                    app.source_refs = existing_session.source_refs
+                return app
         if not self.store or not hasattr(self.store, "create_cram_session"):
             return app
 

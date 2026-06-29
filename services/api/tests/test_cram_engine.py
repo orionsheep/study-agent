@@ -25,6 +25,9 @@ class _FakeCramMaterializerStore:
         self.sessions.append(session)
         return session
 
+    def get_cram_session(self, session_id, **_kwargs):
+        return next((session for session in self.sessions if session.session_id == session_id), None)
+
     def save_app(self, app, **_kwargs):
         self.apps.append(app)
         return app
@@ -185,3 +188,50 @@ async def test_canvas_materializer_persists_hermes_exam_cram_as_cram_session():
     assert app.payload["session"]["progress"]["total_points"] >= 6
     assert app.payload["stage"] == "deconstruct"
     assert app.source_refs[0]["source_id"] == "openstax:principles-management"
+
+
+@pytest.mark.asyncio
+async def test_canvas_materializer_reuses_existing_cram_session_id_without_duplicate_create():
+    store = _FakeCramMaterializerStore()
+    existing = store.create_cram_session(
+        CramSessionCreate(
+            student_id="stu-cram",
+            course_id="course-management",
+            course_title="管理学",
+            exam_types=["简答题"],
+            must_know=["期望理论"],
+            key_points=["霍桑实验"],
+            textbook="Principles of Management",
+        )
+    )
+
+    result = await CanvasMaterializer(store).materialize(
+        HermesTaskResult(
+            capability="exam_cram",
+            topic="管理学",
+            apps=[
+                {
+                    "app_type": "exam.cram",
+                    "title": "管理学期末速成",
+                    "payload": {
+                        "session_id": existing.session_id,
+                        "course_title": "管理学期末速成",
+                    },
+                }
+            ],
+        ),
+        student_id="stu-cram",
+        course_id="course-management",
+        conversation_id="conv-cram",
+        message_id="msg-cram",
+        run_id="run-cram",
+        fallback_refs=[],
+        capability="exam_cram",
+        source_material="继续打开管理学期末速成",
+    )
+
+    assert len(store.sessions) == 1
+    app = result.apps[0]
+    assert app.payload["session_id"] == existing.session_id
+    assert app.payload["session"]["session_id"] == existing.session_id
+    assert app.payload["course_title"] == "管理学"
