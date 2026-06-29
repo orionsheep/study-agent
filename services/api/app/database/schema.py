@@ -37,6 +37,9 @@ REQUIRED_TABLES = [
     "verifier_results",
     "image_assets",
     "feedbacks",
+    "openstax_book_seeds",
+    "cram_sessions",
+    "cram_stage_events",
 ]
 
 SQLITE_SCHEMA = [
@@ -173,6 +176,48 @@ SQLITE_SCHEMA = [
       confidence REAL NOT NULL,
       evidence_json TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS openstax_book_seeds (
+      id TEXT PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      exam_mode TEXT NOT NULL,
+      details_url TEXT NOT NULL,
+      web_url TEXT NOT NULL,
+      pdf_url TEXT NOT NULL,
+      license TEXT NOT NULL,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS cram_sessions (
+      id TEXT PRIMARY KEY,
+      student_id TEXT NOT NULL,
+      course_id TEXT NOT NULL,
+      course_title TEXT NOT NULL,
+      status TEXT NOT NULL,
+      stage TEXT NOT NULL,
+      session_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS cram_stage_events (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      student_id TEXT NOT NULL,
+      course_id TEXT NOT NULL,
+      stage TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      created_at TEXT NOT NULL
     )
     """,
     """

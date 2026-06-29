@@ -8,6 +8,7 @@ import { TutorChat } from "../features/tutor-chat/TutorChat";
 import { SelectionToolbar } from "../components/selection-toolbar/SelectionToolbar";
 import {
   cancelChatRun,
+  advanceCramSession,
   createCanvasApp,
   fetchApps,
   fetchChatMessages,
@@ -679,6 +680,32 @@ export function LearnForgeShell({ sessionContext, onLogout }: Props) {
         } catch (error) {
           console.warn("[LearnForge] 创建系统模块失败", error);
         }
+      }
+      return;
+    }
+
+    if (eventType === "cram.advance") {
+      const sessionId = String(payload.session_id ?? "").trim();
+      const action = String(payload.action ?? "teach_next_batch");
+      const actionPayload = payload.payload && typeof payload.payload === "object" && !Array.isArray(payload.payload)
+        ? payload.payload as Record<string, unknown>
+        : {};
+      if (!sessionId) return;
+      try {
+        const result = await advanceCramSession(sessionId, { action, payload: actionPayload }, sessionContext);
+        const nextPayload = { ...(appsRef.current.find((item) => item.app_id === appId)?.payload ?? {}), session: result.session, session_id: String(result.session?.session_id ?? sessionId) };
+        setApps((current) => current.map((app) => app.app_id === appId ? { ...app, payload: nextPayload } : app));
+        patchApp(appId, { payload: nextPayload }, sessionContext).catch(() => undefined);
+        if (result.dashboard) setDashboard(result.dashboard);
+        setTrace((items) => [
+          ...items.slice(-14),
+          { id: `${appId}-cram-advance-done-${Date.now()}`, name: "cram.advance", status: "completed", detail: action, raw: `cram.advance:completed:${action}` }
+        ]);
+      } catch (error) {
+        setTrace((items) => [
+          ...items.slice(-14),
+          { id: `${appId}-cram-advance-error-${Date.now()}`, name: "cram.advance", status: "failed", detail: error instanceof Error ? error.message : "推进失败", raw: `cram.advance:failed:${String(error)}` }
+        ]);
       }
       return;
     }

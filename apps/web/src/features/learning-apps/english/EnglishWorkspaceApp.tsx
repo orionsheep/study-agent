@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { ChevronLeft, ChevronRight, PanelLeftOpen, MessageSquareText, Monitor, LayoutDashboard, X, Minimize2, BarChart3, BrainCircuit, Clock } from 'lucide-react';
 import type { CanvasApp } from '@learnforge/app-protocol';
 import type { SessionContext } from '../../../lib/api/client';
@@ -181,7 +181,7 @@ function DashboardMode({
 }: DashboardProps) {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-    <PanelGroup direction="horizontal" style={{ flex: 1, minHeight: 0 }}>
+    <PanelGroup orientation="horizontal" style={{ flex: 1, minHeight: 0 }}>
       {/* Left column: Word List */}
       {isLeftSidebarOpen ? (
         <>

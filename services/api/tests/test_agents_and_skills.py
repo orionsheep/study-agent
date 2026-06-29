@@ -2,7 +2,8 @@ import pytest
 from types import SimpleNamespace
 
 from app.agents.base import AgentPlan, TutorTurnContext
-from app.agents.orchestrator_agent import OrchestratorAgent, UnifiedOrchestrator
+from app.agents.capability_contract import detect_capability
+from app.agents.orchestrator_agent import OrchestratorAgent, UnifiedOrchestrator, artifact_kind_for_capability
 from app.canvas.materializer import CanvasMaterializer, detailed_analysis_context_mismatch, normalize_html_artifact_text, wrap_detailed_analysis_report
 from app.core.session import SessionHeaders
 from app.agents.planner_agent import PlannerAgent, PlannerAgentInput
@@ -274,6 +275,18 @@ def test_plain_explanation_stays_answer_only_not_detailed_html():
     assert plan.task_type == "unified_hermes"
     assert plan.payload["capability"] == "answer_only"
     assert plan.payload["requires_canvas"] is False
+
+
+def test_exam_cram_request_locks_to_cram_engine_contract():
+    spec = detect_capability("帮我做一个管理学期末速成，按简答题和案例分析来冲刺")
+    expected_apps, expected_resources, requires_canvas = OrchestratorAgent.capability_contract_spec(spec.name)
+
+    assert spec.name == "exam_cram"
+    assert expected_apps == ["exam.cram", "dashboard.learning", "quiz.practice"]
+    assert expected_resources == ["reading", "quiz", "notes"]
+    assert requires_canvas is True
+    assert artifact_kind_for_capability(spec.name) == "cram_session"
+    assert "cram-engine-skill" in spec.hermes_skills
 
 
 def test_detailed_explanation_request_does_not_route_to_ppt_or_interactive():

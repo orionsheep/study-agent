@@ -20,6 +20,7 @@ REQUIRED_HERMES_SKILLS = [
     "reading-material-skill",
     "notes-skill",
     "dashboard-skill",
+    "cram-engine-skill",
     "resource-bundle-skill",
     "app-generation-skill",
     "custom-html-app-skill",
@@ -83,6 +84,67 @@ Rules:
 - Prefer concrete app payloads over placeholders; the API server will validate, persist, call Gemini for image pixels, and stream canvas events.
 """
 
+CRAM_ENGINE_CONTRACT = """
+# Cram Engine Skill
+
+Use this skill when LearnForge asks for exam sprint learning,期末速成,考前冲刺,突击复习,or Cram-style study planning.
+
+Return ONLY valid JSON. No markdown fences. No prose outside JSON.
+
+Required shape:
+{
+  "capability": "exam_cram",
+  "summary": "short Chinese summary",
+  "trace": ["exam_mode_classified", "openstax_sources_selected", "cram_session_created"],
+  "resources": [
+    {
+      "type": "reading|quiz|notes",
+      "title": "Chinese title",
+      "target_topic": "topic",
+      "difficulty": "adaptive",
+      "content": {},
+      "source_refs": [{"source_id":"openstax:<slug>","title":"OpenStax book title","locator":"chapter or concept"}],
+      "personalized_reason": "why it supports the sprint",
+      "tags": ["cram","openstax"]
+    }
+  ],
+  "apps": [
+    {
+      "app_type": "exam.cram",
+      "title": "期末速成",
+      "payload": {
+        "course_title": "course or exam title",
+        "stage": "deconstruct|teach|test|remediate|summary",
+        "exam_mode": "conceptual_cram|practice_heavy",
+        "must_know": ["high-priority knowledge point"],
+        "key_points": ["supporting point"],
+        "next_actions": ["下一步动作"]
+      },
+      "personalized_reason": "why this sprint is appropriate"
+    },
+    {
+      "app_type": "dashboard.learning",
+      "title": "学习仪表盘",
+      "payload": {"active_tab":"overview"},
+      "personalized_reason": "show cram progress with the rest of the student's learning data"
+    },
+    {
+      "app_type": "quiz.practice",
+      "title": "速成诊断题",
+      "payload": {"questions":[]},
+      "personalized_reason": "validate the current cram batch"
+    }
+  ]
+}
+
+Rules:
+- Follow the cram-engine loop: 1) deconstruct exam scope into must-know/key-point nodes, 2) teach the next compact batch with memory hooks, 3) generate diagnostic questions, 4) remediate wrong/stubborn points and summarize.
+- Prefer OpenStax sources when they match the course. Use source_refs with `openstax:<slug>` ids and real book titles.
+- Classify exam_mode as `practice_heavy` for calculation/problem-heavy exams, otherwise `conceptual_cram`.
+- Do not substitute generic resource.center or custom.html for the primary app. The primary app_type MUST be `exam.cram`.
+- Keep generated content general and capability-level; do not hardcode one demo topic.
+"""
+
 GENERIC_SKILL_CONTRACT = """
 Return ONLY valid JSON compatible with LearnForge app-protocol payloads.
 Preserve source_refs, include trace, and avoid unsupported side effects.
@@ -103,9 +165,16 @@ class HermesSkillSync:
         description = (
             "LearnForge resource bundle orchestration skill."
             if name == "resource-bundle-skill"
+            else "LearnForge exam sprint / Cram Engine orchestration skill."
+            if name == "cram-engine-skill"
             else f"LearnForge {title} protocol skill."
         )
-        contract = RESOURCE_BUNDLE_CONTRACT if name == "resource-bundle-skill" else f"# {title}\n\n{GENERIC_SKILL_CONTRACT}\n"
+        if name == "resource-bundle-skill":
+            contract = RESOURCE_BUNDLE_CONTRACT
+        elif name == "cram-engine-skill":
+            contract = CRAM_ENGINE_CONTRACT
+        else:
+            contract = f"# {title}\n\n{GENERIC_SKILL_CONTRACT}\n"
         return (
             "---\n"
             f"name: {name}\n"

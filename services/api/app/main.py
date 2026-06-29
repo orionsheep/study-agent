@@ -256,6 +256,11 @@ app.include_router(english_router)
 from app.routes.notebooklm_routes import router as notebooklm_router
 app.include_router(notebooklm_router)
 
+# Register Cram Engine routes. Hermes remains the capability chooser; this router
+# stores the exam-sprint state machine and projects it into dashboard/canvas data.
+from app.routes.cram_routes import router as cram_router
+app.include_router(cram_router)
+
 LOGGER = getLogger("learnforge.api")
 
 # Patterns scrubbed from exception text before it is surfaced to the client, since raw

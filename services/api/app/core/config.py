@@ -71,7 +71,7 @@ class Settings:
     python_vision_fallback_enabled: bool = _env("PYTHON_VISION_FALLBACK_ENABLED", "false").lower() == "true"
     hermes_default_skills: str = _env(
         "HERMES_DEFAULT_SKILLS",
-        "resource-bundle-skill,document-skill,mindmap-skill,quiz-skill,code-practice-skill,ppt-skill,guizang-ppt-skill,image-generation-skill,video-script-skill,reading-material-skill,custom-html-app-skill,notes-skill,dashboard-skill,verifier-skill,app-generation-skill,memory-update-skill,course-ingestion-skill,detailed-analysis-skill",
+        "resource-bundle-skill,document-skill,mindmap-skill,quiz-skill,cram-engine-skill,code-practice-skill,ppt-skill,guizang-ppt-skill,image-generation-skill,video-script-skill,reading-material-skill,custom-html-app-skill,notes-skill,dashboard-skill,verifier-skill,app-generation-skill,memory-update-skill,course-ingestion-skill,detailed-analysis-skill",
     )
     unified_orchestrator_enabled: bool = _env("UNIFIED_ORCHESTRATOR", "true").lower() == "true"
     vector_store: str = _env("VECTOR_STORE", "pgvector")

@@ -142,6 +142,54 @@ export async function fetchDashboard(context = DEFAULT_SESSION_CONTEXT): Promise
   return jsonFetch<DashboardSnapshot>(`/api/dashboard/${encodeURIComponent(context.studentId)}`, undefined, context);
 }
 
+export type OpenStaxCramBook = {
+  slug: string;
+  title: string;
+  subject: string;
+  provider: "openstax" | string;
+  exam_mode: "conceptual_cram" | "practice_heavy" | string;
+  details_url?: string;
+  web_url?: string;
+  pdf_url?: string;
+  license?: string;
+  tags?: string[];
+};
+
+export type CramSessionResponse = {
+  session: Record<string, unknown>;
+  app?: CanvasApp;
+  dashboard?: DashboardSnapshot;
+};
+
+export async function fetchOpenStaxCramBooks(context = DEFAULT_SESSION_CONTEXT): Promise<OpenStaxCramBook[]> {
+  const data = await jsonFetch<{ books: OpenStaxCramBook[] }>("/api/cram/openstax-books", undefined, context);
+  return data.books;
+}
+
+export async function createCramSession(payload: {
+  course_title: string;
+  topics?: string[];
+  must_know?: string[];
+  key_points?: string[];
+  exam_types?: string[];
+  textbook?: string;
+}, context = DEFAULT_SESSION_CONTEXT): Promise<CramSessionResponse> {
+  return jsonFetch<CramSessionResponse>("/api/cram/sessions", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  }, context);
+}
+
+export async function advanceCramSession(sessionId: string, payload: {
+  action: string;
+  payload?: Record<string, unknown>;
+}, context = DEFAULT_SESSION_CONTEXT): Promise<CramSessionResponse> {
+  return jsonFetch<CramSessionResponse>(`/api/cram/sessions/${encodeURIComponent(sessionId)}/advance`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  }, context);
+}
+
 export async function fetchLearningPath(pathId = "path-neural-network") {
   return jsonFetch(`/api/learning-path/${pathId}`);
 }

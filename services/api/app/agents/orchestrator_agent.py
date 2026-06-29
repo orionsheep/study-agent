@@ -94,6 +94,7 @@ def artifact_kind_for_capability(capability: str | None) -> str | None:
         "interactive_demo": "interactive_model",
         "detailed_analysis": "html_report",
         "custom_infographic": "infographic",
+        "exam_cram": "cram_session",
     }
     return mapping.get(str(capability or ""))
 
@@ -143,6 +144,7 @@ class OrchestratorAgent:
         "learning_path": "规划「{topic}」的学习路径",
         "resource_bundle": "系统学习「{topic}」的完整资源包",
         "video_search": "实时搜索「{topic}」相关教学视频",
+        "exam_cram": "为「{topic}」生成考前速成冲刺路径",
         "answer_only": "深入理解「{topic}」",
     }
 
@@ -2135,6 +2137,10 @@ class OrchestratorAgent:
             "interactive_model": "interactive_demo",
             "dynamic_model": "interactive_demo",
             "html_report": "detailed_analysis",
+            "exam.cram": "exam_cram",
+            "cram": "exam_cram",
+            "cram_engine": "exam_cram",
+            "exam_sprint": "exam_cram",
             "plain_text": "answer_only",
             "chat": "answer_only",
         }
@@ -2156,6 +2162,7 @@ class OrchestratorAgent:
             "video_script": (["video.script"], ["video_script"], True),
             "notes": (["notes.session"], ["notes"], True),
             "learning_path": (["learning.path"], [], True),
+            "exam_cram": (["exam.cram", "dashboard.learning", "quiz.practice"], ["reading", "quiz", "notes"], True),
         }
         return contracts.get(str(capability or ""), ([], [], False))
 

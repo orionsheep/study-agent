@@ -38,7 +38,8 @@ const iconMap: Partial<Record<CanvasApp["app_type"], typeof Boxes>> = {
   "custom.html": Image,
   "english.workspace": Languages,
   "notebooklm.workspace": BookOpen,
-  "humanities.notebook": BookOpen
+  "humanities.notebook": BookOpen,
+  "exam.cram": BookOpen
 };
 
 const appTypeLabels: Partial<Record<CanvasApp["app_type"], string>> = {
@@ -61,7 +62,8 @@ const appTypeLabels: Partial<Record<CanvasApp["app_type"], string>> = {
   "custom.html": "互动演示",
   "english.workspace": "英语工作区",
   "notebooklm.workspace": "NotebookLM",
-  "humanities.notebook": "NotebookLM"
+  "humanities.notebook": "NotebookLM",
+  "exam.cram": "期末速成"
 };
 
 function customHtmlIsPptDeck(app: CanvasApp): boolean {
@@ -128,6 +130,7 @@ export function NativeAppRenderer({ app, dashboard, isFullscreen, onEvent, onFoc
       {app.app_type === "video.script" ? <VideoScriptApp app={app} /> : null}
       {app.app_type === "video.player" ? <VideoPlayerApp app={app} isFullscreen={isFullscreen} /> : null}
       {app.app_type === "resource.center" ? <ResourceCenterApp app={app} isFullscreen={isFullscreen} onDashboardUpdate={onDashboardUpdate} sessionContext={sessionContext} /> : null}
+      {app.app_type === "exam.cram" ? <CramEngineApp app={app} dashboard={dashboard} onEvent={onEvent} /> : null}
       {app.app_type === "english.workspace" ? <EnglishWorkspaceAppExternal app={app} onEvent={onEvent} sessionContext={sessionContext} /> : null}
       {app.app_type === "notebooklm.workspace" || app.app_type === "humanities.notebook" ? <NotebookLMWorkspaceApp app={app} onEvent={onEvent} sessionContext={sessionContext} /> : null}
       {app.app_type === "custom.html" ? (
@@ -622,7 +625,198 @@ const RUN_LABELS: Record<string, string> = {
   notes_summary: "笔记总结",
   work_energy_demo: "动能演示",
   quiz_evaluation: "测验评估",
+  exam_cram: "期末速成",
 };
+
+type CramSessionView = {
+  sessionId: string;
+  courseTitle: string;
+  stage: string;
+  examMode: string;
+  progress: {
+    total_points: number;
+    taught_points: number;
+    generated_questions: number;
+    wrong_points: number;
+    stubborn_points: number;
+    must_know_total: number;
+    key_point_total: number;
+  };
+  nextActions: string[];
+  mustKnow: string[];
+  keyPoints: string[];
+};
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function textList(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String).map((item) => item.trim()).filter(Boolean) : [];
+}
+
+function numberValue(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function cramStageLabel(stage: string) {
+  return ({
+    deconstruct: "拆解",
+    teach: "讲授",
+    test: "测试",
+    remediate: "补救",
+    summary: "总结",
+  }[stage] ?? stage ?? "准备");
+}
+
+function cramModeLabel(mode: string) {
+  return mode === "practice_heavy" ? "刷题型" : "概念型";
+}
+
+function nextCramAction(stage: string) {
+  return ({
+    deconstruct: "confirm_deconstruction",
+    teach: "teach_next_batch",
+    test: "submit_test_results",
+    remediate: "submit_remediation_results",
+  }[stage] ?? "teach_next_batch");
+}
+
+function normalizeCramSession(app: CanvasApp, dashboard?: DashboardSnapshot): CramSessionView {
+  const payloadSession = asRecord(app.payload.session);
+  const dashboardSession = asRecord(dashboard?.cram?.active_session);
+  const source = Object.keys(payloadSession).length ? payloadSession : dashboardSession;
+  const progressSource = asRecord(source.progress);
+  const knowledgePoints = Array.isArray(source.knowledge_points) ? source.knowledge_points.map(asRecord) : [];
+  const mustKnow = textList(source.must_know).length
+    ? textList(source.must_know)
+    : knowledgePoints.filter((point) => point.priority === "must_know").map((point) => String(point.label ?? point.title ?? point.id)).filter(Boolean);
+  const keyPoints = textList(source.key_points).length
+    ? textList(source.key_points)
+    : knowledgePoints.filter((point) => point.priority === "key_point").map((point) => String(point.label ?? point.title ?? point.id)).filter(Boolean);
+  return {
+    sessionId: String(source.session_id ?? app.payload.session_id ?? app.app_id),
+    courseTitle: String(source.course_title ?? app.payload.course_title ?? app.title),
+    stage: String(source.stage ?? app.payload.stage ?? "deconstruct"),
+    examMode: String(source.exam_mode ?? app.payload.exam_mode ?? "conceptual_cram"),
+    progress: {
+      total_points: numberValue(progressSource.total_points, Math.max(mustKnow.length + keyPoints.length, 0)),
+      taught_points: numberValue(progressSource.taught_points),
+      generated_questions: numberValue(progressSource.generated_questions),
+      wrong_points: numberValue(progressSource.wrong_points),
+      stubborn_points: numberValue(progressSource.stubborn_points),
+      must_know_total: numberValue(progressSource.must_know_total, mustKnow.length),
+      key_point_total: numberValue(progressSource.key_point_total, keyPoints.length),
+    },
+    nextActions: textList(source.next_actions ?? app.payload.next_actions),
+    mustKnow,
+    keyPoints,
+  };
+}
+
+function CramDashboardPanel({ cram, isFullscreen }: { cram?: DashboardSnapshot["cram"]; isFullscreen?: boolean }) {
+  if (!cram) return null;
+  const active = asRecord(cram.active_session);
+  const kpis = asRecord(cram.kpis);
+  const books = Array.isArray(cram.recommended_books) ? cram.recommended_books.map(asRecord) : [];
+  const activeProgress = asRecord(active.progress);
+  const coverage = Math.round(numberValue(kpis.must_know_coverage) * 100);
+  if (!Object.keys(active).length && !books.length && !Object.keys(kpis).length) return null;
+  return (
+    <div className="dash-section cram-dashboard-panel">
+      <h4 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <BookOpen size={15} style={{ color: "var(--accent-orange, #f97316)" }} />
+        期末冲刺
+      </h4>
+      <div className="cram-summary-card">
+        <div className="cram-summary-main">
+          <strong>{String(active.course_title ?? "还没有进行中的冲刺")}</strong>
+          <span>{String(active.stage ? cramStageLabel(String(active.stage)) : "待创建")} · OpenStax {numberValue(kpis.openstax_books, books.length)} 本书</span>
+        </div>
+        <div className="cram-summary-meter">
+          <strong>{numberValue(activeProgress.taught_points)}/{numberValue(activeProgress.total_points)}</strong>
+          <span>讲授进度</span>
+        </div>
+      </div>
+      <div className="dash-kpis cram-kpis">
+        <div className="kpi"><span>活跃冲刺</span><strong>{numberValue(kpis.active_sessions)}</strong></div>
+        <div className="kpi"><span>必背覆盖</span><strong>{coverage}%</strong><i className="kpi-bar"><b style={{ width: `${coverage}%`, background: "linear-gradient(90deg, #f97316, #22c55e)" }} /></i></div>
+        <div className="kpi"><span>顽固错点</span><strong>{numberValue(kpis.stubborn_points)}</strong></div>
+        <div className="kpi"><span>OpenStax</span><strong>{numberValue(kpis.openstax_books, books.length)}</strong></div>
+      </div>
+      {books.length ? (
+        <div className="cram-books">
+          {books.slice(0, isFullscreen ? 6 : 3).map((book) => (
+            <span key={String(book.slug ?? book.title)}>
+              {String(book.title ?? "OpenStax")}
+              <small>{String(book.subject ?? "")}</small>
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CramEngineApp({ app, dashboard, onEvent }: { app: CanvasApp; dashboard?: DashboardSnapshot; onEvent: Props["onEvent"] }) {
+  const session = normalizeCramSession(app, dashboard);
+  const total = Math.max(1, session.progress.total_points);
+  const taught = Math.min(total, session.progress.taught_points);
+  const percent = Math.round((taught / total) * 100);
+  const nextActionLabel = session.nextActions[0] ?? (session.stage === "deconstruct" ? "确认拆解并开始讲授" : "继续讲授下一批知识点");
+  const recommendedBooks = Array.isArray(dashboard?.cram?.recommended_books) ? dashboard.cram.recommended_books.map(asRecord) : [];
+  return (
+    <div className="cram-engine-app" data-testid="cram-engine-app">
+      <header className="cram-engine-head">
+        <div>
+          <strong>{session.courseTitle}</strong>
+          <span>{cramStageLabel(session.stage)} · {cramModeLabel(session.examMode)}</span>
+        </div>
+        <div className="cram-stage-pill">{cramStageLabel(session.stage)}</div>
+      </header>
+      <section className="cram-progress-panel">
+        <div className="cram-progress-number">
+          <strong>{taught}/{total}</strong>
+          <span>已讲授知识点</span>
+        </div>
+        <i className="kpi-bar"><b style={{ width: `${percent}%`, background: "linear-gradient(90deg, #f97316, #22c55e)" }} /></i>
+        <div className="cram-progress-grid">
+          <Metric label="必背" value={session.progress.must_know_total} />
+          <Metric label="重点" value={session.progress.key_point_total} />
+          <Metric label="题目" value={session.progress.generated_questions} />
+          <Metric label="错点" value={session.progress.wrong_points} />
+        </div>
+      </section>
+      <section className="cram-point-columns">
+        <div>
+          <h4>必背框架</h4>
+          {(session.mustKnow.length ? session.mustKnow : ["先拆考试范围，再确认必背概念"]).slice(0, 5).map((point) => <span key={point}>{point}</span>)}
+        </div>
+        <div>
+          <h4>关键支点</h4>
+          {(session.keyPoints.length ? session.keyPoints : ["讲完一批就做即时诊断"]).slice(0, 5).map((point) => <span key={point}>{point}</span>)}
+        </div>
+      </section>
+      {recommendedBooks.length ? (
+        <section className="cram-books cram-books-app">
+          {recommendedBooks.slice(0, 4).map((book) => (
+            <span key={String(book.slug ?? book.title)}>
+              {String(book.title ?? "OpenStax")}
+              <small>{String(book.exam_mode ?? "")}</small>
+            </span>
+          ))}
+        </section>
+      ) : null}
+      <button
+        className="primary-action"
+        onClick={() => onEvent(app.app_id, "cram.advance", { session_id: session.sessionId, action: nextCramAction(session.stage) })}
+      >
+        {nextActionLabel}
+      </button>
+    </div>
+  );
+}
 
 function LearningDashboardApp({ dashboard, isFullscreen, sessionContext }: { dashboard?: DashboardSnapshot; isFullscreen?: boolean; sessionContext?: SessionContext }) {
   const evidence = dashboard?.memory_evidence ?? [];
@@ -701,6 +895,8 @@ function LearningDashboardApp({ dashboard, isFullscreen, sessionContext }: { das
         <div className="kpi"><span>记忆证据</span><strong>{evidence.length}</strong></div>
         <div className="kpi"><span>薄弱点</span><strong>{weakPoints.length}</strong></div>
       </div>
+
+      <CramDashboardPanel cram={dashboard?.cram} isFullscreen={isFullscreen} />
 
       {/* 英语学习统计 — 整合自原 EnglishDashboard */}
       <div className="dash-section">

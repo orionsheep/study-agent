@@ -67,6 +67,16 @@ CAPABILITIES: dict[str, CapabilitySpec] = {
         expected_resource_types=["quiz"],
         requires_canvas=True,
     ),
+    "exam_cram": CapabilitySpec(
+        name="exam_cram",
+        task_type="exam_cram",
+        keywords=["期末速成", "期末冲刺", "期末复习", "考试冲刺", "考试复习", "考前冲刺", "考前突击", "考前复习", "考前速成", "挂科自救", "突击复习", "闭卷复习", "开卷复习", "帮我速成", "/cram", "cram"],
+        context_keywords=["考试", "期末", "考前", "复习", "冲刺", "闭卷", "开卷", "选择题", "简答", "论述", "案例分析"],
+        hermes_skills=["cram-engine-skill", "course-ingestion-skill", "quiz-skill", "dashboard-skill", "memory-update-skill", "verifier-skill", "app-generation-skill"],
+        expected_app_types=["exam.cram", "dashboard.learning", "quiz.practice"],
+        expected_resource_types=["reading", "quiz", "notes"],
+        requires_canvas=True,
+    ),
     "code_lab": CapabilitySpec(
         name="code_lab",
         task_type="hermes_code_lab",
@@ -232,6 +242,8 @@ def _contains_any(message: str, terms: list[str]) -> bool:
 def has_explicit_artifact_intent(message: str) -> bool:
     lowered = message.lower()
     has_generation = _contains_any(lowered, GENERATION_MARKERS)
+    if _contains_any(lowered, CAPABILITIES["exam_cram"].keywords):
+        return True
     if _contains_any(lowered, DETAILED_EXPLANATION_GENERATIVE_MARKERS):
         return True
     if _contains_any(lowered, PPT_STRONG_MARKERS):
@@ -379,6 +391,9 @@ def detect_capability(message: str) -> CapabilitySpec:
     has_interactive_correction = _contains_any(lowered, INTERACTIVE_CORRECTION)
     has_ppt_correction = _contains_any(lowered, PPT_CORRECTION)
 
+    if _contains_any(lowered, CAPABILITIES["exam_cram"].keywords):
+        return CAPABILITIES["exam_cram"]
+
     if is_direct_answer_request(lowered):
         return CAPABILITIES["answer_only"]
 
@@ -419,6 +434,7 @@ def detect_capability(message: str) -> CapabilitySpec:
     # 特定产物意图(ppt/mindmap/quiz/video_script 等)。注意 video_script 排在
     # interactive_demo 前面——"动画脚本"命中 video_script 而非 interactive_demo。
     ordered = [
+        "exam_cram",
         "mindmap",
         "quiz",
         "code_lab",

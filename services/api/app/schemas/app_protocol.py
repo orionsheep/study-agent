@@ -29,6 +29,7 @@ CanvasAppType = Literal[
     "english.workspace",
     "notebooklm.workspace",
     "humanities.notebook",
+    "exam.cram",
 ]
 RenderMode = Literal["native_react", "sandbox_iframe", "svg", "react_flow", "pptx_preview"]
 ResourceType = Literal[
@@ -265,6 +266,7 @@ class DashboardSnapshot(BaseModel):
     recent_runs: list[dict[str, Any]] = Field(default_factory=list)
     path_progress: float = 0
     canvas_activity: list[dict[str, Any]] = Field(default_factory=list)
+    cram: dict[str, Any] = Field(default_factory=dict)
 
 
 class AssistantDelta(BaseModel):

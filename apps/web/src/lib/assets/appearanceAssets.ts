@@ -72,6 +72,7 @@ export const APP_ICON_FILES: Record<string, string> = {
   "english.workspace": "folder_notes_app.png",
   "notebooklm.workspace": "folder_mindmap_app.png",
   "humanities.notebook": "folder_mindmap_app.png",
+  "exam.cram": "learning_path_app.png",
 };
 
 export const FOLDER_ICON_FILES: Record<FolderIconKey, string> = {

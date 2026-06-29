@@ -689,6 +689,7 @@ def artifact_kind_for_capability(capability: str | None) -> str | None:
         "interactive_demo": "interactive_model",
         "detailed_analysis": "html_report",
         "custom_infographic": "infographic",
+        "exam_cram": "cram_session",
     }.get(str(capability or ""))
 
 

@@ -126,6 +126,45 @@ CREATE TABLE IF NOT EXISTS mastery_records (
   updated_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS openstax_book_seeds (
+  id TEXT PRIMARY KEY,
+  slug TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  provider TEXT NOT NULL DEFAULT 'openstax',
+  exam_mode TEXT NOT NULL,
+  details_url TEXT NOT NULL,
+  web_url TEXT NOT NULL,
+  pdf_url TEXT NOT NULL,
+  license TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMP NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS cram_sessions (
+  id TEXT PRIMARY KEY,
+  student_id TEXT NOT NULL REFERENCES students(id),
+  course_id TEXT NOT NULL REFERENCES courses(id),
+  course_title TEXT NOT NULL,
+  status TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  session_json JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMP NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS cram_stage_events (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES cram_sessions(id),
+  student_id TEXT NOT NULL REFERENCES students(id),
+  course_id TEXT NOT NULL REFERENCES courses(id),
+  stage TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  payload JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS course_documents (
   id TEXT PRIMARY KEY,
   course_id TEXT NOT NULL REFERENCES courses(id),

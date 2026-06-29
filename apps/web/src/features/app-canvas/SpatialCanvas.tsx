@@ -96,7 +96,8 @@ function appTypeLabel(appType: string) {
     "custom.html": "互动演示",
     "english.workspace": "英语工作区",
     "notebooklm.workspace": "NotebookLM",
-    "humanities.notebook": "NotebookLM"
+    "humanities.notebook": "NotebookLM",
+    "exam.cram": "期末速成"
   }[appType] ?? "学习应用";
 }
 
@@ -119,7 +120,8 @@ function appAccent(app: CanvasApp) {
     "custom.html": "linear-gradient(135deg,#5b8cff,#f9a23c)",
     "english.workspace": "linear-gradient(135deg,#f59e0b,#ef4444)",
     "notebooklm.workspace": "linear-gradient(135deg,#10b981,#38bdf8)",
-    "humanities.notebook": "linear-gradient(135deg,#8b5cf6,#ec4899)"
+    "humanities.notebook": "linear-gradient(135deg,#8b5cf6,#ec4899)",
+    "exam.cram": "linear-gradient(135deg,#f97316,#22c55e)"
   } as Record<string, string>;
   return palette[app.app_type] ?? "var(--accent-grad)";
 }
@@ -207,6 +209,7 @@ function displaySizeForApp(app: CanvasApp) {
 function minResizeSizeForApp(app: CanvasApp) {
   if (customHtmlIsInteractiveDemo(app)) return { width: 860, height: 620 };
   if (app.app_type === "image.explanation") return { width: 720, height: 520 };
+  if (app.app_type === "exam.cram") return { width: 560, height: 460 };
   if (app.app_type === "english.workspace" || app.app_type === "notebooklm.workspace" || app.app_type === "humanities.notebook") {
     return { width: 820, height: 560 };
   }
@@ -215,7 +218,7 @@ function minResizeSizeForApp(app: CanvasApp) {
 
 const FOLDER_DEFS: FolderDefinition[] = [
   { key: "notes", title: "学习笔记", subtitle: "课堂总结、阶段复盘、可复习卡片", appTypes: ["notes.session"], iconType: "notes.session" },
-  { key: "quiz", title: "题库练习", subtitle: "练习题、测试题、错题巩固", appTypes: ["quiz.practice"], iconType: "quiz.practice" },
+  { key: "quiz", title: "题库练习", subtitle: "练习题、测试题、错题巩固、考前速成", appTypes: ["quiz.practice", "exam.cram"], iconType: "quiz.practice" },
   { key: "mindmap", title: "思维导图", subtitle: "知识网络、概念结构、关系梳理", appTypes: ["mindmap.concept"], iconType: "mindmap.concept" },
   { key: "ppt", title: "PPT", subtitle: "演示文稿、课堂汇报、网页幻灯片", appTypes: ["ppt.preview"], matcher: customHtmlIsPptDeck, iconType: "ppt.preview" },
   { key: "infographic", title: "信息图", subtitle: "HTML 信息图、对比图、流程图", matcher: (app) => app.app_type === "custom.html" && !customHtmlIsPptDeck(app) && !customHtmlIsInteractiveDemo(app), iconType: "custom.html" },

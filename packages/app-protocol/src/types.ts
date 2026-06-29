@@ -20,7 +20,8 @@ export type CanvasAppType =
   | 'custom.html'
   | 'english.workspace'
   | 'notebooklm.workspace'
-  | 'humanities.notebook';
+  | 'humanities.notebook'
+  | 'exam.cram';
 
 export interface CanvasViewport { x: number; y: number; scale: number; }
 export interface CanvasPosition { x: number; y: number; }
@@ -153,7 +154,34 @@ export interface LearningPathStage {
 }
 export interface LearningPath { path_id: string; title: string; current_stage_id?: string; overall_progress: number; stages: LearningPathStage[]; next_actions: string[]; }
 export interface VerifierResult { passed: boolean; score: number; issues: string[]; source_coverage: number; profile_fit: number; safety: 'pass' | 'warn' | 'fail'; }
-export interface DashboardSnapshot { student_id: string; profile: Record<string, unknown>; mastery: Record<string, number>; weak_points: string[]; recommendations: Array<Record<string, unknown>>; memory_evidence: EduMemoryItem[]; recent_runs: Array<Record<string, unknown>>; path_progress?: number; canvas_activity?: Array<Record<string, unknown>>; }
+export interface CramDashboardSummary {
+  active_session?: {
+    session_id: string;
+    course_title: string;
+    stage: string;
+    exam_mode?: string;
+    progress: {
+      total_points: number;
+      taught_points: number;
+      generated_questions: number;
+      wrong_points: number;
+      stubborn_points: number;
+      must_know_total: number;
+      key_point_total: number;
+    };
+    next_actions: string[];
+  } | null;
+  kpis?: {
+    openstax_books?: number;
+    active_sessions?: number;
+    must_know_coverage?: number;
+    stubborn_points?: number;
+  };
+  recommended_books?: Array<Record<string, unknown>>;
+  stubborn_points?: Array<Record<string, unknown>>;
+  root_cause_distribution?: Record<string, number>;
+}
+export interface DashboardSnapshot { student_id: string; profile: Record<string, unknown>; mastery: Record<string, number>; weak_points: string[]; recommendations: Array<Record<string, unknown>>; memory_evidence: EduMemoryItem[]; recent_runs: Array<Record<string, unknown>>; path_progress?: number; canvas_activity?: Array<Record<string, unknown>>; cram?: CramDashboardSummary; }
 export interface AgentStep { step_id: string; run_id: string; step_order: number; agent_or_skill: string; input_json: Record<string, unknown>; output_json: Record<string, unknown>; status: string; latency_ms: number; error_message?: string; created_at: string; }
 export interface AgentRun { run_id: string; student_id?: string; task_type: string; input_json: Record<string, unknown>; output_json: Record<string, unknown>; status: string; model_name?: string; latency_ms: number; created_at: string; updated_at: string; steps: AgentStep[]; }
 export interface QuizQuestion { question_id: string; question_type: string; prompt: string; options: string[]; answer: unknown; explanation: string; knowledge_point_id?: string; difficulty: string; misconception_tags: string[]; source_refs: Array<Record<string, unknown>>; }

@@ -981,6 +981,45 @@ button:disabled { cursor: not-allowed; opacity: 0.45; box-shadow: none; }
 .dash-english-card.is-compact .dash-english-open {
   width: 100%;
 }
+.cram-dashboard-panel { gap: 9px; }
+.cram-summary-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, #f97316 24%, var(--glass-border));
+  border-radius: var(--r-md);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #f97316 14%, transparent), transparent 58%),
+    var(--glass-1);
+}
+.cram-summary-main { min-width: 0; }
+.cram-summary-main strong { display: block; color: var(--text-1); font-size: var(--fs-sm); font-weight: 720; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cram-summary-main span { display: block; margin-top: 3px; color: var(--text-3); font-size: var(--fs-2xs); }
+.cram-summary-meter { display: grid; place-items: center; min-width: 68px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--glass-2); border: 1px solid var(--glass-border); }
+.cram-summary-meter strong { color: var(--text-1); font-size: 18px; font-weight: 780; }
+.cram-summary-meter span { color: var(--text-3); font-size: var(--fs-2xs); }
+.cram-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.learning-dashboard.is-fullscreen .cram-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cram-books { display: flex; flex-wrap: wrap; gap: 7px; }
+.cram-books span { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 6px 9px; border-radius: var(--r-pill); border: 1px solid var(--glass-border); background: var(--glass-1); color: var(--text-2); font-size: var(--fs-2xs); }
+.cram-books small { color: var(--text-3); }
+.cram-engine-app { display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
+.cram-engine-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--glass-border); border-radius: var(--r-md); background: var(--glass-1); }
+.cram-engine-head strong { display: block; color: var(--text-1); font-size: var(--fs-h3); font-weight: 760; }
+.cram-engine-head span { display: block; margin-top: 3px; color: var(--text-3); font-size: var(--fs-2xs); }
+.cram-stage-pill { flex: 0 0 auto; padding: 5px 9px; border-radius: var(--r-pill); color: #f97316; background: color-mix(in srgb, #f97316 14%, transparent); border: 1px solid color-mix(in srgb, #f97316 28%, var(--glass-border)); font-size: var(--fs-2xs); font-weight: 760; }
+.cram-progress-panel { display: grid; gap: 9px; padding: 12px; border: 1px solid var(--glass-border); border-radius: var(--r-md); background: var(--glass-1); }
+.cram-progress-number { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.cram-progress-number strong { color: var(--text-1); font-size: 24px; font-weight: 820; }
+.cram-progress-number span { color: var(--text-3); font-size: var(--fs-2xs); }
+.cram-progress-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.cram-point-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.cram-point-columns > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px; border: 1px solid var(--glass-border); border-radius: var(--r-md); background: var(--glass-1); }
+.cram-point-columns h4 { margin: 0; color: var(--text-3); font-size: var(--fs-2xs); font-weight: 680; }
+.cram-point-columns span { padding: 6px 8px; border-radius: var(--r-sm); color: var(--text-2); background: var(--glass-2); font-size: var(--fs-2xs); line-height: 1.35; }
+.cram-books-app { padding: 0 2px; }
 .subject-map { display: flex; flex-direction: column; gap: 7px; }
 .subject-map label { display: grid; grid-template-columns: 78px 1fr 38px; align-items: center; gap: 8px; font-size: var(--fs-xs); color: var(--text-2); }
 .subject-map i { height: 7px; border-radius: 99px; background: var(--accent-grad); display: block; transition: width 0.5s var(--ease-out); }
@@ -2407,10 +2446,17 @@ html.dark.enable-glass {
 .profile-hero,
 .pstat,
 .kpi,
-.dash-section,
-.dash-english-card,
-.dash-english-metrics span,
-.rec-card,
+	.dash-section,
+	.dash-english-card,
+	.dash-english-metrics span,
+	.cram-summary-card,
+	.cram-summary-meter,
+	.cram-books span,
+	.cram-engine-head,
+	.cram-progress-panel,
+	.cram-point-columns > div,
+	.cram-point-columns span,
+	.rec-card,
 .evidence-chain article,
 .resource-roadmap,
 .resource-list button,

@@ -2817,6 +2817,157 @@ class LearningStore:
         )
         return submission
 
+    def ensure_openstax_book_seeds(self) -> list[dict[str, Any]]:
+        from app.cram.openstax_seed import OPENSTAX_CRAM_BOOKS
+
+        now = utc_now()
+        for book in OPENSTAX_CRAM_BOOKS:
+            self.execute(
+                """
+                INSERT OR REPLACE INTO openstax_book_seeds(
+                  id, slug, title, subject, provider, exam_mode, details_url, web_url,
+                  pdf_url, license, metadata, created_at, updated_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    stable_id("openstax", book.slug),
+                    book.slug,
+                    book.title,
+                    book.subject,
+                    book.provider,
+                    book.exam_mode,
+                    book.details_url,
+                    book.web_url,
+                    book.pdf_url,
+                    book.license,
+                    dumps({"tags": book.tags}),
+                    now,
+                    now,
+                ),
+            )
+        return self.list_openstax_book_seeds()
+
+    def list_openstax_book_seeds(self) -> list[dict[str, Any]]:
+        rows = self.fetchall("SELECT * FROM openstax_book_seeds ORDER BY subject, title")
+        if not rows:
+            return self.ensure_openstax_book_seeds()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["metadata"] = loads(item.get("metadata"), {})
+            result.append(item)
+        return result
+
+    def save_cram_session(self, session: Any) -> Any:
+        from app.cram.engine import CramSession
+
+        typed = session if isinstance(session, CramSession) else CramSession.model_validate(session)
+        self.execute(
+            """
+            INSERT OR REPLACE INTO cram_sessions(id, student_id, course_id, course_title, status, stage, session_json, created_at, updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                typed.session_id,
+                typed.student_id,
+                typed.course_id,
+                typed.course_title,
+                typed.status,
+                typed.stage.value,
+                dumps(typed.model_dump(mode="json")),
+                typed.created_at,
+                typed.updated_at,
+            ),
+        )
+        return typed
+
+    def create_cram_session(self, request: Any) -> Any:
+        from app.cram.engine import CramSessionCreate, create_cram_session
+
+        data = request if isinstance(request, CramSessionCreate) else CramSessionCreate.model_validate(request)
+        now = utc_now()
+        self.execute(
+            "INSERT OR IGNORE INTO students(id, display_name, created_at, updated_at) VALUES(?,?,?,?)",
+            (data.student_id, data.student_id, now, now),
+        )
+        self.execute(
+            "INSERT OR IGNORE INTO courses(id, title, description, created_at) VALUES(?,?,?,?)",
+            (data.course_id, data.course_title, "Cram Engine exam sprint course.", now),
+        )
+        session = create_cram_session(data)
+        saved = self.save_cram_session(session)
+        self.record_cram_stage_event(saved, "cram.session.created", {"exam_types": data.exam_types})
+        return saved
+
+    def get_cram_session(self, session_id: str, *, student_id: str | None = None, course_id: str | None = None) -> Any | None:
+        from app.cram.engine import CramSession
+
+        clauses = ["id=?"]
+        params: list[Any] = [session_id]
+        if student_id:
+            clauses.append("student_id=?")
+            params.append(student_id)
+        if course_id:
+            clauses.append("course_id=?")
+            params.append(course_id)
+        row = self.fetchone("SELECT session_json FROM cram_sessions WHERE " + " AND ".join(clauses), tuple(params))
+        return CramSession.model_validate(loads(row["session_json"], {})) if row else None
+
+    def list_cram_sessions(self, student_id: str, course_id: str | None = None, *, limit: int = 12) -> list[Any]:
+        from app.cram.engine import CramSession
+
+        if course_id:
+            rows = self.fetchall(
+                "SELECT session_json FROM cram_sessions WHERE student_id=? AND course_id=? ORDER BY updated_at DESC LIMIT ?",
+                (student_id, course_id, limit),
+            )
+        else:
+            rows = self.fetchall(
+                "SELECT session_json FROM cram_sessions WHERE student_id=? ORDER BY updated_at DESC LIMIT ?",
+                (student_id, limit),
+            )
+        return [CramSession.model_validate(loads(row["session_json"], {})) for row in rows]
+
+    def advance_cram_session(self, session_id: str, *, action: str, payload: dict[str, Any] | None = None, student_id: str | None = None, course_id: str | None = None) -> Any:
+        from app.cram.engine import advance_cram_session
+
+        session = self.get_cram_session(session_id, student_id=student_id, course_id=course_id)
+        if not session:
+            raise ValueError("cram_session_not_found")
+        updated = advance_cram_session(session, action=action, payload=payload or {})
+        self.save_cram_session(updated)
+        self.record_cram_stage_event(updated, action, payload or {})
+        return updated
+
+    def record_cram_stage_event(self, session: Any, event_type: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        event_id = new_id("cramevt")
+        event_payload = payload or {}
+        self.execute(
+            """
+            INSERT OR REPLACE INTO cram_stage_events(id, session_id, student_id, course_id, stage, event_type, payload, created_at)
+            VALUES(?,?,?,?,?,?,?,?)
+            """,
+            (
+                event_id,
+                session.session_id,
+                session.student_id,
+                session.course_id,
+                session.stage.value,
+                event_type,
+                dumps(event_payload),
+                utc_now(),
+            ),
+        )
+        return {"id": event_id, "session_id": session.session_id, "event_type": event_type, "payload": event_payload}
+
+    def cram_dashboard_summary(self, student_id: str, course_id: str | None = None) -> dict[str, Any]:
+        from app.cram.engine import build_cram_dashboard_summary
+        from app.cram.openstax_seed import OPENSTAX_CRAM_BOOKS
+
+        sessions = self.list_cram_sessions(student_id, course_id=course_id)
+        self.ensure_openstax_book_seeds()
+        return build_cram_dashboard_summary(sessions, OPENSTAX_CRAM_BOOKS)
+
     def save_feedback(self, student_id: str, payload: dict[str, Any]) -> str:
         feedback_id = new_id("feedback")
         self.execute(
@@ -2961,6 +3112,7 @@ class LearningStore:
             recent_runs=self.recent_runs(),
             path_progress=(latest_path.overall_progress if (latest_path := self.get_latest_path(student_id, course_id=course_id)) else 0),
             canvas_activity=[dict(row) for row in apps],
+            cram=self.cram_dashboard_summary(student_id, course_id=course_id),
         )
 
     # ---- Learning Focus (current topic / objective) ----
