@@ -7,11 +7,36 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.cram.openstax_seed import OPENSTAX_CRAM_BOOKS
 from app.notebooklm_service import OpenNotebookBridge, is_binary_like_source_text, notebook_key, sanitize_notebook_sources
 from app.database.store import get_store
+from app.schemas.app_protocol import CanvasApp, CanvasPosition, CanvasSize, utc_now
 
 
 client = TestClient(app)
+
+
+def ensure_test_identity(student_id: str, course_id: str = "ai-course") -> None:
+    store = get_store()
+    now = utc_now()
+    if store.__class__.__name__ == "PostgresLearningStore":
+        store.execute(
+            "INSERT INTO students(id,display_name,created_at,updated_at) VALUES(%s,%s,%s,%s) ON CONFLICT (id) DO NOTHING",
+            (student_id, student_id, now, now),
+        )
+        store.execute(
+            "INSERT INTO courses(id,title,description,created_at) VALUES(%s,%s,%s,%s) ON CONFLICT (id) DO NOTHING",
+            (course_id, course_id, "NotebookLM bridge test course.", now),
+        )
+        return
+    store.execute(
+        "INSERT OR IGNORE INTO students(id, display_name, created_at, updated_at) VALUES(?,?,?,?)",
+        (student_id, student_id, now, now),
+    )
+    store.execute(
+        "INSERT OR IGNORE INTO courses(id, title, description, created_at) VALUES(?,?,?,?)",
+        (course_id, course_id, "NotebookLM bridge test course.", now),
+    )
 
 
 @pytest.mark.asyncio
@@ -177,11 +202,65 @@ def test_notebooklm_notebooks_include_course_and_personal_defaults():
     assert "personal_review" in purposes
 
 
+def test_notebooklm_course_knowledge_base_includes_default_openstax_books():
+    notebooks = client.get(
+        "/api/notebooklm/notebooks",
+        headers={"X-Student-Id": "demo-student", "X-Course-Id": "ai-course"},
+    ).json()["notebooks"]
+    course_notebook = next(item for item in notebooks if item["purpose"] == "course_official")
+
+    sources = client.get(
+        f"/api/notebooklm/notebooks/{course_notebook['id']}/sources",
+        headers={"X-Student-Id": "demo-student", "X-Course-Id": "ai-course"},
+    ).json()["sources"]
+    openstax_sources = [
+        item for item in sources
+        if str(item.get("metadata", {}).get("provider") or "") == "openstax"
+    ]
+
+    assert len(openstax_sources) >= min(20, len(OPENSTAX_CRAM_BOOKS))
+    assert any(item["metadata"].get("source_id") == "openstax:principles-management" for item in openstax_sources)
+    assert all(item["source_scope"] == "course_official" for item in openstax_sources)
+    assert all(item["file_url"] and item["original_url"] for item in openstax_sources)
+
+
+def test_notebooklm_event_records_real_canvas_app_id_from_payload():
+    ensure_test_identity("stu-nblm-event")
+    app_model = CanvasApp(
+        app_id="app-nblm-event",
+        app_type="notebooklm.workspace",
+        title="NotebookLM",
+        icon="BookOpen",
+        position=CanvasPosition(x=0, y=0),
+        size=CanvasSize(width=720, height=520),
+    )
+    get_store().save_app(app_model, student_id="stu-nblm-event", course_id="ai-course")
+
+    response = client.post(
+        "/api/notebooklm/events",
+        headers={"X-Student-Id": "stu-nblm-event", "X-Course-Id": "ai-course"},
+        json={
+            "event_type": "notebooklm.context_select",
+            "payload": {
+                "app_id": "app-nblm-event",
+                "source_id": "openstax:principles-management",
+                "source_title": "Principles of Management",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "recorded"
+    assert payload["event"]["app_id"] == "app-nblm-event"
+
+
 def test_notebooklm_text_upload_defaults_to_personal_notebook(monkeypatch):
     async def fake_sync(self, *, student_id: str, course_id: str, learnforge_notebook_id: str):
         return {"status": "blocked_sidecar_unreachable", "synced": [], "blocked": True, "learnforge_notebook_id": learnforge_notebook_id}
 
     monkeypatch.setattr(OpenNotebookBridge, "sync_notebook_sources", fake_sync)
+    ensure_test_identity("stu-nblm-upload")
     notebooks = client.get(
         "/api/notebooklm/notebooks",
         headers={"X-Student-Id": "stu-nblm-upload", "X-Course-Id": "ai-course"},
@@ -225,6 +304,7 @@ def test_notebooklm_link_upload_saves_source(monkeypatch):
 
     monkeypatch.setattr("app.notebooklm_service.fetch_url_source", fake_fetch)
     monkeypatch.setattr(OpenNotebookBridge, "sync_notebook_sources", fake_sync)
+    ensure_test_identity("stu-nblm-link")
     notebooks = client.get(
         "/api/notebooklm/notebooks",
         headers={"X-Student-Id": "stu-nblm-link", "X-Course-Id": "ai-course"},
@@ -249,6 +329,7 @@ def test_notebooklm_file_upload_saves_original_and_source(monkeypatch):
         return {"status": "ready", "synced": [{"document_id": "x"}], "blocked": [], "learnforge_notebook_id": learnforge_notebook_id}
 
     monkeypatch.setattr(OpenNotebookBridge, "sync_notebook_sources", fake_sync)
+    ensure_test_identity("stu-nblm-file")
     notebooks = client.get(
         "/api/notebooklm/notebooks",
         headers={"X-Student-Id": "stu-nblm-file", "X-Course-Id": "ai-course"},
@@ -274,6 +355,7 @@ def test_notebooklm_file_upload_saves_original_and_source(monkeypatch):
 
 
 def test_notebooklm_publish_preserves_source_metadata():
+    ensure_test_identity("stu-publish", "course-publish")
     source_refs = [{"source_id": "src-1", "chunk_id": "chunk-1", "title": "Verified Source"}]
     response = client.post(
         "/api/notebooklm/publish",

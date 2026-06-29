@@ -323,8 +323,10 @@ async def notebooklm_events(
     headers: SessionHeaders = Depends(get_session_headers),
 ) -> dict[str, Any]:
     student_id, course_id = resolve_notebook_session(request, headers)
+    payload_app_id = request.payload.get("app_id")
+    event_app_id = payload_app_id if isinstance(payload_app_id, str) and payload_app_id.strip() else request.app_id
     event = AppEvent(
-        app_id=request.app_id,
+        app_id=event_app_id,
         student_id=student_id,
         course_id=course_id,
         event_type=request.event_type,

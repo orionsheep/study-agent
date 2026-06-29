@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import { Paperclip } from "lucide-react";
-import type { ChatMessage, TraceItem } from "../../lib/events/agentEvents";
+import { AnimatePresence, motion } from "framer-motion";
+import type { ChatMessage } from "../../lib/events/agentEvents";
 import type { ChatAppLink, LearningResource } from "@learnforge/app-protocol";
 import { RichMessageContent } from "../../features/tutor-chat/RichMessageContent";
 import { AppLinkChip } from "../../features/applink-flight/AppLinkChip";
@@ -21,6 +22,8 @@ export type MessageItemProps = {
   onOpenLink: (link: ChatAppLink, rect: DOMRect) => void;
   onAddResourceToCanvas: (resource: LearningResource) => void | Promise<void>;
 };
+
+const messageTransition = { type: "spring", stiffness: 440, damping: 36, mass: 0.72 } as const;
 
 /* ── MessageItem ── */
 
@@ -44,8 +47,13 @@ export function MessageItem({
 
   return (
     <>
-      <article
+      <motion.article
         key={message.id}
+        layout="position"
+        initial={{ opacity: 0, y: 12, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -8, scale: 0.985, transition: { duration: 0.14 } }}
+        transition={messageTransition}
         className={`message msg ${message.role} ${isAssistant ? "tutor" : ""}`}
       >
         <div className="message-content">
@@ -131,10 +139,24 @@ export function MessageItem({
             />
           ) : null}
         </div>
-      </article>
+      </motion.article>
 
       {/* Agent activity — rendered inline after the message */}
-      {agentActivity ?? null}
+      <AnimatePresence initial={false}>
+        {agentActivity ? (
+          <motion.div
+            key={`${message.id}-activity`}
+            layout="position"
+            initial={{ opacity: 0, y: 8, scale: 0.99 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.99, transition: { duration: 0.12 } }}
+            transition={messageTransition}
+            className="message-motion-slot"
+          >
+            {agentActivity}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </>
   );
 }

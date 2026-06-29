@@ -9,6 +9,7 @@ from app.database.schema import REQUIRED_TABLES
 from app.database.store import FOUNDATION_APP_TYPES, dumps, loads, merge_profile_dicts, snippet_for, stable_id
 from app.edumem0.decay_policy import DecayPolicy
 from app.schemas.app_protocol import (
+    AppEvent,
     CanvasApp,
     CanvasPosition,
     CanvasSize,
@@ -482,6 +483,40 @@ class PostgresLearningStore:
             "created_at": created_at,
         }
 
+    def record_app_event(self, event: AppEvent) -> AppEvent:
+        self.execute(
+            """
+            INSERT INTO app_events(id, app_id, student_id, event_type, payload, created_at)
+            VALUES(%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (id) DO UPDATE SET
+              app_id=EXCLUDED.app_id,
+              student_id=EXCLUDED.student_id,
+              event_type=EXCLUDED.event_type,
+              payload=EXCLUDED.payload,
+              created_at=EXCLUDED.created_at
+            """,
+            (event.event_id, event.app_id, event.student_id, event.event_type, dumps(event.payload), event.created_at),
+        )
+        self.execute(
+            """
+            INSERT INTO learning_events(id, student_id, event_type, payload, created_at)
+            VALUES(%s,%s,%s,%s,%s)
+            ON CONFLICT (id) DO UPDATE SET
+              student_id=EXCLUDED.student_id,
+              event_type=EXCLUDED.event_type,
+              payload=EXCLUDED.payload,
+              created_at=EXCLUDED.created_at
+            """,
+            (
+                event.event_id,
+                event.student_id,
+                event.event_type,
+                dumps({"app_id": event.app_id, "course_id": event.course_id, "conversation_id": event.conversation_id, **event.payload}),
+                event.created_at,
+            ),
+        )
+        return event
+
     def create_memory(self, memory: EduMemoryItem) -> EduMemoryItem:
         if memory.source_event_id:
             existing = self.get_memory_by_source_event_id(memory.student_id, memory.source_event_id, memory.course_id)
@@ -752,13 +787,151 @@ class PostgresLearningStore:
         row = self.fetchone("SELECT title FROM courses WHERE id=%s", (course_id,))
         return str(row["title"]) if row and row.get("title") else course_id
 
+    def _openstax_course_document_payload(self, course_id: str, book: Any, now: str) -> dict[str, Any]:
+        document_id = stable_id("doc-openstax", f"{course_id}:{book.slug}")
+        metadata = {
+            "provider": book.provider,
+            "source_id": f"openstax:{book.slug}",
+            "slug": book.slug,
+            "subject": book.subject,
+            "exam_mode": book.exam_mode,
+            "details_url": book.details_url,
+            "web_url": book.web_url,
+            "pdf_url": book.pdf_url,
+            "license": book.license,
+            "tags": book.tags,
+            "source_channel": "openstax_default_book",
+            "default_import": True,
+        }
+        chunk = (
+            f"OpenStax source record for {book.title}. "
+            f"Subject: {book.subject}. Exam mode: {book.exam_mode}. "
+            f"Details page: {book.details_url}. Web reader: {book.web_url}. PDF: {book.pdf_url}. "
+            f"License: {book.license}. Tags: {', '.join(book.tags)}. "
+            "Use the linked OpenStax material as the canonical source before quoting page-level content."
+        )
+        chunk_id = stable_id("chunk-openstax", f"{document_id}:source-card")
+        source_ref = {
+            "document_id": document_id,
+            "chunk_id": chunk_id,
+            "course_id": course_id,
+            "title": book.title,
+            "section": "OpenStax source card",
+            "source_type": "openstax_book",
+            "provider": book.provider,
+            "source_id": metadata["source_id"],
+            "details_url": book.details_url,
+            "web_url": book.web_url,
+            "pdf_url": book.pdf_url,
+            "license": book.license,
+            "quote_span": [0, min(180, len(chunk))],
+            "confidence": 0.88,
+            "verified": True,
+        }
+        return {
+            "document_id": document_id,
+            "title": book.title,
+            "file_url": book.pdf_url,
+            "parser": "openstax_book_link",
+            "ingest_type": "openstax_seed",
+            "owner_scope": "course",
+            "owner_id": course_id,
+            "source_scope": "course_official",
+            "original_url": book.details_url,
+            "mime_type": "application/pdf",
+            "upload_status": "ready",
+            "metadata": metadata,
+            "chunk_id": chunk_id,
+            "chunk": chunk,
+            "source_ref": source_ref,
+            "created_at": now,
+        }
+
+    def _ensure_openstax_course_documents(self, *, course_id: str) -> None:
+        from app.cram.openstax_seed import OPENSTAX_CRAM_BOOKS
+
+        self.ensure_openstax_book_seeds()
+        now = utc_now()
+        for book in OPENSTAX_CRAM_BOOKS:
+            payload = self._openstax_course_document_payload(course_id, book, now)
+            self.execute(
+                """
+                INSERT INTO course_documents(
+                  id,course_id,title,file_url,parser,ingest_type,owner_scope,owner_id,
+                  source_scope,original_url,mime_type,upload_status,metadata,created_at
+                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (id) DO UPDATE SET
+                  title=EXCLUDED.title,
+                  file_url=EXCLUDED.file_url,
+                  parser=EXCLUDED.parser,
+                  ingest_type=EXCLUDED.ingest_type,
+                  owner_scope=EXCLUDED.owner_scope,
+                  owner_id=EXCLUDED.owner_id,
+                  source_scope=EXCLUDED.source_scope,
+                  original_url=EXCLUDED.original_url,
+                  mime_type=EXCLUDED.mime_type,
+                  upload_status=EXCLUDED.upload_status,
+                  metadata=EXCLUDED.metadata
+                """,
+                (
+                    payload["document_id"],
+                    course_id,
+                    payload["title"],
+                    payload["file_url"],
+                    payload["parser"],
+                    payload["ingest_type"],
+                    payload["owner_scope"],
+                    payload["owner_id"],
+                    payload["source_scope"],
+                    payload["original_url"],
+                    payload["mime_type"],
+                    payload["upload_status"],
+                    dumps(payload["metadata"]),
+                    payload["created_at"],
+                ),
+            )
+            self.execute(
+                """
+                INSERT INTO document_chunks(id,document_id,course_id,chunk_index,content,source_ref,embedding,created_at)
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (id) DO UPDATE SET
+                  content=EXCLUDED.content,
+                  source_ref=EXCLUDED.source_ref,
+                  embedding=EXCLUDED.embedding
+                """,
+                (
+                    payload["chunk_id"],
+                    payload["document_id"],
+                    course_id,
+                    1,
+                    payload["chunk"],
+                    dumps(payload["source_ref"]),
+                    None,
+                    payload["created_at"],
+                ),
+            )
+
     def _ensure_course_notebook_sources(self, *, course_id: str) -> None:
         self._ensure_notebook_schema()
         now = utc_now()
         course_notebook_id = stable_id("nblm", f"course:{course_id}:official")
         if not self.fetchone("SELECT 1 FROM notebooks WHERE id=%s", (course_notebook_id,)):
             return
+        self._ensure_openstax_course_documents(course_id=course_id)
+        self.execute(
+            """
+            DELETE FROM notebook_sources
+            WHERE notebook_id=%s AND source_kind='course_document'
+              AND source_id IN (
+                SELECT id FROM course_documents
+                WHERE course_id=%s AND source_scope != 'course_official'
+              )
+            """,
+            (course_notebook_id, course_id),
+        )
         for document in self.list_course_documents(course_id):
+            if document.get("source_scope") != "course_official":
+                continue
             document_id = str(document["document_id"])
             self.execute(
                 """

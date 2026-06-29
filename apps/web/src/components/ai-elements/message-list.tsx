@@ -22,9 +22,12 @@ export function MessageList({
   useEffect(() => {
     if (!autoScroll) return;
     const el = ref.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-    }
+    if (!el) return;
+    const raf = window.requestAnimationFrame(() => {
+      const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      el.scrollTo({ top: el.scrollHeight, behavior: prefersReducedMotion ? "auto" : "smooth" });
+    });
+    return () => window.cancelAnimationFrame(raf);
   }, [children, autoScroll]);
 
   return (

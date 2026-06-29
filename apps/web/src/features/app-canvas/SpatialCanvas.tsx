@@ -63,6 +63,15 @@ type WindowInteraction = {
   raf?: number;
 };
 
+const WINDOW_MOTION = {
+  initial: { opacity: 0, scale: 0.955, y: 18, filter: "blur(10px)" },
+  animate: { opacity: 1, scale: 1, y: 0, filter: "blur(0px)" },
+  exit: { opacity: 0, scale: 0.965, y: 12, filter: "blur(8px)" },
+  transition: { type: "spring", stiffness: 360, damping: 34, mass: 0.78 },
+} as const;
+
+const DOCK_TAP_MOTION = { scale: 0.92, y: -3 };
+
 function appStatusClass(app: CanvasApp) {
   if (app.status === "ready") return "st-done";
   if (app.status === "creating") return "st-rec";
@@ -846,10 +855,14 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
             const size = slot ? { width: slot.width, height: slot.height } : displaySizeForApp(app);
             const isActiveFrame = (drag?.kind === "app" || drag?.kind === "resize") && drag.appId === app.app_id;
             return (
-            <div
+            <motion.div
               key={app.app_id}
               data-window-frame={app.app_id}
               className={isActiveFrame ? "window-frame is-direct-manipulating" : "window-frame"}
+              initial={WINDOW_MOTION.initial}
+              animate={WINDOW_MOTION.animate}
+              exit={WINDOW_MOTION.exit}
+              transition={WINDOW_MOTION.transition}
               style={{ position: "absolute", left: pos.x, top: pos.y, width: size.width, height: size.height, zIndex: pinned ? 12 : zIndexFor(app.app_id) }}
             >
             <AppWindow
@@ -870,7 +883,7 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
               onDashboardUpdate={onDashboardUpdate}
               sessionContext={sessionContext}
             />
-            </div>
+            </motion.div>
             );
           })())}
           </AnimatePresence>
@@ -896,10 +909,14 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
               const pos = app.position;
               const size = displaySizeForApp(app);
               return (
-                <div
+                <motion.div
                   key={app.app_id}
                   data-window-frame={app.app_id}
                   className="window-frame native-window-frame"
+                  initial={WINDOW_MOTION.initial}
+                  animate={WINDOW_MOTION.animate}
+                  exit={WINDOW_MOTION.exit}
+                  transition={WINDOW_MOTION.transition}
                   style={{ position: "absolute", left: pos.x, top: pos.y, width: size.width, height: size.height, zIndex: zIndexFor(app.app_id) }}
                 >
                   <AppWindow
@@ -920,7 +937,7 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
                     onDashboardUpdate={onDashboardUpdate}
                     sessionContext={sessionContext}
                   />
-                </div>
+                </motion.div>
               );
             })}
           </AnimatePresence>
@@ -986,8 +1003,11 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
             const iconSrc = isFolderApp(app) ? folderIconSrc(app) : undefined;
             const isVirtualSystemModule = app.app_id === "app-english" || app.app_id === "app-notebooklm";
             return (
-            <button
+            <motion.button
               key={app.app_id}
+              type="button"
+              whileTap={DOCK_TAP_MOTION}
+              transition={{ type: "spring", stiffness: 520, damping: 28 }}
               onClick={() => {
                 if (isFolderApp(app)) {
                   setActiveFolderApp(activeFolderApp?.app_id === app.app_id ? null : app);
@@ -1008,7 +1028,7 @@ export function SpatialCanvas({ apps, dashboard, viewport, setViewport, setApps,
               {isFolderApp(app) ? <span className="dock-badge">{(app.payload as FolderPayload).count}</span> : null}
               {!isFolderApp(app) && isOpen ? <span className="dock-dot" /> : null}
               <span className="dock-tip">{app.title}</span>
-            </button>
+            </motion.button>
             );
           };
           return (

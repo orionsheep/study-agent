@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatAppLink, LearningResource } from "@learnforge/app-protocol";
+import { AnimatePresence } from "framer-motion";
 import type { ModelProvider, NotebookLMContext } from "../../lib/api/client";
 import type { ChatMessage, TraceItem } from "../../lib/events/agentEvents";
 import { AppLinkChip } from "../applink-flight/AppLinkChip";
@@ -330,32 +331,34 @@ export function TutorChat({
         <BackgroundTaskBanner tasks={backgroundTasks} />
 
         {/* Messages */}
-        {messages.map((message, idx) => {
-          const agentActivity = activitiesByAnchor.get(message.id);
-          return (
-            <MessageItem
-              key={message.id}
-              message={message}
-              index={idx}
-              allMessages={messages}
-              isStreaming={isStreaming}
-              agentActivity={
-                agentActivity ? (
-                  <AgentActivityItem
-                    messageId={message.id}
-                    trace={agentActivity.trace}
-                    isActive={agentActivity.isActive}
-                    reasoningText={reasoningText}
-                    currentThinking={currentThinking}
-                  />
-                ) : null
-              }
-              onSend={onSend}
-              onOpenLink={onOpenLink}
-              onAddResourceToCanvas={onAddResourceToCanvas}
-            />
-          );
-        })}
+        <AnimatePresence initial={false}>
+          {messages.map((message, idx) => {
+            const agentActivity = activitiesByAnchor.get(message.id);
+            return (
+              <MessageItem
+                key={message.id}
+                message={message}
+                index={idx}
+                allMessages={messages}
+                isStreaming={isStreaming}
+                agentActivity={
+                  agentActivity ? (
+                    <AgentActivityItem
+                      messageId={message.id}
+                      trace={agentActivity.trace}
+                      isActive={agentActivity.isActive}
+                      reasoningText={reasoningText}
+                      currentThinking={currentThinking}
+                    />
+                  ) : null
+                }
+                onSend={onSend}
+                onOpenLink={onOpenLink}
+                onAddResourceToCanvas={onAddResourceToCanvas}
+              />
+            );
+          })}
+        </AnimatePresence>
       </MessageList>
 
       <ChatComposer

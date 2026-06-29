@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, type FC, type FormEvent, type RefObject } from "react";
 import { FileText, Film, ImagePlus, Mic, NotebookPen, Paperclip, Plus, Presentation, Send, Sparkles, Square, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 
 /* ── Types ── */
 
@@ -189,87 +190,128 @@ export function ChatComposer({
   const SkillIcon = activeSkill ? SKILL_ICON_MAP[activeSkill.key] : null;
 
   return (
-    <form className="composer" onSubmit={handleSubmit}>
+    <motion.form className="composer" layout onSubmit={handleSubmit}>
       {/* Attachment previews */}
-      {attachments.length > 0 && (
-        <div className="composer-top-bar">
-          <div className="composer-attachments">
-            {attachments.map((item) => (
-              <div key={item.id} className="composer-chip" title={item.name}>
-                {item.preview ? (
-                  <img src={item.preview} alt={item.name} />
-                ) : (
-                  <Paperclip size={13} />
-                )}
-                <span>{item.name}</span>
-                <button
-                  type="button"
-                  onClick={() => onRemoveAttachment(item.id)}
-                  aria-label="移除附件"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeSkill && SkillIcon && (
-        <div
-          className="composer-skill-tag"
-          style={{
-            borderColor: activeSkill.borderColor,
-            background: activeSkill.bgColor,
-            color: activeSkill.color,
-          }}
-        >
-          <SkillIcon size={12} />
-          <span>{activeSkill.label}</span>
-          <button
-            type="button"
-            className="composer-skill-tag-clear"
-            onClick={clearActiveSkill}
-            aria-label="取消技能"
-            style={{ color: activeSkill.color }}
+      <AnimatePresence initial={false}>
+        {attachments.length > 0 && (
+          <motion.div
+            key="attachments"
+            className="composer-top-bar"
+            initial={{ opacity: 0, y: 8, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: 6, height: 0 }}
+            transition={{ type: "spring", stiffness: 420, damping: 34 }}
           >
-            <X size={10} />
-          </button>
-        </div>
-      )}
+            <div className="composer-attachments">
+              <AnimatePresence initial={false}>
+                {attachments.map((item) => (
+                  <motion.div
+                    layout
+                    key={item.id}
+                    className="composer-chip"
+                    title={item.name}
+                    initial={{ opacity: 0, scale: 0.88, y: 6 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: -4 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 32 }}
+                  >
+                    {item.preview ? (
+                      <img src={item.preview} alt={item.name} />
+                    ) : (
+                      <Paperclip size={13} />
+                    )}
+                    <span>{item.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveAttachment(item.id)}
+                      aria-label="移除附件"
+                    >
+                      <X size={12} />
+                    </button>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence initial={false}>
+        {activeSkill && SkillIcon && (
+          <motion.div
+            key={activeSkill.key}
+            className="composer-skill-tag"
+            style={{
+              borderColor: activeSkill.borderColor,
+              background: activeSkill.bgColor,
+              color: activeSkill.color,
+            }}
+            initial={{ opacity: 0, y: -6, scale: 0.94 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.94 }}
+            transition={{ type: "spring", stiffness: 520, damping: 32 }}
+          >
+            <SkillIcon size={12} />
+            <span>{activeSkill.label}</span>
+            <button
+              type="button"
+              className="composer-skill-tag-clear"
+              onClick={clearActiveSkill}
+              aria-label="取消技能"
+              style={{ color: activeSkill.color }}
+            >
+              <X size={10} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Voice listening UI */}
-      {listening ? (
-        <button
-          type="button"
-          className="composer-wave"
-          onClick={onToggleVoice}
-          title="点击停止语音输入"
-        >
-          <span className="composer-wave-dot" />
-          <canvas ref={waveCanvasRef} className="composer-wave-canvas" />
-          <span className="composer-wave-label">正在聆听…轻触停止</span>
-        </button>
-      ) : (
-        <div className="composer-input-wrap">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(event) => onInputChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                !event.shiftKey &&
-                !(event.nativeEvent as { isComposing?: boolean }).isComposing
-              ) {
-                event.preventDefault();
-                onSubmit();
-              }
-            }}
-            aria-label="输入学习问题"
-          />
-        </div>
-      )}
+      <AnimatePresence initial={false} mode="wait">
+        {listening ? (
+          <motion.button
+            key="wave"
+            type="button"
+            className="composer-wave"
+            onClick={onToggleVoice}
+            title="点击停止语音输入"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <span className="composer-wave-dot" />
+            <canvas ref={waveCanvasRef} className="composer-wave-canvas" />
+            <span className="composer-wave-label">正在聆听…轻触停止</span>
+          </motion.button>
+        ) : (
+          <motion.div
+            key="text"
+            className="composer-input-wrap"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(event) => onInputChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter" &&
+                  !event.shiftKey &&
+                  !(event.nativeEvent as { isComposing?: boolean }).isComposing
+                ) {
+                  event.preventDefault();
+                  onSubmit();
+                }
+              }}
+              aria-label="输入学习问题"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Toolbar */}
       <div className="composer-toolbar">
@@ -284,8 +326,15 @@ export function ChatComposer({
               >
                 <Plus size={18} />
               </button>
+              <AnimatePresence>
               {skillsOpen && (
-                <div className="composer-skill-dropdown">
+                <motion.div
+                  className="composer-skill-dropdown"
+                  initial={{ opacity: 0, y: 10, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                >
                   {SKILLS.map((skill) => (
                     <button
                       key={skill.key}
@@ -303,8 +352,9 @@ export function ChatComposer({
                       <span className="composer-skill-item-label">{skill.label}</span>
                     </button>
                   ))}
-                </div>
+                </motion.div>
               )}
+              </AnimatePresence>
             </div>
           )}
           <button
@@ -333,26 +383,32 @@ export function ChatComposer({
           </button>
         </div>
         {canStop ? (
-          <button
+          <motion.button
             type="button"
             data-testid="chat-stop"
             title="停止 Agent"
             className="composer-stop"
             onClick={onStop}
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            whileTap={{ scale: 0.96 }}
           >
             <Square size={12} fill="currentColor" />
             <span>停止</span>
-          </button>
+          </motion.button>
         ) : (
-          <button
+          <motion.button
             type="submit"
             data-testid="chat-send"
             disabled={isStreaming || !hasContent}
             title="发送"
             className="composer-send"
+            animate={hasContent && !isStreaming ? { scale: 1, opacity: 1 } : { scale: 0.98, opacity: 0.68 }}
+            whileTap={hasContent && !isStreaming ? { scale: 0.92 } : undefined}
+            transition={{ type: "spring", stiffness: 520, damping: 30 }}
           >
             <Send size={17} />
-          </button>
+          </motion.button>
         )}
       </div>
 
@@ -378,6 +434,6 @@ export function ChatComposer({
           event.target.value = "";
         }}
       />
-    </form>
+    </motion.form>
   );
 }
