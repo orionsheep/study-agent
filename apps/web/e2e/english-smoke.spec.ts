@@ -6,12 +6,10 @@ import { test, expect } from "@playwright/test";
  * Verifies the full chain that previously broke:
  *   vite /api proxy → LearnForge 8011 → english-word-fission 3011 → real DB
  *
- * Covers every tab of the English workspace:
- *   - Word list (libraries browser + virtualized words + Chinese definitions)
- *   - Word detail (phonetic, Collins stars, markdown definition)
- *   - Fission graph (force-directed nodes from real synonym data)
- *   - Quiz panel
- *   - AI chat panel (mounts without crashing; live SSE not asserted here)
+ * Covers the current English workspace workbench:
+ *   - Word library/search (virtualized words + Chinese definitions)
+ *   - Word detail and fission graph panes
+ *   - Stats, quiz, and immersive mode switches
  *
  * Auth is stubbed the same way as product-flow.spec.ts (a fake token + a /api/auth/me
  * mock) so we can reach the shell. Critically, the English API endpoints are NOT mocked —
@@ -49,26 +47,27 @@ test.beforeEach(async ({ page }) => {
       const reqBody = route.request().postDataJSON();
       const appType = String(reqBody?.app_type ?? "");
       if (appType === "english.workspace" || appType === "humanities.notebook") {
+        const app = {
+          app_id: `app-e2e-${appType}`,
+          title: String(reqBody?.title ?? "英语工作区"),
+          app_type: appType,
+          status: "ready",
+          state: "window",
+          position: { x: 240, y: 120 },
+          size: { width: 1100, height: 720 },
+          z_index: 20,
+          group_id: "system-modules",
+          payload: reqBody?.payload ?? {},
+          source_refs: [],
+          render_mode: "native_react",
+          source: {},
+          actions: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
         await route.fulfill({
           contentType: "application/json",
-          body: JSON.stringify({
-            app_id: `app-e2e-${appType}`,
-            title: String(reqBody?.title ?? "英语工作区"),
-            app_type: appType,
-            status: "ready",
-            state: "window",
-            position: { x: 240, y: 120 },
-            size: { width: 1100, height: 720 },
-            z_index: 20,
-            group_id: "system-modules",
-            payload: reqBody?.payload ?? {},
-            source_refs: [],
-            render_mode: "native_react",
-            source: {},
-            actions: [],
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
+          body: JSON.stringify({ app })
         });
         return;
       }
@@ -82,7 +81,9 @@ test.describe("English Workspace — end to end", () => {
     const words = await request.get(`${API_BASE}/api/english/words?search=hello`);
     expect(words.ok()).toBeTruthy();
     const body = await words.json();
-    expect(Array.isArray(body) ? body : body.words).toContain("hello");
+    const wordItems = Array.isArray(body) ? body : body.words;
+    const wordTexts = wordItems.map((item: unknown) => typeof item === "string" ? item : String((item as { word?: unknown })?.word ?? ""));
+    expect(wordTexts).toContain("hello");
 
     const detail = await request.get(`${API_BASE}/api/english/words/hello`);
     expect(detail.ok()).toBeTruthy();
@@ -101,55 +102,48 @@ test.describe("English Workspace — end to end", () => {
     expect(Array.isArray(fissionBody.nodes) ? fissionBody.nodes.length : 0).toBeGreaterThan(0);
   });
 
-  test("English workspace opens and every tab renders", async ({ page }) => {
+  test("English workspace opens and workbench modes render", async ({ page }) => {
     const consoleErrors: string[] = [];
-    const netLog: string[] = [];
     page.on("console", (msg) => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
     page.on("pageerror", (err) => consoleErrors.push(`pageerror: ${err.message}`));
-    page.on("response", (resp) => {
-      const url = resp.url();
-      if (/\/api\/(canvas|english|auth|dashboard)/.test(url)) {
-        netLog.push(`${resp.request().method()} ${url.replace(/^https?:\/\/[^/]+/, "")} → ${resp.status()}`);
-      }
-    });
 
     await page.goto(API_BASE);
     await expect(page.getByTestId("app-dock")).toBeVisible({ timeout: 20_000 });
 
     // Open the English workspace via the dock entry (virtual system module).
     await page.getByTitle("英语工作区").first().click({ timeout: 10_000 });
-    await page.waitForTimeout(4000);
 
-    // Debug: dump what's visible on the canvas so we can see why the workspace didn't open.
-    const visibleButtons = await page.locator('[data-testid="spatial-canvas"] button, .appwin button').allInnerTexts().catch(() => []);
-    console.log("visible buttons after dock click:", visibleButtons.slice(0, 30));
-    console.log("network log:\n  " + netLog.join("\n  "));
+    // Wait for the current three-column workspace to materialize. This used to be
+    // a tabbed UI; the restored EFW workspace now shows library, detail, and graph
+    // panes simultaneously.
+    const englishWindow = page.getByTestId("canvas-app-app-e2e-english.workspace");
+    await expect(englishWindow.getByRole("textbox", { name: "搜索单词..." })).toBeVisible({ timeout: 20_000 });
+    await expect(englishWindow.locator('button:has-text("考纲"), button:has-text("四六级"), button:has-text("托福")').first()).toBeVisible({ timeout: 15_000 });
+    await expect(englishWindow.getByText("选择一个单词查看详情")).toBeVisible();
+    await expect(englishWindow.getByText("选择一个单词查看裂变图")).toBeVisible();
 
-    // Wait for the workspace window to materialize, then for the tab bar.
-    await expect(page.getByRole("button", { name: /单词列表/ })).toBeVisible({ timeout: 20_000 });
+    // Search uses the real /api/english/words?query=... chain, then selecting a
+    // result hydrates WordDetail and FissionGraph.
+    await englishWindow.getByRole("textbox", { name: "搜索单词..." }).fill("hello");
+    const helloWord = englishWindow.getByRole("button", { name: /^hello\b.*喂/i }).last();
+    await expect(helloWord).toBeAttached({ timeout: 15_000 });
+    await helloWord.evaluate((node) => (node as HTMLButtonElement).click());
+    await expect(englishWindow.getByText("右侧讨论：")).toBeVisible({ timeout: 10_000 });
 
-    // ── Tab 1: Word list — should load the real library browser ─────────
-    await page.getByRole("button", { name: /单词列表/ }).click();
-    // Expect at least one library entry to render (file or directory from the DB).
-    await expect(page.locator('[data-testid="spatial-canvas"] button:has-text("考纲"), [data-testid="spatial-canvas"] button:has-text("四六级"), [data-testid="spatial-canvas"] button:has-text("托福")').first()).toBeVisible({ timeout: 15_000 });
+    // Footer actions switch the same workspace into stats, quiz, and immersive
+    // modes without leaving the canvas window.
+    await page.getByTitle("英语学习统计").click();
+    await expect(page.getByText("返回工作区")).toBeVisible({ timeout: 10_000 });
+    await page.getByText("返回工作区").click();
 
-    // Open the first .csv library → words list should populate.
-    await page.locator('button:has-text("四六级"), button:has-text("托福")').first().click({ timeout: 8000 });
-    await page.waitForTimeout(2000);
+    await page.getByTitle("单词测验").click();
+    await expect(page.getByText(/测验 · hello|单词测验/)).toBeVisible({ timeout: 10_000 });
+    await page.getByText("返回工作区").click();
 
-    // ── Tab 2: Fission graph — should render the force-directed canvas ──
-    await page.getByRole("button", { name: /裂变图/ }).click();
-    await page.waitForTimeout(3000);
-
-    // ── Tab 3: Quiz ─────────────────────────────────────────────────────
-    await page.getByRole("button", { name: /测验/ }).click();
-    await page.waitForTimeout(1000);
-
-    // ── Tab 4: AI chat ──────────────────────────────────────────────────
-    await page.getByRole("button", { name: /AI 对话/ }).click();
-    await page.waitForTimeout(1000);
+    await page.getByTitle("进入浸润模式").first().click();
+    await expect(page.getByTitle("退出浸润模式")).toBeVisible({ timeout: 10_000 });
 
     // Surface any non-network console errors as a test failure.
     const fatalErrors = consoleErrors.filter((msg) =>

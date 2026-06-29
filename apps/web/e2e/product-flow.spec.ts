@@ -137,6 +137,108 @@ function chatLink(appId: string, label: string) {
   };
 }
 
+function e2eCramSession(overrides: Record<string, unknown> = {}) {
+  return {
+    session_id: "cram-e2e-management",
+    course_title: "Principles of Management",
+    stage: "deconstruct",
+    exam_mode: "conceptual_cram",
+    progress: {
+      total_points: 6,
+      taught_points: 0,
+      generated_questions: 0,
+      wrong_points: 0,
+      stubborn_points: 0,
+      must_know_total: 4,
+      key_point_total: 2
+    },
+    must_know: ["期望理论", "公平理论", "管理职能", "组织文化"],
+    key_points: ["霍桑实验", "领导风格"],
+    next_actions: ["确认拆解并开始讲授"],
+    source_refs: [
+      {
+        source_id: "openstax:principles-management",
+        title: "Principles of Management",
+        url: "https://openstax.org/details/books/principles-management"
+      }
+    ],
+    ...overrides
+  };
+}
+
+function e2eCramApp(session: Record<string, unknown> = e2eCramSession()): CanvasApp {
+  return canvasApp({
+    app_id: "app-cram-management",
+    app_type: "exam.cram",
+    title: "Principles of Management 期末速成",
+    position: { x: 720, y: 430 },
+    size: { width: 560, height: 460 },
+    z_index: 92,
+    payload: {
+      session,
+      session_id: session.session_id,
+      course_title: session.course_title,
+      stage: session.stage,
+      exam_mode: session.exam_mode,
+      next_actions: session.next_actions
+    },
+    source: { message_id: "msg-e2e-cram", run_id: "run-e2e-cram", skill_name: "cram-engine-skill" },
+    source_refs: [
+      {
+        source_id: "openstax:principles-management",
+        title: "Principles of Management",
+        url: "https://openstax.org/details/books/principles-management"
+      }
+    ],
+    actions: [{ label: "继续冲刺", action: "cram.advance" }]
+  });
+}
+
+function e2eCramDashboard(session: Record<string, unknown> = e2eCramSession()): DashboardSnapshot {
+  const progress = session.progress as {
+    total_points?: number;
+    taught_points?: number;
+    generated_questions?: number;
+    wrong_points?: number;
+    stubborn_points?: number;
+    must_know_total?: number;
+    key_point_total?: number;
+  };
+  return {
+    ...e2eDashboard(),
+    cram: {
+      active_session: {
+        session_id: String(session.session_id),
+        course_title: String(session.course_title),
+        stage: String(session.stage),
+        exam_mode: String(session.exam_mode),
+        progress: {
+          total_points: progress.total_points ?? 0,
+          taught_points: progress.taught_points ?? 0,
+          generated_questions: progress.generated_questions ?? 0,
+          wrong_points: progress.wrong_points ?? 0,
+          stubborn_points: progress.stubborn_points ?? 0,
+          must_know_total: progress.must_know_total ?? 0,
+          key_point_total: progress.key_point_total ?? 0
+        },
+        next_actions: Array.isArray(session.next_actions) ? session.next_actions.map(String) : []
+      },
+      kpis: {
+        openstax_books: 24,
+        active_sessions: 1,
+        must_know_coverage: Number(progress.taught_points ?? 0) / 6,
+        stubborn_points: 0
+      },
+      recommended_books: [
+        { slug: "principles-management", title: "Principles of Management", subject: "Business", exam_mode: "conceptual_cram" },
+        { slug: "organizational-behavior", title: "Organizational Behavior", subject: "Business", exam_mode: "conceptual_cram" }
+      ],
+      stubborn_points: [],
+      root_cause_distribution: {}
+    }
+  };
+}
+
 async function expectAppNearCanvasCenter(page: Page, appId: string) {
   await expect
     .poll(async () => {
@@ -264,6 +366,100 @@ test("chat stream creates AppLink and AppLink Flight focuses target App", async 
   await expect(page.locator(".applink-flight.active")).toBeVisible();
   await expect(page.locator(".flight-streak")).toBeVisible();
   await expect(page.locator(".flight-particle")).toHaveCount(3);
+});
+
+test("student asks to study an OpenStax book and opens the generated Cram Agent app", async ({ page }) => {
+  const initialSession = e2eCramSession();
+  const taughtSession = e2eCramSession({
+    stage: "teach",
+    progress: {
+      total_points: 6,
+      taught_points: 3,
+      generated_questions: 0,
+      wrong_points: 0,
+      stubborn_points: 0,
+      must_know_total: 4,
+      key_point_total: 2
+    },
+    next_actions: ["继续讲授下一批知识点"]
+  });
+  let currentApp = e2eCramApp(initialSession);
+  let currentDashboard = e2eCramDashboard(initialSession);
+  let chatRequest: Record<string, unknown> | null = null;
+  let advanceCalls = 0;
+
+  await page.route("**/api/dashboard/**", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(currentDashboard) });
+  });
+  await page.route("**/api/canvas/applink/link-app-cram-management/open", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true }) });
+  });
+  await page.route("**/api/canvas/apps/app-cram-management", async (route) => {
+    if (route.request().method() === "PATCH") {
+      const patch = route.request().postDataJSON() as Partial<CanvasApp> & { payload?: Record<string, unknown> };
+      currentApp = {
+        ...currentApp,
+        ...patch,
+        payload: patch.payload ? { ...currentApp.payload, ...patch.payload } : currentApp.payload,
+        updated_at: E2E_NOW
+      };
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify(currentApp) });
+      return;
+    }
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(currentApp) });
+  });
+  await page.route("**/api/cram/sessions/cram-e2e-management/advance", async (route) => {
+    advanceCalls += 1;
+    currentApp = e2eCramApp(taughtSession);
+    currentDashboard = e2eCramDashboard(taughtSession);
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ session: taughtSession, app: currentApp, dashboard: currentDashboard })
+    });
+  });
+  await page.route("**/api/chat/stream", async (route) => {
+    chatRequest = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
+      contentType: "text/event-stream",
+      body: streamBody([
+        { type: "run.started", run_id: "run-e2e-cram", task_type: "exam_cram" },
+        { type: "context.update", topic: "Principles of Management", capability: "exam_cram", course_label: "OpenStax", learning_objective: "期末速成" },
+        { type: "run.step", run_id: "run-e2e-cram", step_name: "hermes_runtime", status: "running", detail: "理解用户要学习 Principles of Management" },
+        { type: "run.step", run_id: "run-e2e-cram", step_name: "canvas_materializer", status: "completed", detail: "已创建期末速成 App" },
+        { type: "app.create", app: currentApp, link: chatLink("app-cram-management", "打开 Principles of Management 期末速成") },
+        { type: "dashboard.update", dashboard: currentDashboard },
+        { type: "assistant.delta", message_id: "msg-e2e-cram", text: "已经为 Principles of Management 建好期末速成冲刺 App，先从考试范围拆解开始。" },
+        { type: "run.done", run_id: "run-e2e-cram", status: "completed" },
+        { type: "assistant.done", message_id: "msg-e2e-cram" }
+      ])
+    });
+  });
+
+  await page.getByLabel("输入学习问题").fill("我要学 Principles of Management 这本书，帮我做期末速成。");
+  await page.getByTestId("chat-send").click();
+
+  await expect.poll(() => String(chatRequest?.message ?? "")).toContain("Principles of Management");
+  await expect(page.getByTestId("agent-activity")).toContainText("Hermes 工作");
+  await expect(page.locator(".message.assistant").last()).toContainText("已经为 Principles of Management 建好期末速成冲刺 App");
+
+  const cramLink = page.getByTestId("applink-app-cram-management").first();
+  await expect(cramLink).toBeVisible();
+  await cramLink.click();
+  await expect(page.locator(".applink-flight.active")).toBeVisible();
+
+  const cramApp = page.getByTestId("cram-engine-app");
+  await expect(cramApp).toBeVisible();
+  await expect(cramApp).toContainText("Principles of Management");
+  await expect(cramApp).toContainText("拆解");
+  await expect(cramApp).toContainText("0/6");
+  await expect(cramApp).toContainText("期望理论");
+  await expect(cramApp).toContainText("霍桑实验");
+
+  await cramApp.getByRole("button", { name: "确认拆解并开始讲授" }).click();
+  await expect.poll(() => advanceCalls).toBe(1);
+  await expect(cramApp).toContainText("讲授");
+  await expect(cramApp).toContainText("3/6");
+  await expect(cramApp.getByRole("button", { name: "继续讲授下一批知识点" })).toBeVisible();
 });
 
 test("chat trace renders Hermes activity and Gemini answer", async ({ page }) => {
